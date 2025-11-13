@@ -1,0 +1,19 @@
+# Ignore build artifacts
+target/
+**/target/
+
+# Ignore git files
+.git/
+.gitignore
+
+# Ignore local development files
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Ignore documentation (not needed in container)
+*.md
+
+# Ignore CI/CD files
+.github/

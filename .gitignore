@@ -1,0 +1,22 @@
+# Rust build artifacts
+/target
+
+# Environment files (contain secrets)
+.env
+.env.local
+
+# Data directory (persistence history)
+/data
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+token.ron
