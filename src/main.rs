@@ -2,18 +2,17 @@ use std::{
     collections::HashSet,
     path::PathBuf,
     sync::{Arc, LazyLock},
-    usize,
 };
 
 use async_trait::async_trait;
 use chrono::{Timelike, Utc};
-use color_eyre::eyre::{self, Context, Result, bail};
+use color_eyre::eyre::{self, Result, bail};
 use rand::seq::IndexedRandom as _;
 use secrecy::{ExposeSecret, SecretString};
 use tokio::{
     fs::{self, File},
     io::AsyncWriteExt,
-    sync::{Mutex, mpsc::UnboundedReceiver},
+    sync::{Mutex, broadcast, mpsc::UnboundedReceiver},
     time::{Duration, sleep},
 };
 use tracing::{debug, error, info, instrument, trace};
@@ -26,11 +25,12 @@ use twitch_irc::{
 // TODO: handle twitch latency (90ms)
 // TODO: ping lazy users
 
+/// Type alias for the authenticated Twitch IRC client
+type AuthenticatedTwitchClient =
+    TwitchIRCClient<SecureTCPTransport, RefreshingLoginCredentials<FileBasedTokenStorage>>;
+
 const TARGET_HOUR: u32 = 13;
 const TARGET_MINUTE: u32 = 37;
-
-/// Duration to wait after posting stats before disconnecting (30 seconds)
-const POST_STATS_DELAY: Duration = Duration::from_secs(30);
 
 /// Maximum number of unique users to track (prevents unbounded memory growth)
 const MAX_USERS: usize = 10_000;
@@ -154,277 +154,11 @@ fn is_valid_1337_message(message: &PrivmsgMessage) -> bool {
     false
 }
 
-/// Token storage implementation that persists tokens to disk.
+/// Generates a stats message based on the number of users who said 1337.
 ///
-/// Falls back to environment variables on first load if no token file exists.
-#[derive(Debug)]
-struct FileBasedTokenStorage {
-    path: PathBuf,
-}
-
-impl Default for FileBasedTokenStorage {
-    fn default() -> Self {
-        Self {
-            path: PathBuf::from("./token.ron"),
-        }
-    }
-}
-
-#[async_trait]
-impl TokenStorage for FileBasedTokenStorage {
-    type LoadError = eyre::Report;
-    type UpdateError = eyre::Report;
-
-    async fn load_token(&mut self) -> Result<UserAccessToken, Self::LoadError> {
-        // Try to load from file first
-        match fs::read_to_string(&self.path).await {
-            Ok(contents) => {
-                info!(
-                    path = %self.path.display(),
-                    "Loading user access token from file"
-                );
-                Ok(ron::from_str(&contents)?)
-            }
-            Err(_) => {
-                // File doesn't exist, fall back to environment variables
-                info!("Token file not found, loading intial values from environment variables");
-                let token = UserAccessToken {
-                    access_token: TWITCH_ACCESS_TOKEN.expose_secret().to_string(),
-                    refresh_token: TWITCH_REFRESH_TOKEN.expose_secret().to_string(),
-                    created_at: chrono::Utc::now(),
-                    expires_at: Some(chrono::Utc::now()), // we do not know when it expires
-                };
-
-                // Save the token for future use
-                self.update_token(&token).await?;
-
-                Ok(token)
-            }
-        }
-    }
-
-    async fn update_token(&mut self, token: &UserAccessToken) -> Result<(), Self::UpdateError> {
-        info!( path = %self.path.display(), "Updating token in file");
-        let buffer = ron::to_string(token)?.into_bytes();
-        File::create(&self.path).await?.write_all(&buffer).await?;
-        Ok(())
-    }
-}
-
-/// Main entry point for the twitch-1337 bot.
-///
-/// Runs a daily task that connects at 13:36 Berlin time, monitors messages at 13:37,
-/// posts stats at 13:38, and disconnects at 13:38:30.
-///
-/// # Errors
-///
-/// Returns an error if required environment variables are missing.
-#[tokio::main]
-pub async fn main() -> Result<()> {
-    // Initialize error handling
-    color_eyre::install()?;
-
-    // Initialize tracing subscriber
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
-        )
-        .init();
-
-    let local = Utc::now().with_timezone(&chrono_tz::Europe::Berlin);
-
-    info!(local_time = ?local, utc_time = ?Utc::now(), "Starting twitch-1337 bot");
-
-    // Validate environment variables at startup
-    info!(channel = %*CHANNEL_LOGIN, "Channel configured");
-    let _ = &*TWITCH_USERNAME;
-    let _ = &*TWITCH_ACCESS_TOKEN;
-    let _ = &*TWITCH_REFRESH_TOKEN;
-    let _ = &*TWITCH_CLIENT_ID;
-    let _ = &*TWITCH_CLIENT_SECRET;
-    info!("Environment variables validated");
-
-    verify_twitch_connection().await?;
-
-    let start_minute = TARGET_MINUTE - 1;
-
-    // Spawn main task - runs daily at 13:36 Berlin time
-    let main_task = tokio::spawn(async move {
-        loop {
-            wait_until_schedule(TARGET_HOUR, start_minute).await;
-
-            info!("Starting daily bot session");
-
-            if let Err(e) = run_daily_session().await {
-                error!("Daily session failed: {e:?}");
-            }
-
-            info!("Daily session completed, waiting for next day");
-        }
-    });
-
-    info!(
-        "Bot scheduled to run daily at {}:{:02} (Europe/Berlin)",
-        TARGET_HOUR, start_minute
-    );
-
-    // Keep the program running until shutdown signal
-    info!("Bot is running. Press Ctrl+C to stop.");
-    tokio::select! {
-        _ = tokio::signal::ctrl_c() => {
-            info!("Shutdown signal received, exiting gracefully");
-        }
-        result = main_task => {
-            error!("Main task unexpectedly exited: {result:?}");
-        }
-    }
-
-    info!("Bot shutdown complete");
-    Ok(())
-}
-
-fn setup_twitch_client() -> (
-    UnboundedReceiver<ServerMessage>,
-    TwitchIRCClient<SecureTCPTransport, RefreshingLoginCredentials<FileBasedTokenStorage>>,
-) {
-    // Create authenticated IRC client with refreshing tokens
-    let credentials = RefreshingLoginCredentials::init_with_username(
-        Some(TWITCH_USERNAME.clone()),
-        TWITCH_CLIENT_ID.clone(),
-        TWITCH_CLIENT_SECRET.expose_secret().to_string(),
-        FileBasedTokenStorage::default(),
-    );
-    let config = ClientConfig::new_simple(credentials);
-    TwitchIRCClient::<SecureTCPTransport, RefreshingLoginCredentials<FileBasedTokenStorage>>::new(
-        config,
-    )
-}
-
-#[instrument]
-async fn verify_twitch_connection() -> Result<()> {
-    info!("Verifying Twitch Connection");
-
-    let (mut incoming_messages, client) = setup_twitch_client();
-
-    client.connect().await;
-
-    let handle = tokio::spawn(async move {
-        while let Some(message) = incoming_messages.recv().await {
-            trace!(message = ?message, "Received irc message");
-
-            match message {
-                ServerMessage::Notice(NoticeMessage { message_text, .. })
-                    if message_text == "Login authentication failed" =>
-                {
-                    error!("Authentication with Twitch IRC Servers failed");
-                    bail!("Failed to authenticate with twitch");
-                }
-                ServerMessage::GlobalUserState(_) => return Ok(()),
-                _ => continue,
-            }
-        }
-
-        Ok(())
-    });
-
-    match tokio::time::timeout(Duration::from_secs(30), handle).await {
-        Err(elapsed) => {
-            error!(elapsed = ?elapsed, "Connection to Twitch IRC Server timed out");
-            bail!("Connection to Twitch timed out")
-        }
-        Ok(inner) => inner??,
-    };
-
-    info!("Connection to Twitch verified");
-
-    Ok(())
-}
-
-/// Runs a single daily session: connect, monitor messages, post stats, disconnect.
-///
-/// # Errors
-///
-/// Returns an error if IRC connection fails, channel join fails, message sending fails,
-/// or the monitoring task panics.
-async fn run_daily_session() -> Result<()> {
-    let (mut incoming_messages, client) = setup_twitch_client();
-
-    info!(channel = %*CHANNEL_LOGIN, "Joining channel");
-    let channels = [CHANNEL_LOGIN.to_string()].into();
-    client.set_wanted_channels(channels)?;
-
-    // Shared HashSet to track unique users (scoped to this session)
-    let total_users = Arc::new(Mutex::new(HashSet::with_capacity(MAX_USERS)));
-
-    // Spawn message monitoring task
-    let monitor_handle = tokio::spawn({
-        let total_users = total_users.clone();
-        async move {
-            while let Some(message) = incoming_messages.recv().await {
-                trace!(message = ?message, "Received irc message");
-
-                let ServerMessage::Privmsg(privmsg) = message else {
-                    continue;
-                };
-
-                // Check time and message content
-                let local = Utc::now().with_timezone(&chrono_tz::Europe::Berlin);
-                if (local.hour(), local.minute()) != (TARGET_HOUR, TARGET_MINUTE) {
-                    continue;
-                }
-
-                if is_valid_1337_message(&privmsg) {
-                    let username = &privmsg.sender.login;
-                    debug!(user = %username, "User said 1337 at 13:37");
-
-                    let mut users = total_users.lock().await;
-                    // Double-check minute to prevent race condition
-                    let current_minute = Utc::now()
-                        .with_timezone(&chrono_tz::Europe::Berlin)
-                        .minute();
-                    if current_minute == TARGET_MINUTE {
-                        if users.len() < MAX_USERS {
-                            users.insert(privmsg.sender.login);
-                        } else {
-                            error!(max = MAX_USERS, "User limit reached");
-                        }
-                    } else {
-                        debug!("Skipping insert, minute changed to {current_minute}");
-                    }
-                }
-            }
-            debug!("Message monitor loop exited");
-        }
-    });
-
-    // Wait until 13:36:30 to send reminder
-    sleep_until_hms(TARGET_HOUR, TARGET_MINUTE - 1, 30).await;
-
-    info!("Posting reminder to channel");
-    client
-        .say(CHANNEL_LOGIN.clone(), "PausersHype".to_string())
-        .await
-        .wrap_err_with(|| {
-            format!(
-                "Failed to send reminder message to channel '{}'",
-                *CHANNEL_LOGIN
-            )
-        })?;
-
-    // Wait until 13:38 to post stats
-    sleep_until_hms(TARGET_HOUR, TARGET_MINUTE + 1, 0).await;
-
-    // Get user list and count while keeping monitor running
-    let (count, user_list) = {
-        let users = total_users.lock().await;
-        let count = users.len();
-        let mut user_vec: Vec<String> = users.iter().cloned().collect();
-        user_vec.sort(); // Sort alphabetically for consistency
-        (count, user_vec)
-    };
-
-    let message = match count {
+/// Returns a contextual message with emotes based on participation level.
+fn generate_stats_message(count: usize, user_list: &[String]) -> String {
+    match count {
         0 => one_of(&["Erm", "fuh"]).to_string(),
         1 => format!(
             "@{} zumindest einer {}",
@@ -457,38 +191,428 @@ async fn run_daily_session() -> Result<()> {
         _ => {
             format!("{count}, insane quota Pag")
         }
+    }
+}
+
+/// Monitors broadcast messages and tracks users who say 1337 during the target minute.
+///
+/// Runs in a loop until the broadcast channel closes or an error occurs.
+/// Only tracks messages sent during the configured TARGET_HOUR:TARGET_MINUTE.
+async fn monitor_1337_messages(
+    mut broadcast_rx: broadcast::Receiver<ServerMessage>,
+    total_users: Arc<Mutex<HashSet<String>>>,
+) {
+    loop {
+        match broadcast_rx.recv().await {
+            Ok(message) => {
+                let ServerMessage::Privmsg(privmsg) = message else {
+                    continue;
+                };
+
+                // Check time and message content
+                let local = Utc::now().with_timezone(&chrono_tz::Europe::Berlin);
+                if (local.hour(), local.minute()) != (TARGET_HOUR, TARGET_MINUTE) {
+                    continue;
+                }
+
+                if is_valid_1337_message(&privmsg) {
+                    let username = &privmsg.sender.login;
+                    debug!(user = %username, "User said 1337 at 13:37");
+
+                    let mut users = total_users.lock().await;
+                    // Double-check minute to prevent race condition
+                    let current_minute = Utc::now()
+                        .with_timezone(&chrono_tz::Europe::Berlin)
+                        .minute();
+                    if current_minute == TARGET_MINUTE {
+                        if users.len() < MAX_USERS {
+                            users.insert(privmsg.sender.login);
+                        } else {
+                            error!(max = MAX_USERS, "User limit reached");
+                        }
+                    } else {
+                        debug!("Skipping insert, minute changed to {current_minute}");
+                    }
+                }
+            }
+            Err(broadcast::error::RecvError::Lagged(skipped)) => {
+                error!(skipped, "1337 handler lagged, skipped messages");
+                continue;
+            }
+            Err(broadcast::error::RecvError::Closed) => {
+                debug!("Broadcast channel closed, 1337 monitor exiting");
+                break;
+            }
+        }
+    }
+}
+
+/// Processes a PRIVMSG to check if it's asking about Minecraft and sends a response.
+///
+/// Returns true if a response was sent, false otherwise.
+async fn process_minecraft_message(
+    privmsg: &PrivmsgMessage,
+    client: &Arc<AuthenticatedTwitchClient>,
+) -> bool {
+    let text = privmsg.message_text.to_lowercase();
+    if text.contains("wannminecraft") || text.contains("wann minecraft") {
+        debug!(user = %privmsg.sender.login, "User asked about Minecraft");
+
+        let response = format!(
+            "@{} soon™ https://time.is/countdown/15:00_29_Nov_2025",
+            privmsg.sender.login
+        );
+        if let Err(e) = client.say_in_reply_to(privmsg, response).await {
+            error!(error = ?e, "Failed to send Minecraft response");
+        }
+        return true;
+    }
+    false
+}
+
+/// Token storage implementation that persists tokens to disk.
+///
+/// Falls back to environment variables on first load if no token file exists.
+#[derive(Debug)]
+struct FileBasedTokenStorage {
+    path: PathBuf,
+}
+
+impl Default for FileBasedTokenStorage {
+    fn default() -> Self {
+        Self {
+            path: PathBuf::from("./token.ron"),
+        }
+    }
+}
+
+#[async_trait]
+impl TokenStorage for FileBasedTokenStorage {
+    type LoadError = eyre::Report;
+    type UpdateError = eyre::Report;
+
+    async fn load_token(&mut self) -> Result<UserAccessToken, Self::LoadError> {
+        // Try to load from file first
+        match fs::read_to_string(&self.path).await {
+            Ok(contents) => {
+                debug!(
+                    path = %self.path.display(),
+                    "Loading user access token from file"
+                );
+                Ok(ron::from_str(&contents)?)
+            }
+            Err(_) => {
+                // File doesn't exist, fall back to environment variables
+                debug!("Token file not found, loading initial values from environment variables");
+                let token = UserAccessToken {
+                    access_token: TWITCH_ACCESS_TOKEN.expose_secret().to_string(),
+                    refresh_token: TWITCH_REFRESH_TOKEN.expose_secret().to_string(),
+                    created_at: chrono::Utc::now(),
+                    expires_at: Some(chrono::Utc::now()), // we do not know when it expires
+                };
+
+                // Save the token for future use
+                self.update_token(&token).await?;
+
+                Ok(token)
+            }
+        }
+    }
+
+    async fn update_token(&mut self, token: &UserAccessToken) -> Result<(), Self::UpdateError> {
+        debug!(path = %self.path.display(), "Updating token in file");
+        let buffer = ron::to_string(token)?.into_bytes();
+        File::create(&self.path).await?.write_all(&buffer).await?;
+        Ok(())
+    }
+}
+
+/// Main entry point for the twitch-1337 bot.
+///
+/// Establishes a persistent Twitch IRC connection and runs multiple handlers in parallel:
+/// - Daily 1337 tracker: monitors 13:37 messages, posts stats at 13:38
+/// - Minecraft responder: replies to "WannMinecraft"/"Wann Minecraft" messages
+///
+/// # Errors
+///
+/// Returns an error if required environment variables are missing or connection fails.
+#[tokio::main]
+pub async fn main() -> Result<()> {
+    // Initialize error handling
+    color_eyre::install()?;
+
+    // Initialize tracing subscriber
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
+        )
+        .init();
+
+    let local = Utc::now().with_timezone(&chrono_tz::Europe::Berlin);
+
+    info!(local_time = ?local, utc_time = ?Utc::now(), "Starting twitch-1337 bot");
+
+    // Validate environment variables at startup
+    info!(channel = %*CHANNEL_LOGIN, "Channel configured");
+    let _ = &*TWITCH_USERNAME;
+    let _ = &*TWITCH_ACCESS_TOKEN;
+    let _ = &*TWITCH_REFRESH_TOKEN;
+    let _ = &*TWITCH_CLIENT_ID;
+    let _ = &*TWITCH_CLIENT_SECRET;
+    info!("Environment variables validated");
+
+    // Setup, connect, join channel, and verify authentication (all in one step)
+    let (incoming_messages, client) = setup_and_verify_twitch_client().await?;
+
+    // Wrap client in Arc for sharing across handlers
+    let client = Arc::new(client);
+
+    // Create broadcast channel for message distribution (capacity: 100 messages)
+    let (broadcast_tx, _) = broadcast::channel::<ServerMessage>(100);
+
+    // Spawn message router task
+    let router_handle = tokio::spawn(run_message_router(incoming_messages, broadcast_tx.clone()));
+
+    // Spawn 1337 handler task
+    let handler_1337 = tokio::spawn({
+        let broadcast_tx = broadcast_tx.clone();
+        let client = client.clone();
+        async move {
+            run_1337_handler(broadcast_tx, client).await;
+        }
+    });
+
+    // Spawn Minecraft handler task
+    let handler_minecraft = tokio::spawn({
+        let broadcast_tx = broadcast_tx.clone();
+        let client = client.clone();
+        async move {
+            run_minecraft_handler(broadcast_tx, client).await;
+        }
+    });
+
+    info!("Bot running with continuous connection. Handlers: 1337 tracker, Minecraft responder");
+    info!(
+        "1337 tracker scheduled to run daily at {}:{:02} (Europe/Berlin)",
+        TARGET_HOUR,
+        TARGET_MINUTE - 1
+    );
+
+    // Keep the program running until shutdown signal or any task exits
+    info!("Bot is running. Press Ctrl+C to stop.");
+    tokio::select! {
+        _ = tokio::signal::ctrl_c() => {
+            info!("Shutdown signal received, exiting gracefully");
+        }
+        result = router_handle => {
+            error!("Message router exited unexpectedly: {result:?}");
+        }
+        result = handler_1337 => {
+            error!("1337 handler exited unexpectedly: {result:?}");
+        }
+        result = handler_minecraft => {
+            error!("Minecraft handler exited unexpectedly: {result:?}");
+        }
+    }
+
+    info!("Bot shutdown complete");
+    Ok(())
+}
+
+fn setup_twitch_client() -> (UnboundedReceiver<ServerMessage>, AuthenticatedTwitchClient) {
+    // Create authenticated IRC client with refreshing tokens
+    let credentials = RefreshingLoginCredentials::init_with_username(
+        Some(TWITCH_USERNAME.clone()),
+        TWITCH_CLIENT_ID.clone(),
+        TWITCH_CLIENT_SECRET.expose_secret().to_string(),
+        FileBasedTokenStorage::default(),
+    );
+    let config = ClientConfig::new_simple(credentials);
+    TwitchIRCClient::<SecureTCPTransport, RefreshingLoginCredentials<FileBasedTokenStorage>>::new(
+        config,
+    )
+}
+
+/// Sets up and verifies the Twitch IRC connection.
+///
+/// Creates the client, connects, joins the configured channel, and verifies authentication
+/// by waiting for a GlobalUserState message. Returns the verified client and message receiver.
+///
+/// # Errors
+///
+/// Returns an error if connection times out (30s) or authentication fails.
+#[instrument]
+async fn setup_and_verify_twitch_client()
+-> Result<(UnboundedReceiver<ServerMessage>, AuthenticatedTwitchClient)> {
+    info!("Setting up and verifying Twitch connection");
+
+    let (mut incoming_messages, client) = setup_twitch_client();
+
+    // Connect to Twitch IRC
+    info!("Connecting to Twitch IRC");
+    client.connect().await;
+
+    // Join the configured channel
+    info!(channel = %*CHANNEL_LOGIN, "Joining channel");
+    let channels = [CHANNEL_LOGIN.to_string()].into();
+    client.set_wanted_channels(channels)?;
+
+    // Verify authentication by waiting for GlobalUserState message
+    let verification = async {
+        while let Some(message) = incoming_messages.recv().await {
+            trace!(message = ?message, "Received IRC message during verification");
+
+            match message {
+                ServerMessage::Notice(NoticeMessage { message_text, .. })
+                    if message_text == "Login authentication failed" =>
+                {
+                    error!("Authentication with Twitch IRC Servers failed");
+                    bail!("Failed to authenticate with Twitch");
+                }
+                ServerMessage::GlobalUserState(_) => {
+                    info!("Connection verified and authenticated");
+                    return Ok(());
+                }
+                _ => continue,
+            }
+        }
+        bail!("Connection closed during verification")
     };
 
-    // Post stats message
-    info!(count = count, "Posting stats to channel");
-    client
-        .say(CHANNEL_LOGIN.clone(), message)
-        .await
-        .wrap_err_with(|| {
-            format!(
-                "Failed to send stats message (count: {}) to channel '{}'",
-                count, *CHANNEL_LOGIN
-            )
-        })?;
+    match tokio::time::timeout(Duration::from_secs(30), verification).await {
+        Err(_) => {
+            error!("Connection to Twitch IRC Server timed out");
+            bail!("Connection to Twitch timed out")
+        }
+        Ok(result) => result?,
+    };
 
-    info!("Stats posted successfully");
+    Ok((incoming_messages, client))
+}
 
-    // Wait 30 seconds before disconnecting
-    info!(
-        "Waiting {} seconds before disconnecting",
-        POST_STATS_DELAY.as_secs()
-    );
-    sleep(POST_STATS_DELAY).await;
+/// Message router task that broadcasts incoming IRC messages to all handlers.
+///
+/// Reads from the twitch-irc receiver and broadcasts to all subscribed handlers.
+/// Exits when the incoming_messages channel is closed.
+async fn run_message_router(
+    mut incoming_messages: UnboundedReceiver<ServerMessage>,
+    broadcast_tx: broadcast::Sender<ServerMessage>,
+) {
+    info!("Message router started");
 
-    // Disconnect client (will close incoming_messages and stop monitor task)
-    info!("Disconnecting IRC client");
-    drop(client);
+    while let Some(message) = incoming_messages.recv().await {
+        trace!(message = ?message, "Routing IRC message");
 
-    // Wait for monitor task to finish
-    monitor_handle.await.wrap_err("Monitor task panicked")?;
+        // Broadcast to all listeners (ignore errors if no receivers)
+        let _ = broadcast_tx.send(message);
+    }
 
-    info!("Daily session completed successfully");
-    Ok(())
+    debug!("Message router exited (connection closed)");
+}
+
+/// Handler for the daily 1337 tracking feature.
+///
+/// Monitors messages during the 13:37 window, tracks unique users, and posts stats at 13:38.
+/// Runs continuously, resetting state daily.
+async fn run_1337_handler(
+    broadcast_tx: broadcast::Sender<ServerMessage>,
+    client: Arc<AuthenticatedTwitchClient>,
+) {
+    info!("1337 handler started");
+
+    loop {
+        // Wait until 13:36 to start monitoring
+        wait_until_schedule(TARGET_HOUR, TARGET_MINUTE - 1).await;
+
+        info!("Starting daily 1337 monitoring session");
+
+        // Fresh HashSet for today's users
+        let total_users = Arc::new(Mutex::new(HashSet::with_capacity(MAX_USERS)));
+
+        // Spawn message monitoring subtask
+        let monitor_handle = tokio::spawn({
+            let total_users = total_users.clone();
+            // Subscribe fresh when we wake up - only see messages from now on
+            let broadcast_rx = broadcast_tx.subscribe();
+
+            async move {
+                monitor_1337_messages(broadcast_rx, total_users).await;
+            }
+        });
+
+        // Wait until 13:36:30 to send reminder
+        sleep_until_hms(TARGET_HOUR, TARGET_MINUTE - 1, 30).await;
+
+        info!("Posting reminder to channel");
+        if let Err(e) = client
+            .say(CHANNEL_LOGIN.clone(), "PausersHype".to_string())
+            .await
+        {
+            error!(error = ?e, "Failed to send reminder message");
+        }
+
+        // Wait until 13:38 to post stats
+        sleep_until_hms(TARGET_HOUR, TARGET_MINUTE + 1, 0).await;
+
+        // Get user list and count
+        let (count, user_list) = {
+            let users = total_users.lock().await;
+            let count = users.len();
+            let mut user_vec: Vec<String> = users.iter().cloned().collect();
+            user_vec.sort(); // Sort alphabetically for consistency
+            (count, user_vec)
+        };
+
+        let message = generate_stats_message(count, &user_list);
+
+        // Post stats message
+        info!(count = count, "Posting stats to channel");
+        if let Err(e) = client.say(CHANNEL_LOGIN.clone(), message).await {
+            error!(error = ?e, count = count, "Failed to send stats message");
+        } else {
+            info!("Stats posted successfully");
+        }
+
+        // Abort the monitor task
+        monitor_handle.abort();
+
+        info!("Daily 1337 session completed, waiting for next day");
+    }
+}
+
+/// Handler for responding to "WannMinecraft" messages.
+///
+/// Monitors chat for users asking about Minecraft and responds.
+/// Runs continuously.
+async fn run_minecraft_handler(
+    broadcast_tx: broadcast::Sender<ServerMessage>,
+    client: Arc<AuthenticatedTwitchClient>,
+) {
+    info!("Minecraft handler started");
+
+    // Subscribe to the broadcast channel
+    let mut broadcast_rx = broadcast_tx.subscribe();
+
+    loop {
+        match broadcast_rx.recv().await {
+            Ok(message) => {
+                let ServerMessage::Privmsg(privmsg) = message else {
+                    continue;
+                };
+
+                process_minecraft_message(&privmsg, &client).await;
+            }
+            Err(broadcast::error::RecvError::Lagged(skipped)) => {
+                error!(skipped, "Minecraft handler lagged, skipped messages");
+                continue;
+            }
+            Err(broadcast::error::RecvError::Closed) => {
+                debug!("Broadcast channel closed, Minecraft handler exiting");
+                break;
+            }
+        }
+    }
 }
 
 fn one_of<const L: usize, T>(array: &[T; L]) -> &T {
