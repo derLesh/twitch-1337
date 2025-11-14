@@ -5,7 +5,7 @@ use std::{
 };
 
 use async_trait::async_trait;
-use chrono::{Timelike, Utc};
+use chrono::{Datelike, Timelike, Utc, Weekday};
 use color_eyre::eyre::{self, Result, bail};
 use rand::seq::IndexedRandom as _;
 use secrecy::{ExposeSecret, SecretString};
@@ -247,6 +247,150 @@ async fn monitor_1337_messages(
     }
 }
 
+/// Returns the session start and end times for a given date in Berlin timezone.
+///
+/// Schedule:
+/// - Monday-Thursday: 18:00 - 23:00
+/// - Friday: 18:00 - 01:00 (next day)
+/// - Saturday: 15:00 - 01:00 (next day)
+/// - Sunday: 15:00 - 23:00
+///
+/// Returns None if the date is before the first session (2025-11-29) or if time calculation fails.
+fn get_session_times(
+    date: chrono::NaiveDate,
+) -> Option<(
+    chrono::DateTime<chrono_tz::Tz>,
+    chrono::DateTime<chrono_tz::Tz>,
+)> {
+    // Server doesn't exist before 2025-11-29
+    let first_session = chrono::NaiveDate::from_ymd_opt(2025, 11, 29)?;
+    if date < first_session {
+        return None;
+    }
+
+    let weekday = date.weekday();
+    let (start_hour, end_hour, end_next_day) = match weekday {
+        Weekday::Mon | Weekday::Tue | Weekday::Wed | Weekday::Thu => (18, 23, false),
+        Weekday::Fri => (18, 1, true),
+        Weekday::Sat => (15, 1, true),
+        Weekday::Sun => (15, 23, false),
+    };
+
+    let start = date
+        .and_hms_opt(start_hour, 0, 0)?
+        .and_local_timezone(chrono_tz::Europe::Berlin)
+        .single()?;
+
+    let end_date = if end_next_day {
+        date + chrono::Duration::days(1)
+    } else {
+        date
+    };
+
+    let end = end_date
+        .and_hms_opt(end_hour, 0, 0)?
+        .and_local_timezone(chrono_tz::Europe::Berlin)
+        .single()?;
+
+    Some((start, end))
+}
+
+/// Checks if the Minecraft server is currently online based on the schedule.
+///
+/// Returns true if the current time falls within an active session window.
+fn is_server_online(now: chrono::DateTime<chrono_tz::Tz>) -> bool {
+    let date = now.date_naive();
+
+    // Check today's session
+    if let Some((start, end)) = get_session_times(date)
+        && now >= start
+        && now < end
+    {
+        return true;
+    }
+
+    // Check if we're in the early hours of a day following a late-night session
+    // (between 00:00 and 01:00 after Friday or Saturday)
+    if now.hour() == 0 {
+        let yesterday = date - chrono::Duration::days(1);
+        if let Some((_, end)) = get_session_times(yesterday)
+            && now < end
+        {
+            return true;
+        }
+    }
+
+    false
+}
+
+/// Calculates the next session start time based on the current time.
+///
+/// Returns the DateTime when the next Minecraft session will begin.
+fn get_next_session_start(now: chrono::DateTime<chrono_tz::Tz>) -> chrono::DateTime<chrono_tz::Tz> {
+    let mut check_date = now.date_naive();
+
+    // Check if there's a session today that hasn't started yet
+    if let Some((start, _)) = get_session_times(check_date)
+        && now < start
+    {
+        return start;
+    }
+
+    // Otherwise, check the next 7 days
+    for _ in 0..7 {
+        check_date += chrono::Duration::days(1);
+        if let Some((start, _)) = get_session_times(check_date) {
+            return start;
+        }
+    }
+
+    // This should never happen, but return a fallback
+    now + chrono::Duration::days(1)
+}
+
+/// Formats a duration as a countdown string in German.
+///
+/// Returns a string like "1 Tag, 2 Stunden, 30 Minuten, 45 Sekunden".
+fn format_countdown(duration: chrono::Duration) -> String {
+    let days = duration.num_days();
+    let hours = duration.num_hours() % 24;
+    let minutes = duration.num_minutes() % 60;
+    let seconds = duration.num_seconds() % 60;
+
+    let mut parts = Vec::new();
+
+    if days > 0 {
+        parts.push(format!(
+            "{} {}",
+            days,
+            if days == 1 { "Tag" } else { "Tage" }
+        ));
+    }
+    if hours > 0 {
+        parts.push(format!(
+            "{} {}",
+            hours,
+            if hours == 1 { "Stunde" } else { "Stunden" }
+        ));
+    }
+    if minutes > 0 {
+        parts.push(format!(
+            "{} {}",
+            minutes,
+            if minutes == 1 { "Minute" } else { "Minuten" }
+        ));
+    }
+    if seconds > 0 || parts.is_empty() {
+        parts.push(format!(
+            "{} {}",
+            seconds,
+            if seconds == 1 { "Sekunde" } else { "Sekunden" }
+        ));
+    }
+
+    parts.join(", ")
+}
+
 /// Processes a PRIVMSG to check if it's asking about Minecraft and sends a response.
 ///
 /// Returns true if a response was sent, false otherwise.
@@ -258,10 +402,17 @@ async fn process_minecraft_message(
     if text.contains("wannminecraft") || text.contains("wann minecraft") {
         debug!(user = %privmsg.sender.login, "User asked about Minecraft");
 
-        let response = format!(
-            "@{} soon™ https://time.is/countdown/15:00_29_Nov_2025",
-            privmsg.sender.login
-        );
+        let now = Utc::now().with_timezone(&chrono_tz::Europe::Berlin);
+
+        let response = if is_server_online(now) {
+            "Der Server ist online Okayge 👉 REDACTED_HOST:255652 PogChamp".to_string()
+        } else {
+            let next_start = get_next_session_start(now);
+            let duration = next_start - now;
+            let countdown = format_countdown(duration);
+            format!("Noch {} WannMinecraft", countdown)
+        };
+
         if let Err(e) = client.say_in_reply_to(privmsg, response).await {
             error!(error = ?e, "Failed to send Minecraft response");
         }
