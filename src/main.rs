@@ -5,7 +5,7 @@ use std::{
 };
 
 use async_trait::async_trait;
-use chrono::{Datelike, Timelike, Utc, Weekday};
+use chrono::{Datelike, TimeDelta, Timelike, Utc, Weekday};
 use color_eyre::eyre::{self, Result, bail};
 use rand::seq::IndexedRandom as _;
 use secrecy::{ExposeSecret, SecretString};
@@ -34,6 +34,10 @@ const TARGET_MINUTE: u32 = 37;
 
 /// Maximum number of unique users to track (prevents unbounded memory growth)
 const MAX_USERS: usize = 10_000;
+
+/// Expected Latency of the Twitch IRC Server
+/// Will adjust all schedules by the latency in order to increase accuracy
+const EXPECTED_LATENCY: u32 = 90;
 
 static CHANNEL_LOGIN: LazyLock<String> = LazyLock::new(|| {
     std::env::var("TWITCH_CHANNEL").unwrap_or_else(|_| "REDACTED_CHANNEL".to_string())
@@ -118,7 +122,7 @@ async fn wait_until_schedule(hour: u32, minute: u32) {
 /// Sleeps until a specific time today in Europe/Berlin timezone.
 ///
 /// If the target time has already passed, returns immediately.
-async fn sleep_until_hms(hour: u32, minute: u32, second: u32) {
+async fn sleep_until_hms(hour: u32, minute: u32, second: u32, expected_latency: u32) {
     let now = Utc::now().with_timezone(&chrono_tz::Europe::Berlin);
     let time = now
         .date_naive()
@@ -128,9 +132,10 @@ async fn sleep_until_hms(hour: u32, minute: u32, second: u32) {
         .single()
         .expect("Ambiguous time during DST transition");
 
-    let wait_duration = (time.with_timezone(&Utc) - Utc::now())
-        .to_std()
-        .unwrap_or(Duration::from_secs(0));
+    let wait_duration =
+        (time.with_timezone(&Utc) - Utc::now() - TimeDelta::microseconds(expected_latency as i64))
+            .to_std()
+            .unwrap_or(Duration::from_secs(0));
 
     if wait_duration > Duration::from_secs(0) {
         info!(
@@ -764,7 +769,7 @@ async fn run_1337_handler(
         });
 
         // Wait until 13:36:30 to send reminder
-        sleep_until_hms(TARGET_HOUR, TARGET_MINUTE - 1, 30).await;
+        sleep_until_hms(TARGET_HOUR, TARGET_MINUTE - 1, 30, EXPECTED_LATENCY).await;
 
         info!("Posting reminder to channel");
         if let Err(e) = client
@@ -775,7 +780,7 @@ async fn run_1337_handler(
         }
 
         // Wait until 13:38 to post stats
-        sleep_until_hms(TARGET_HOUR, TARGET_MINUTE + 1, 0).await;
+        sleep_until_hms(TARGET_HOUR, TARGET_MINUTE + 1, 0, EXPECTED_LATENCY).await;
 
         // Get user list and count
         let (count, user_list) = {
