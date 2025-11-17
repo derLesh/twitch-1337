@@ -235,7 +235,8 @@ async fn monitor_1337_messages(
 
                     let mut users = total_users.lock().await;
                     // Double-check minute to prevent race condition
-                    let current_minute = Utc::now()
+                    let current_minute = privmsg
+                        .server_timestamp
                         .with_timezone(&chrono_tz::Europe::Berlin)
                         .minute();
                     if current_minute == TARGET_MINUTE {
