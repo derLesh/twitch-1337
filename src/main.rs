@@ -229,7 +229,9 @@ async fn monitor_1337_messages(
                 };
 
                 // Check time and message content
-                let local = Utc::now().with_timezone(&chrono_tz::Europe::Berlin);
+                let local = privmsg
+                    .server_timestamp
+                    .with_timezone(&chrono_tz::Europe::Berlin);
                 if (local.hour(), local.minute()) != (TARGET_HOUR, TARGET_MINUTE) {
                     continue;
                 }
