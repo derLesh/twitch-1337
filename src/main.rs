@@ -285,7 +285,7 @@ fn get_session_times(
     chrono::DateTime<chrono_tz::Tz>,
 )> {
     // Server doesn't exist before 2025-11-29
-    let first_session = chrono::NaiveDate::from_ymd_opt(2025, 11, 29)?;
+    let first_session = chrono::NaiveDate::from_ymd_opt(2025, 11, 30)?;
     if date < first_session {
         return None;
     }
