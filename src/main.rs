@@ -154,7 +154,7 @@ mod streamelements {
         pub async fn update_command(&self, channel_id: &str, command: Command) -> Result<()> {
             self.0
                 .put(format!(
-                    "https://api.streamelements.com/kappa/v3/bot/commands/{channel_id}/{}",
+                    "https://api.streamelements.com/kappa/v2/bot/commands/{channel_id}/{}",
                     command.id
                 ))
                 .json(&command)
