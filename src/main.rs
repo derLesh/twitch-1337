@@ -1092,10 +1092,29 @@ async fn handle_generic_commands(
 
     if first_word == "!toggle-ping" {
         toggle_ping_command(privmsg, client, se_client, words.next()).await?;
+    } else if first_word == "!list-pings" {
+        list_pings_command(privmsg, client, se_client, words.next()).await?;
     }
 
     Ok(())
 }
+
+// TODO: use layzlock and request id dynamically
+const STREAMELEMENTS_CHANNEL_ID: &str = "REDACTED_SE_ID";
+const PING_COMMANDS: &[&str] = &[
+    "ackern",
+    "amra",
+    "arbeitszeitbetrug",
+    "dayz",
+    "deadlock",
+    "euv",
+    "fetentiere",
+    "front",
+    "hoi",
+    "kreuzzug",
+    "ron",
+    "vicky",
+];
 
 /// Toggles a user's mention in a StreamElements ping command.
 ///
@@ -1118,7 +1137,7 @@ async fn handle_generic_commands(
 /// # Error Responses
 ///
 /// - "Das kann ich nicht FDM" - No command name provided
-/// - "Das finde ich nicht FDM" - Command not found or doesn't have "pinger" keyword
+/// - "Das finde ich nicht FDM" - Command not found
 ///
 /// # Errors
 ///
@@ -1130,22 +1149,6 @@ async fn toggle_ping_command(
     se_client: &SEClient,
     command_name: Option<&str>,
 ) -> Result<()> {
-    const CHANNEL_ID: &str = "REDACTED_SE_ID";
-    const PING_COMMANDS: &[&str] = &[
-        "ackern",
-        "amra",
-        "arbeitszeitbetrug",
-        "dayz",
-        "deadlock",
-        "euv",
-        "fetentiere",
-        "front",
-        "hoi",
-        "kreuzzug",
-        "ron",
-        "vicky",
-    ];
-
     let Some(command_name) = command_name else {
         // Best-effort reply, log but don't fail if this specific reply fails
         if let Err(e) = client
@@ -1169,7 +1172,7 @@ async fn toggle_ping_command(
 
     // Fetch all commands from StreamElements
     let commands = se_client
-        .get_all_commands(CHANNEL_ID)
+        .get_all_commands(STREAMELEMENTS_CHANNEL_ID)
         .await
         .wrap_err("Failed to fetch commands from StreamElements API")?;
 
@@ -1224,7 +1227,7 @@ async fn toggle_ping_command(
 
     // Update the command via StreamElements API
     se_client
-        .update_command(CHANNEL_ID, command)
+        .update_command(STREAMELEMENTS_CHANNEL_ID, command)
         .await
         .wrap_err("Failed to update command via StreamElements API")?;
 
@@ -1242,6 +1245,55 @@ async fn toggle_ping_command(
         )
         .await
         .wrap_err("Failed to send success confirmation message")?;
+
+    Ok(())
+}
+
+async fn list_pings_command(
+    privmsg: &PrivmsgMessage,
+    client: &Arc<AuthenticatedTwitchClient>,
+    se_client: &SEClient,
+    enabled_option: Option<&str>,
+) -> Result<()> {
+    let filter = enabled_option.unwrap_or("enabled");
+
+    let commands = se_client
+        .get_all_commands(STREAMELEMENTS_CHANNEL_ID)
+        .await
+        .wrap_err("Failed to fetch commands from StreamElements API")?;
+
+    let response = match filter {
+        "enabled" => &commands
+            .iter()
+            .filter(|command| PING_COMMANDS.contains(&command.command.as_str()))
+            .filter(|command| {
+                command
+                    .reply
+                    .to_lowercase()
+                    .contains(&format!("@{}", privmsg.sender.login.to_lowercase()))
+            })
+            .map(|command| command.command.as_str())
+            .collect::<Vec<_>>()
+            .join(" "),
+        "disabled" => &commands
+            .iter()
+            .filter(|command| PING_COMMANDS.contains(&command.command.as_str()))
+            .filter(|command| {
+                !command
+                    .reply
+                    .to_lowercase()
+                    .contains(&format!("@{}", privmsg.sender.login.to_lowercase()))
+            })
+            .map(|command| command.command.as_str())
+            .collect::<Vec<_>>()
+            .join(" "),
+        "all" => &PING_COMMANDS.join(" "),
+        _ => "Das weiß ich nicht Sadding",
+    };
+
+    if let Err(e) = client.say_in_reply_to(privmsg, response.to_string()).await {
+        error!(error = ?e, "Failed to send response message");
+    }
 
     Ok(())
 }
