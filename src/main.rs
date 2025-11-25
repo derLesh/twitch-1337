@@ -1106,13 +1106,17 @@ const PING_COMMANDS: &[&str] = &[
     "amra",
     "arbeitszeitbetrug",
     "dayz",
+    "dbd",
     "deadlock",
+    "eft",
     "euv",
     "fetentiere",
     "front",
     "hoi",
+    "kluft",
     "kreuzzug",
     "ron",
+    "ttt",
     "vicky",
 ];
 
