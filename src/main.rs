@@ -6,8 +6,9 @@ use std::{
 
 use async_trait::async_trait;
 use chrono::{Datelike, TimeDelta, Timelike, Utc, Weekday};
-use color_eyre::eyre::{self, Result, bail};
+use color_eyre::eyre::{self, Result, WrapErr, bail};
 use rand::seq::IndexedRandom as _;
+use regex::Regex;
 use secrecy::{ExposeSecret, SecretString};
 use tokio::{
     fs::{self, File},
@@ -22,8 +23,152 @@ use twitch_irc::{
     message::{NoticeMessage, PrivmsgMessage, ServerMessage},
 };
 
-// TODO: handle twitch latency (90ms)
-// TODO: ping lazy users
+/// StreamElements API client and types for managing bot commands.
+///
+/// This module provides an HTTP client for interacting with the StreamElements API
+/// to retrieve and update bot commands. Used primarily for managing ping commands
+/// that notify users about community game sessions.
+mod streamelements {
+    use eyre::{Result, WrapErr as _};
+    use reqwest::header::{self, HeaderValue};
+    use serde::{Deserialize, Serialize};
+
+    use crate::APP_USER_AGENT;
+
+    /// A StreamElements bot command with all its configuration.
+    ///
+    /// Commands can be triggered by users in chat and have various settings
+    /// like cooldowns, access levels, and the reply text.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    pub struct Command {
+        pub cooldown: CommandCooldown,
+        pub aliases: Vec<String>,
+        pub keywords: Vec<String>,
+        pub enabled: bool,
+        pub enabled_online: bool,
+        pub enabled_offline: bool,
+        pub hidden: bool,
+        pub cost: i64,
+        #[serde(rename = "type")]
+        pub command_type: String,
+        pub access_level: i64,
+        #[serde(rename = "_id")]
+        pub id: String,
+        pub regex: String,
+        pub reply: String,
+        pub command: String,
+        pub channel: String,
+        pub created_at: String,
+        pub updated_at: String,
+    }
+
+    /// Cooldown settings for a command.
+    ///
+    /// Defines how long users must wait between command uses.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct CommandCooldown {
+        /// Per-user cooldown in seconds
+        pub user: i64,
+        /// Global cooldown in seconds (affects all users)
+        pub global: i64,
+    }
+
+    /// Error response from the StreamElements API.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    pub struct Error {
+        status_code: i64,
+        error: String,
+        message: String,
+        details: Vec<ErrorDetail>,
+    }
+
+    /// Detailed error information for a specific field.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct ErrorDetail {
+        path: Vec<String>,
+        message: String,
+    }
+
+    /// HTTP client for the StreamElements API.
+    ///
+    /// Handles authentication and provides methods to interact with bot commands.
+    pub struct SEClient(reqwest::Client);
+
+    impl SEClient {
+        /// Creates a new StreamElements API client with the given authentication token.
+        ///
+        /// # Errors
+        ///
+        /// Returns an error if the token format is invalid or the HTTP client cannot be built.
+        pub fn new(token: &str) -> Result<Self> {
+            let mut headers = header::HeaderMap::new();
+            let mut auth_value = header::HeaderValue::from_str(&format!("Bearer {token}"))?;
+            auth_value.set_sensitive(true);
+            headers.insert(header::AUTHORIZATION, auth_value);
+            headers.insert(
+                header::ACCEPT,
+                HeaderValue::from_static("application/json; charset=utf-8"),
+            );
+            headers.insert(
+                header::CONTENT_TYPE,
+                HeaderValue::from_static("application/json"),
+            );
+
+            let http = reqwest::Client::builder()
+                .user_agent(APP_USER_AGENT)
+                .default_headers(headers)
+                .build()
+                .wrap_err("Failed to build HTTP Client")?;
+
+            Ok(Self(http))
+        }
+
+        /// Retrieves all bot commands for a given channel.
+        ///
+        /// # Errors
+        ///
+        /// Returns an error if the API request fails or the response cannot be parsed.
+        pub async fn get_all_commands(&self, channel_id: &str) -> Result<Vec<Command>> {
+            let commands = self
+                .0
+                .get(format!(
+                    "https://api.streamelements.com/kappa/v2/bot/commands/{channel_id}"
+                ))
+                .send()
+                .await?
+                .error_for_status()?
+                .json::<Vec<Command>>()
+                .await?;
+
+            Ok(commands)
+        }
+
+        /// Updates an existing bot command.
+        ///
+        /// # Errors
+        ///
+        /// Returns an error if the API request fails or the response cannot be parsed.
+        pub async fn update_command(&self, channel_id: &str, command: Command) -> Result<()> {
+            self.0
+                .put(format!(
+                    "https://api.streamelements.com/kappa/v3/bot/commands/{channel_id}/{}",
+                    command.id
+                ))
+                .json(&command)
+                .send()
+                .await?
+                .error_for_status()?
+                .json::<Command>()
+                .await?;
+
+            Ok(())
+        }
+    }
+}
+
+use crate::streamelements::SEClient;
 
 /// Type alias for the authenticated Twitch IRC client
 type AuthenticatedTwitchClient =
@@ -38,6 +183,8 @@ const MAX_USERS: usize = 10_000;
 /// Expected Latency of the Twitch IRC Server
 /// Will adjust all schedules by the latency in order to increase accuracy
 const EXPECTED_LATENCY: u32 = 90;
+
+static APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
 
 static CHANNEL_LOGIN: LazyLock<String> = LazyLock::new(|| {
     std::env::var("TWITCH_CHANNEL").unwrap_or_else(|_| "REDACTED_CHANNEL".to_string())
@@ -66,6 +213,12 @@ static TWITCH_CLIENT_ID: LazyLock<String> = LazyLock::new(|| {
 static TWITCH_CLIENT_SECRET: LazyLock<SecretString> = LazyLock::new(|| {
     let secret = std::env::var("TWITCH_CLIENT_SECRET")
         .expect("TWITCH_CLIENT_SECRET environment variable must be set");
+    SecretString::new(secret.into())
+});
+
+static STREAMELEMENTS_API_TOKEN: LazyLock<SecretString> = LazyLock::new(|| {
+    let secret = std::env::var("STREAMELEMENTS_API_TOKEN")
+        .expect("STREAMELEMENTS_API_TOKEN environment variable must be set");
     SecretString::new(secret.into())
 });
 
@@ -211,6 +364,13 @@ fn generate_stats_message(count: usize, user_list: &[String]) -> String {
 /// Each byte of the input string is converted to its two-digit hex representation.
 fn encode_hex(input: &str) -> String {
     input.bytes().map(|b| format!("{:02x}", b)).collect()
+}
+
+/// Returns a random element from an array.
+///
+/// Used for adding variety to bot responses by randomly selecting from predefined options.
+fn one_of<const L: usize, T>(array: &[T; L]) -> &T {
+    array.choose(&mut rand::rng()).unwrap()
 }
 
 /// Monitors broadcast messages and tracks users who say 1337 during the target minute.
@@ -571,6 +731,7 @@ pub async fn main() -> Result<()> {
     let _ = &*TWITCH_REFRESH_TOKEN;
     let _ = &*TWITCH_CLIENT_ID;
     let _ = &*TWITCH_CLIENT_SECRET;
+    let _ = &*STREAMELEMENTS_API_TOKEN;
     info!("Environment variables validated");
 
     // Setup, connect, join channel, and verify authentication (all in one step)
@@ -603,7 +764,15 @@ pub async fn main() -> Result<()> {
         }
     });
 
-    info!("Bot running with continuous connection. Handlers: 1337 tracker, Minecraft responder");
+    let handler_generic_commands = tokio::spawn({
+        let broadcast_tx = broadcast_tx.clone();
+        let client = client.clone();
+        async move { run_generic_command_handler(broadcast_tx, client).await }
+    });
+
+    info!(
+        "Bot running with continuous connection. Handlers: 1337 tracker, Minecraft responder, Generic commands"
+    );
     info!(
         "1337 tracker scheduled to run daily at {}:{:02} (Europe/Berlin)",
         TARGET_HOUR,
@@ -624,6 +793,9 @@ pub async fn main() -> Result<()> {
         }
         result = handler_minecraft => {
             error!("Minecraft handler exited unexpectedly: {result:?}");
+        }
+        result = handler_generic_commands => {
+            error!("Generic Command Handler exited unexpectedly: {result:?}");
         }
     }
 
@@ -844,6 +1016,200 @@ async fn run_minecraft_handler(
     }
 }
 
-fn one_of<const L: usize, T>(array: &[T; L]) -> &T {
-    array.choose(&mut rand::rng()).unwrap()
+/// Handler for generic text commands that start with `!`.
+///
+/// Monitors chat for commands and dispatches them to appropriate handlers.
+/// Currently supports:
+/// - `!toggle-ping <command>` - Adds/removes user from StreamElements ping command
+///
+/// Runs continuously in a loop, processing all incoming messages.
+async fn run_generic_command_handler(
+    broadcast_tx: broadcast::Sender<ServerMessage>,
+    client: Arc<AuthenticatedTwitchClient>,
+) {
+    info!("Generic Command Handler started");
+
+    // Subscribe to the broadcast channel
+    let mut broadcast_rx = broadcast_tx.subscribe();
+
+    // Initialize StreamElements client
+    let se_client = match SEClient::new(STREAMELEMENTS_API_TOKEN.expose_secret()) {
+        Ok(client) => client,
+        Err(e) => {
+            error!(error = ?e, "Failed to initialize StreamElements client");
+            error!("Generic Command Handler cannot start without valid StreamElements API token");
+            return;
+        }
+    };
+
+    loop {
+        match broadcast_rx.recv().await {
+            Ok(message) => {
+                let ServerMessage::Privmsg(privmsg) = message else {
+                    continue;
+                };
+
+                // Catch any errors from command handling to prevent task crash
+                if let Err(e) = handle_generic_commands(&privmsg, &client, &se_client).await {
+                    error!(
+                        error = ?e,
+                        user = %privmsg.sender.login,
+                        message = %privmsg.message_text,
+                        "Error handling generic command"
+                    );
+                }
+            }
+            Err(broadcast::error::RecvError::Lagged(skipped)) => {
+                error!(skipped, "Generic Command Handler lagged, skipped messages");
+                continue;
+            }
+            Err(broadcast::error::RecvError::Closed) => {
+                debug!("Broadcast channel closed, Generic Command Handler exiting");
+                break;
+            }
+        }
+    }
 }
+
+/// Dispatches chat messages to the appropriate command handler.
+///
+/// Parses the first word of the message and routes to specialized handlers.
+/// This acts as a simple command router for all `!` commands.
+///
+/// # Errors
+///
+/// Returns an error if command execution fails, but does not crash the handler.
+async fn handle_generic_commands(
+    privmsg: &PrivmsgMessage,
+    client: &Arc<AuthenticatedTwitchClient>,
+    se_client: &SEClient,
+) -> Result<()> {
+    let mut words = privmsg.message_text.split_whitespace();
+    let Some(first_word) = words.next() else {
+        return Ok(());
+    };
+
+    if first_word == "!toggle-ping" {
+        toggle_ping_command(privmsg, client, se_client, words.next()).await?;
+    }
+
+    Ok(())
+}
+
+/// Toggles a user's mention in a StreamElements ping command.
+///
+/// Ping commands are used to notify community members about game sessions (e.g., Minecraft).
+/// This function adds the requesting user's @mention to the command reply if not present,
+/// or removes it if already present.
+///
+/// # Command Format
+///
+/// `!toggle-ping <command_name>`
+///
+/// # Behavior
+///
+/// 1. Searches for a StreamElements command matching `<command_name>` with the "pinger" keyword
+/// 2. If user's @mention exists in the reply, removes it (case-insensitive)
+/// 3. If not present, adds @mention after the first existing @ symbol (or at the start)
+/// 4. Updates the command via StreamElements API
+/// 5. Confirms success to the user
+///
+/// # Error Responses
+///
+/// - "Das kann ich nicht FDM" - No command name provided
+/// - "Das finde ich nicht FDM" - Command not found or doesn't have "pinger" keyword
+///
+/// # Errors
+///
+/// Returns an error if IRC communication or StreamElements API calls fail.
+/// User-facing errors are sent as chat messages before returning the error.
+async fn toggle_ping_command(
+    privmsg: &PrivmsgMessage,
+    client: &Arc<AuthenticatedTwitchClient>,
+    se_client: &SEClient,
+    command_name: Option<&str>,
+) -> Result<()> {
+    const CHANNEL_ID: &str = "REDACTED_SE_ID";
+
+    let Some(command_name) = command_name else {
+        // Best-effort reply, log but don't fail if this specific reply fails
+        if let Err(e) = client
+            .say_in_reply_to(privmsg, String::from("Das kann ich nicht FDM"))
+            .await
+        {
+            error!(error = ?e, "Failed to send 'no command name' error message");
+        }
+        return Ok(());
+    };
+
+    // Fetch all commands from StreamElements
+    let commands = se_client
+        .get_all_commands(CHANNEL_ID)
+        .await
+        .wrap_err("Failed to fetch commands from StreamElements API")?;
+
+    // Find the matching command with "pinger" keyword
+    let Some(mut command) = commands
+        .into_iter()
+        .filter(|command| command.keywords.contains(&String::from("pinger")))
+        .find(|command| command.command == command_name)
+    else {
+        // Best-effort reply
+        if let Err(e) = client
+            .say_in_reply_to(privmsg, String::from("Das finde ich nicht FDM"))
+            .await
+        {
+            error!(error = ?e, "Failed to send 'command not found' error message");
+        }
+        return Ok(());
+    };
+
+    // Create case-insensitive regex to find user's mention
+    // Use regex::escape to prevent username from being interpreted as regex
+    let escaped_username = regex::escape(&privmsg.sender.login);
+    let re = Regex::new(&format!("(?i)@?\\s*{}", escaped_username))
+        .wrap_err("Failed to create username regex")?;
+
+    // Toggle user's mention in the command reply
+    command.reply = if re.is_match(&command.reply) {
+        // Remove user's mention
+        let new_reply = re.replace_all(&command.reply, "").to_string();
+        // Clean up extra whitespace
+        new_reply
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ")
+    } else {
+        // Add user's mention
+        if let Some(insert_location) = command.reply.find('@') {
+            // Insert after first @ symbol
+            let (head, tail) = command.reply.split_at(insert_location);
+            format!("{head} @{} {tail}", privmsg.sender.name)
+        } else {
+            // No @ found, add at the beginning
+            format!("@{} {}", privmsg.sender.name, command.reply)
+        }
+    };
+
+    debug!(
+        command_name = %command_name,
+        user = %privmsg.sender.login,
+        new_reply = %command.reply,
+        "Updating ping command"
+    );
+
+    // Update the command via StreamElements API
+    se_client
+        .update_command(CHANNEL_ID, command)
+        .await
+        .wrap_err("Failed to update command via StreamElements API")?;
+
+    // Confirm success to the user
+    client
+        .say_in_reply_to(privmsg, String::from("Hab ich gemacht Okayge"))
+        .await
+        .wrap_err("Failed to send success confirmation message")?;
+
+    Ok(())
+}
+
