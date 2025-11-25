@@ -4,37 +4,25 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-A Rust-based Twitch IRC bot that monitors a channel for messages containing "1337" sent at exactly 13:37 Berlin time. The bot tracks unique users and posts daily statistics at 13:38. Designed for resource efficiency - IRC connection only active 2.5 minutes per day (13:36-13:38:30).
+A Rust-based Twitch IRC bot with multiple features:
+1. **1337 Tracker**: Monitors for "1337"/"DANKIES" messages at 13:37 Berlin time, posts stats at 13:38
+2. **Minecraft Responder**: Answers "WannMinecraft" queries with server status and countdown
+3. **Ping Toggle**: Allows users to toggle their @mention in StreamElements ping commands
+
+Uses a persistent IRC connection with broadcast-based message routing to multiple handlers.
 
 ## Build and Run Commands
 
 ### Using Just (Recommended)
 
-The project includes a Justfile for common tasks:
+The project includes a Justfile for deployment tasks:
 
 ```bash
-# Docker operations
-just build              # Build Docker image as chronophylos/twitch-1337:latest
+just build              # Build podman image as chronophylos/twitch-1337:latest
 just build-no-cache     # Force full rebuild without cache
-just run                # Run container in background (requires .env file)
-just run-test           # Run container interactively for testing
-just up                 # Build and run in one command
-just reload             # Stop, remove, rebuild, and run (fresh start)
-just logs               # Follow container logs
-just logs-tail          # Show last 50 log lines
-just stop               # Stop the container
-just clean              # Stop and remove container
-just restart            # Restart the container
-just push               # Push to Docker Hub
-just pull               # Pull from Docker Hub
-
-# Local development
-just build-local        # Build Rust binary (glibc, dynamically linked)
-just build-musl         # Build static musl binary (no dependencies)
-just run-local          # Run with cargo
-just lint               # Run clippy
-just fmt                # Format code
-just fmt-check          # Check formatting
+just push               # Push image to remote docker host via SSH
+just restart            # Restart container on docker host via SSH
+just deploy             # Build, push, and restart (full deployment)
 ```
 
 ### Using Cargo Directly
@@ -95,70 +83,68 @@ docker logs -f twitch-1337
 ## Environment Variables
 
 **Required:**
-- `TWITCH_USERNAME` - Bot username for posting stats
-- `TWITCH_ACCESS_TOKEN` - OAuth access token
+- `TWITCH_USERNAME` - Bot username for posting messages
+- `TWITCH_ACCESS_TOKEN` - OAuth access token (with chat:read and chat:edit scopes)
 - `TWITCH_REFRESH_TOKEN` - OAuth refresh token
 - `TWITCH_CLIENT_ID` - Twitch application client ID
 - `TWITCH_CLIENT_SECRET` - Twitch application client secret
+- `STREAMELEMENTS_API_TOKEN` - StreamElements API token for command management
 
 **Optional:**
 - `TWITCH_CHANNEL` - Channel to monitor (default: "REDACTED_CHANNEL")
 - `RUST_LOG` - Logging level (default: "info", options: trace, debug, info, warn, error)
 
-## Data Persistence
+## Token Storage
 
-The bot persists user participation history to `/data/history.jsonl` (JSONL format - one JSON object per line).
-
-**File Format:**
-```jsonl
-{"date":"2025-10-29","users":["user1","user2","user3"]}
-{"date":"2025-10-30","users":["user4"]}
-```
-
-**Each entry contains:**
-- `date`: Date in YYYY-MM-DD format (Berlin timezone)
-- `users`: Sorted array of usernames who said "1337" at 13:37
-
-**Volume Mount (Required):**
-- The `/data` directory must be mounted as a volume for persistence
-- Example: `-v $(pwd)/data:/data` or `-v /path/to/data:/data`
-- The `just run` and `just run-test` commands automatically create `./data` and mount it
-- The bot will fail if it cannot write to the history file (ensures data integrity)
-
-**File Operations:**
-- Write-only: Bot appends new entries daily, never reads historical data
-- Atomic writes with flush and sync to ensure data durability
-- Entries are written after stats are posted (13:38)
-- Directory and file are created automatically if they don't exist
+The bot persists refreshed OAuth tokens to `./token.ron` (Rust Object Notation format):
+- Automatically saves updated tokens when they're refreshed by twitch-irc
+- Falls back to environment variables on first run if file doesn't exist
+- Eliminates need to manually update tokens when they expire
+- Uses `FileBasedTokenStorage` implementing the `TokenStorage` trait
 
 ## Architecture
 
-### Main Application Flow
+### Persistent Connection with Broadcast-Based Message Routing
 
-The application runs a single daily task that handles the complete flow:
+The bot maintains a **single persistent IRC connection** and uses a **broadcast channel** to distribute messages to multiple independent handlers:
 
-1. **Daily Session** (13:36-13:38:30):
-   - Connects to Twitch IRC at 13:36 (authenticated)
-   - Spawns async subtask to monitor incoming messages
-   - Filters for PRIVMSG at exactly 13:37 containing "1337"
-   - Tracks unique usernames in session-scoped `HashSet`
-   - At 13:38, posts stats message to channel
-   - Waits 30 seconds (until 13:38:30)
-   - Disconnects and prepares for next day
+1. **Setup and Connection** (startup):
+   - Creates authenticated IRC client with refreshing token credentials
+   - Connects to Twitch IRC and joins configured channel
+   - Verifies authentication by waiting for GlobalUserState message (30s timeout)
+   - Creates broadcast channel (capacity: 100 messages) for message distribution
 
-**Benefits of unified session:**
-- Simpler code - single connection, single task
-- No state synchronization between separate tasks
-- Clearer control flow and error handling
-- Single authentication instead of anonymous + authenticated
+2. **Message Router Task** (continuous):
+   - Reads from twitch-irc's UnboundedReceiver
+   - Broadcasts all ServerMessages to subscribed handlers
+   - Runs until connection closes
+
+3. **Handler Tasks** (parallel, continuous):
+   - **1337 Handler**: Daily scheduled monitoring (13:36-13:38)
+   - **Minecraft Handler**: Responds to "WannMinecraft" queries 24/7
+   - **Generic Command Handler**: Processes `!toggle-ping` commands 24/7
+   - Each handler subscribes to broadcast channel independently
+   - Handlers filter for relevant messages and act accordingly
+
+4. **Graceful Shutdown**:
+   - Main task waits for Ctrl+C or any handler exit
+   - All tasks run in tokio::select! for coordinated shutdown
+
+**Benefits of persistent connection + broadcast:**
+- Single connection overhead (no repeated auth)
+- Handlers are independent and can be added/removed easily
+- No shared state between handlers (loose coupling)
+- Broadcast channel handles backpressure (lagging handlers warned)
+- Clean separation of concerns
 
 ### Key Dependencies
 
 **Runtime & Async:**
-- `tokio` - Async runtime (features: macros, rt-multi-thread, time, signal, fs only)
+- `tokio` - Async runtime (features: macros, rt-multi-thread, time, signal, fs)
 
 **IRC & Networking:**
-- `twitch-irc` - Twitch IRC client (feature: transport-tcp-rustls-webpki-roots only)
+- `twitch-irc` - Twitch IRC client (features: refreshing-token-rustls-webpki-roots, transport-tcp-rustls-webpki-roots)
+- `reqwest` - HTTP client for StreamElements API (features: json, rustls-tls-webpki-roots)
 
 **Time Handling:**
 - `chrono` - Date/time operations
@@ -166,23 +152,35 @@ The application runs a single daily task that handles the complete flow:
   - Only compiles Berlin timezone data via `.cargo/config.toml`
 
 **Error Handling & Logging:**
-- `color-eyre` - Rich error messages with context
+- `color-eyre` / `eyre` - Rich error messages with context
 - `tracing` - Structured logging
-- `tracing-subscriber` - Log formatting and filtering
+- `tracing-subscriber` - Log formatting and filtering (env-filter feature)
 
 **Security:**
-- `secrecy` - Protects OAuth token in memory (prevents accidental logging)
+- `secrecy` - Protects OAuth tokens and secrets in memory (prevents accidental logging)
 
 **Serialization:**
 - `serde` - Serialization framework (derive feature)
-- `serde_json` - JSON serialization for JSONL persistence
+- `serde_json` - JSON serialization for StreamElements API
+- `ron` - Rust Object Notation for token storage
+
+**Other:**
+- `regex` - For username matching in ping command
+- `rand` - For randomizing bot response messages
+- `async-trait` - For TokenStorage trait implementation
 
 ### State Management
 
-- `total_users`: `Arc<Mutex<HashSet<String>>>` - Tracks unique usernames who said "1337" at 13:37
-- Session-scoped: created fresh for each daily run, automatically cleared when session ends
-- Shared between main task and monitoring subtask via tokio::sync::Mutex
+**1337 Handler State:**
+- `total_users`: `Arc<Mutex<HashSet<String>>>` - Tracks unique usernames who said "1337"/"DANKIES" at 13:37
+- Created fresh each day at 13:36, discarded after stats posted at 13:38
+- Shared between handler task and monitoring subtask via tokio::sync::Mutex
 - Maximum capacity: 10,000 users (prevents unbounded memory growth)
+
+**No Persistent State:**
+- Bot is stateless between runs
+- Minecraft schedule hardcoded in `get_session_times()` (first session: 2025-11-30)
+- StreamElements commands fetched/updated via API on demand
 
 ### Configuration Files
 
@@ -267,92 +265,259 @@ sudo cp target/x86_64-unknown-linux-musl/release/twitch-1337 /usr/local/bin/
 
 ## Code Structure
 
-### Functions
+### Main Entry Point
 
-**`run_daily_session() -> Result<()>`**
-- Creates authenticated IRC connection
-- Spawns monitoring subtask to process incoming messages
-- Waits until 13:38 to post stats
-- Posts stats message with user count
-- Writes participation history to JSONL file
-- Waits 30 seconds before disconnecting
-- Returns errors via eyre for proper handling
+**`main() -> Result<()>` (src/main.rs:711-804)**
+- Initializes error handling (color-eyre) and logging (tracing-subscriber)
+- Validates all environment variables at startup (panics if missing)
+- Calls `setup_and_verify_twitch_client()` to establish authenticated connection
+- Creates broadcast channel with 100-message capacity
+- Spawns 4 concurrent tasks: message router, 1337 handler, Minecraft handler, generic command handler
+- Uses `tokio::select!` to wait for Ctrl+C or any task exit
 
-**`append_to_history(entry: HistoryEntry) -> Result<()>`**
-- Creates `/data` directory if it doesn't exist
-- Opens history file in append mode (creates if missing)
-- Serializes entry to JSON and writes line + newline
-- Flushes and syncs to ensure data is written to disk
-- Returns error if any file operation fails (fail-fast for data integrity)
+### Connection Management
 
-**`sleep_until_daily_time(hour, minute) -> ()`**
-- Calculates next occurrence of specified Berlin time
-- Sleeps until that time using tokio::time::sleep
-- Accounts for DST transitions
-- Logs next scheduled run time
+**`setup_and_verify_twitch_client() -> Result<(UnboundedReceiver, Client)>` (src/main.rs:829-893)**
+- Creates IRC client with `RefreshingLoginCredentials<FileBasedTokenStorage>`
+- Connects to Twitch IRC and joins configured channel
+- Waits for `GlobalUserState` message to verify authentication (30s timeout)
+- Returns verified client and incoming message receiver
+- Detects and reports authentication failures with helpful error messages
 
-**`main() -> Result<()>`**
-- Initializes error handling (color-eyre)
-- Initializes logging (tracing-subscriber)
-- Validates environment variables at startup
-- Spawns single task that loops daily
-- Handles Ctrl+C shutdown gracefully
+**`setup_twitch_client() -> (UnboundedReceiver, Client)` (src/main.rs:806-818)**
+- Creates `RefreshingLoginCredentials` with client ID, secret, and token storage
+- Builds `ClientConfig` and `TwitchIRCClient`
+- Returns receiver and client for connection setup
+
+### Message Distribution
+
+**`run_message_router(incoming_messages, broadcast_tx)` (src/main.rs:899-913)**
+- Reads from twitch-irc's UnboundedReceiver
+- Broadcasts all ServerMessages to subscribed handlers
+- Exits when connection closes
+
+### Handler: 1337 Tracker
+
+**`run_1337_handler(broadcast_tx, client)` (src/main.rs:919-983)**
+- Infinite loop: waits until 13:36 Berlin time each day
+- Creates fresh `HashSet` for today's users
+- Spawns `monitor_1337_messages()` subtask
+- At 13:36:30: posts "PausersHype" reminder
+- At 13:38: generates and posts stats message
+- Aborts monitor subtask and repeats next day
+
+**`monitor_1337_messages(broadcast_rx, total_users)` (src/main.rs:380-430)**
+- Filters for PRIVMSG messages at exactly 13:37:xx Berlin time
+- Checks if message contains "1337" or "DANKIES" via `is_valid_1337_message()`
+- Ignores known bots: "supibot", "potatbotat"
+- Inserts unique usernames into shared HashSet (max 10,000)
+
+**`generate_stats_message(count, user_list) -> String` (src/main.rs:325-360)**
+- Returns contextual German message based on count:
+  - 0: "Erm" or "fuh"
+  - 1: "@user zumindest einer..."
+  - 2-3: Special handling for specific users
+  - 4: "3.6, nicht gut, nicht dramatisch"
+  - 5-7: "gute Auslese"
+  - 8+: "insane quota Pag"
+- Uses `one_of()` to randomly select from message variants
+
+### Handler: Minecraft Responder
+
+**`run_minecraft_handler(broadcast_tx, client)` (src/main.rs:989-1017)**
+- Subscribes to broadcast channel
+- Filters for PRIVMSG messages
+- Calls `process_minecraft_message()` for each message
+
+**`process_minecraft_message(privmsg, client) -> bool` (src/main.rs:593-642)**
+- Checks if message contains "wannminecraft" or "wann minecraft"
+- Ignores known bots
+- Gets current Berlin time and checks `is_server_online()`
+- If online: responds with server address
+- If offline: calculates countdown via `get_next_session_start()` and `format_countdown()`
+- Special handling for user "REDACTED_USER": hex-encoded responses only
+
+**`get_session_times(date) -> Option<(DateTime, DateTime)>` (src/main.rs:441-478)**
+- Returns Minecraft server online hours for a given date
+- Schedule varies by weekday:
+  - Mon-Thu: 18:00-23:00
+  - Fri: 18:00-01:00 (next day)
+  - Sat: 15:00-01:00 (next day)
+  - Sun: 15:00-23:00
+- First session: 2025-11-30
+
+**`is_server_online(now) -> bool` (src/main.rs:483-513)**
+- Checks if current Berlin time falls within session window
+- Handles late-night sessions spanning midnight
+
+**`get_next_session_start(now) -> DateTime` (src/main.rs:518-545)**
+- Scans up to 30 days ahead for next session start
+- Used for countdown calculations
+
+**`format_countdown(duration) -> String` (src/main.rs:550-588)**
+- Formats chrono::Duration as German text: "X Tage, Y Stunden, Z Minuten, W Sekunden"
+
+### Handler: Generic Commands
+
+**`run_generic_command_handler(broadcast_tx, client)` (src/main.rs:1026-1072)**
+- Initializes `SEClient` (StreamElements API client)
+- Subscribes to broadcast channel
+- Dispatches commands to `handle_generic_commands()`
+
+**`handle_generic_commands(privmsg, client, se_client) -> Result<()>` (src/main.rs:1082-1097)**
+- Parses first word of message
+- Routes to specialized handlers (currently only `toggle_ping_command`)
+
+**`toggle_ping_command(privmsg, client, se_client, command_name) -> Result<()>` (src/main.rs:1126-1214)**
+- Fetches all StreamElements commands with "pinger" keyword
+- Finds command matching `command_name`
+- Toggles user's @mention in command reply using regex
+- Updates command via StreamElements API
+- Responds with "Hab ich gemacht Okayge" on success
+- Error responses: "Das kann ich nicht FDM" (no name), "Das finde ich nicht FDM" (not found)
+
+### StreamElements Module
+
+**`streamelements::SEClient` (src/main.rs:94-168)**
+- HTTP client for StreamElements API with Bearer auth
+- `new(token) -> Result<Self>`: Creates client with auth headers
+- `get_all_commands(channel_id) -> Result<Vec<Command>>`: Fetches all bot commands
+- `update_command(channel_id, command) -> Result<()>`: Updates a command
+
+**`streamelements::Command` (src/main.rs:42-64)**
+- Represents a StreamElements bot command
+- Fields: cooldown, aliases, keywords, enabled flags, reply text, etc.
+
+### Token Storage
+
+**`FileBasedTokenStorage` (src/main.rs:647-699)**
+- Implements `TokenStorage` trait for twitch-irc
+- Stores tokens in `./token.ron` file
+- `load_token()`: Reads from file, falls back to environment variables on first run
+- `update_token()`: Writes updated tokens to file (called automatically by twitch-irc)
+
+### Utility Functions
+
+**`calculate_next_occurrence(hour, minute) -> DateTime<Utc>` (src/main.rs:228-252)**
+- Calculates next occurrence of daily Berlin time
+- Handles DST transitions
+
+**`wait_until_schedule(hour, minute)` (src/main.rs:255-273)**
+- Sleeps until next occurrence of daily Berlin time
+- Logs wait duration
+
+**`sleep_until_hms(hour, minute, second, latency)` (src/main.rs:278-300)**
+- Sleeps until specific time today (Berlin)
+- Adjusts for expected latency (90ms)
+- Used for precise timing within 1337 handler
+
+**`is_ignored_bot(username) -> bool` (src/main.rs:305-307)**
+- Returns true if username is "supibot" or "potatbotat"
+
+**`is_valid_1337_message(message) -> bool` (src/main.rs:312-320)**
+- Checks if PRIVMSG should count toward 1337 stats
+- Filters bots and checks for "1337" or "DANKIES" keywords
+
+**`encode_hex(input) -> String` (src/main.rs:365-367)**
+- Converts string to hex representation
+- Used for REDACTED_USER's special response encoding
+
+**`one_of<T>(array) -> &T` (src/main.rs:372-374)**
+- Returns random element from array using rand::rng()
 
 ### Types
 
-**`HistoryEntry` (struct)**
-- `date: String` - Date in YYYY-MM-DD format
-- `users: Vec<String>` - Sorted list of participating usernames
-- Implements `Serialize` for JSON encoding
+**`AuthenticatedTwitchClient` (type alias, src/main.rs:174-175)**
+- `TwitchIRCClient<SecureTCPTransport, RefreshingLoginCredentials<FileBasedTokenStorage>>`
 
-### Static Configuration
+**`streamelements::Command` (struct, src/main.rs:42-64)**
+- Represents a StreamElements bot command
+- Key fields: `id`, `command`, `reply`, `keywords`, `enabled`, `cooldown`
 
-- `CHANNEL_LOGIN: LazyLock<String>` - Channel name from env or default
-- `TWITCH_USERNAME: LazyLock<String>` - Required env var
-- `TWITCH_ACCESS_TOKEN: LazyLock<SecretString>` - Required env var, wrapped for security
-- `TWITCH_REFRESH_TOKEN: LazyLock<SecretString>` - Required env var, wrapped for security
-- `TWITCH_CLIENT_ID: LazyLock<String>` - Required env var
-- `TWITCH_CLIENT_SECRET: LazyLock<SecretString>` - Required env var, wrapped for security
-- `HISTORY_FILE: &str` - Path to history file (`/data/history.jsonl`)
+**`streamelements::CommandCooldown` (struct, src/main.rs:69-75)**
+- `user: i64` - Per-user cooldown in seconds
+- `global: i64` - Global cooldown in seconds
+
+### Static Configuration (LazyLock)
+
+- `APP_USER_AGENT: &str` - User agent for HTTP requests (src/main.rs:187)
+- `CHANNEL_LOGIN: LazyLock<String>` - Channel name from env or "REDACTED_CHANNEL" (src/main.rs:189-191)
+- `TWITCH_USERNAME: LazyLock<String>` - Required env var (src/main.rs:193-195)
+- `TWITCH_ACCESS_TOKEN: LazyLock<SecretString>` - Required env var, wrapped for security (src/main.rs:197-201)
+- `TWITCH_REFRESH_TOKEN: LazyLock<SecretString>` - Required env var, wrapped for security (src/main.rs:203-207)
+- `TWITCH_CLIENT_ID: LazyLock<String>` - Required env var (src/main.rs:209-211)
+- `TWITCH_CLIENT_SECRET: LazyLock<SecretString>` - Required env var, wrapped for security (src/main.rs:213-217)
+- `STREAMELEMENTS_API_TOKEN: LazyLock<SecretString>` - Required env var, wrapped for security (src/main.rs:219-223)
+
+### Constants
+
+- `TARGET_HOUR: u32 = 13` - Hour for 1337 tracking (src/main.rs:177)
+- `TARGET_MINUTE: u32 = 37` - Minute for 1337 tracking (src/main.rs:178)
+- `MAX_USERS: usize = 10_000` - Maximum tracked users (src/main.rs:181)
+- `EXPECTED_LATENCY: u32 = 90` - Twitch IRC latency in milliseconds (src/main.rs:185)
 
 ## Important Notes
 
-- **Resource Efficient**: IRC connection only active 2.5 minutes/day (13:36-13:38:30)
-- **Secure**: OAuth tokens and client secret wrapped in `SecretString`, won't appear in debug output
-- **Error Handling**: All failures logged with context, session retried next day on error
-- **Timezone**: All operations use `Europe/Berlin` timezone
-- **Message Filter**: Only messages containing "1337" at exactly 13:37:xx are counted
-- **Deduplication**: Same user counted only once per day via HashSet
-- **Binary Size**: Optimized with minimal tokio features and single timezone
+- **Persistent Connection**: Single IRC connection runs 24/7, not ephemeral sessions
+- **Secure**: OAuth tokens and secrets wrapped in `SecretString`, won't appear in debug output
+- **Error Handling**: All failures logged with context, handlers continue running on error
+- **Timezone**: All time-based operations use `Europe/Berlin` timezone
+- **1337 Tracking**: Messages containing "1337" or "DANKIES" at exactly 13:37:xx Berlin time
+- **Bot Filtering**: Ignores messages from "supibot" and "potatbotat"
+- **Deduplication**: Same user counted only once per day via HashSet (1337 handler)
+- **Binary Size**: Optimized with minimal tokio features and single timezone (6MB)
 - **Logging**: Structured logs with tracing, configurable via `RUST_LOG`
-- **Simplified Architecture**: Single task, single connection, no state synchronization
-- **Data Persistence**: User participation history stored in JSONL format at `/data/history.jsonl`
-- **Data Integrity**: Bot fails if history file cannot be written (ensures no data loss)
+- **Broadcast Architecture**: Message router distributes to independent handlers
+- **Token Refresh**: Tokens automatically refreshed and saved to `./token.ron`
+- **Special Users**: REDACTED_USER gets hex-encoded responses for Minecraft queries
 
-## Daily Timeline
+## Feature Timelines
 
+### 1337 Tracker (Daily)
 ```
-13:36:00 → Bot connects to IRC (authenticated), starts monitoring
-13:37:00-13:37:59 → Messages containing "1337" counted (unique users)
-13:38:00 → Stats posted to channel
-13:38:30 → Bot disconnects, waits until next day
+13:36:00 → Handler wakes, creates fresh HashSet, subscribes to broadcast
+13:36:30 → Posts "PausersHype" reminder
+13:37:00-13:37:59 → Monitoring subtask tracks "1337"/"DANKIES" messages (unique users)
+13:38:00 → Posts stats message with contextual response
+         → Aborts monitor subtask, waits for next day
+```
+
+### Minecraft Responder (24/7)
+```
+Continuous → Listens for "wannminecraft" / "wann minecraft"
+           → Responds with server status or countdown to next session
+           → Uses hardcoded schedule (Mon-Thu 18-23, Fri 18-01, Sat 15-01, Sun 15-23)
+```
+
+### Ping Toggle (24/7)
+```
+Continuous → Listens for "!toggle-ping <command>"
+           → Fetches StreamElements commands, toggles user's @mention
+           → Updates command via API, confirms success
 ```
 
 ## Development Tips
 
 ### General
-- Use `RUST_LOG=debug` to see all IRC messages
-- Session catches errors and logs them - check logs if stats don't post
-- HashSet is session-scoped - automatically cleared when session ends (~2.5 minutes)
-- Single authenticated connection used for both monitoring and posting
-- All `.unwrap()` calls replaced with proper error handling except lazy static initialization
+- Use `RUST_LOG=debug` to see all IRC messages and handler activity
+- Use `RUST_LOG=trace` to see every ServerMessage received (very verbose)
+- Handlers are independent - errors in one handler don't crash others
+- Broadcast channel capacity: 100 messages (handlers warned if lagging)
+- All handlers run in infinite loops - only exit on channel close or panic
+- LazyLock panics if environment variables are missing at startup
 
-### Docker Development
-- Use `just build` for quick Docker builds with caching
-- Use `just run-test` for interactive testing (see logs immediately)
-- Use `just logs` to follow logs from running container
-- cargo-chef caches dependencies - only rebuilds app when source changes
-- Build verification step ensures binary is statically linked
+### Adding New Handlers
+1. Create handler function: `async fn run_my_handler(broadcast_tx, client)`
+2. Subscribe to broadcast: `let mut broadcast_rx = broadcast_tx.subscribe()`
+3. Loop on `broadcast_rx.recv().await`, filter for relevant messages
+4. Spawn handler in main(): `tokio::spawn(run_my_handler(broadcast_tx.clone(), client.clone()))`
+5. Add to `tokio::select!` for coordinated shutdown
+
+### Deployment Workflow
+- Use `just deploy` to build locally with podman, push to remote docker host via SSH, and restart
+- The Justfile assumes podman locally and docker on remote host
+- Deployment target: `docker.homelab` SSH host
+- Remote project directory: `twitch` (docker compose location)
 
 ### Binary Size
 - Standard build: ~6.2MB (glibc, dynamically linked)
@@ -360,12 +525,8 @@ sudo cp target/x86_64-unknown-linux-musl/release/twitch-1337 /usr/local/bin/
 - Docker image: ~6MB (FROM scratch with musl binary)
 - Verify static linking: `ldd target/x86_64-unknown-linux-musl/release/twitch-1337` (should show "statically linked")
 
-### Testing Minimal Deployments
-- Docker scratch: Already configured in Dockerfile
-- Alpine: `docker run -v $(pwd)/target/x86_64-unknown-linux-musl/release/twitch-1337:/bot alpine:latest /bot`
-- Busybox: Same as Alpine but with busybox image
-
 ### Environment Configuration
 - Copy `.env.example` to `.env` for local development
 - Never commit `.env` to git (already in .gitignore)
 - Get OAuth credentials from your Twitch application at https://dev.twitch.tv/console
+- StreamElements API token from StreamElements dashboard
