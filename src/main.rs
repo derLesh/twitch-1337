@@ -1131,7 +1131,20 @@ async fn toggle_ping_command(
     command_name: Option<&str>,
 ) -> Result<()> {
     const CHANNEL_ID: &str = "REDACTED_SE_ID";
-    const PING_COMMANDS: &[&str] = &["ron", "vicky", "euv"];
+    const PING_COMMANDS: &[&str] = &[
+        "ackern",
+        "amra",
+        "arbeitszeitbetrug",
+        "dayz",
+        "deadlock",
+        "euv",
+        "fetentiere",
+        "front",
+        "hoi",
+        "kreuzzug",
+        "ron",
+        "vicky",
+    ];
 
     let Some(command_name) = command_name else {
         // Best-effort reply, log but don't fail if this specific reply fails
