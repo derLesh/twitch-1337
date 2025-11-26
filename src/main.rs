@@ -326,16 +326,24 @@ fn is_valid_1337_message(message: &PrivmsgMessage) -> bool {
 fn generate_stats_message(count: usize, user_list: &[String]) -> String {
     match count {
         0 => one_of(&["Erm", "fuh"]).to_string(),
-        1 => format!(
-            "@{} zumindest einer {}",
-            user_list
-                .first()
-                .expect("Count should equal user list length"),
-            one_of(&["fuh", "uhh"])
-        ),
+        1 => one_of(&[
+            format!(
+                "@{} zumindest einer {}",
+                user_list
+                    .first()
+                    .expect("Count should equal user list length"),
+                one_of(&["fuh", "uhh"])
+            ),
+            format!(
+                "War wohl zu viel verlangt {}",
+                one_of(&["BRUHSIT", "UltraMad", "Madeg"])
+            ),
+        ])
+        .to_string(),
         2..=3 if !user_list.contains(&"gargoyletec".to_string()) => {
             format!(
-                "{count}, nichtmal gnocci {}",
+                "{count}{} gnocci {}",
+                one_of(&[" und nichtmal", ", aber wo", " und ohne"]),
                 one_of(&["Sadding", "Sadge", "Sadeg", "SadgeCry", "Saddies"])
             )
         }
@@ -343,11 +351,19 @@ fn generate_stats_message(count: usize, user_list: &[String]) -> String {
             "{count}, {}",
             one_of(&[
                 "geht besser Okayge",
-                "Verbesserungswürdig",
-                "unterdurchnittlich"
+                "verbesserungswürdig Waiting",
+                "unterdurchschnittlich Waiting",
+                "ausbaufähig Waiting",
+                "entspricht nicht ganz den Erwarungen Waiting",
+                "bemüht",
+                "anpassungsfähig YEP"
             ])
         ),
-        4 => "3.6, nicht gut, nicht dramatisch".to_string(),
+        4 => one_of(&[
+            "3.6, nicht gut, nicht dramatisch".to_string(),
+            format!("{count}, {}", one_of(&["Standard Performance", "solide"])),
+        ])
+        .to_string(),
         5..=7 => {
             format!(
                 "{count}, gute Auslese {}",
@@ -355,7 +371,10 @@ fn generate_stats_message(count: usize, user_list: &[String]) -> String {
             )
         }
         _ => {
-            format!("{count}, insane quota Pag")
+            format!(
+                "{count}, {}",
+                one_of(&["insane quota Pag", "rekordverdächtig WICKED"])
+            )
         }
     }
 }
@@ -1300,4 +1319,21 @@ async fn list_pings_command(
     }
 
     Ok(())
+}
+
+mod database {
+    struct CaffeineProduct {
+        id: u64,
+        name: String,
+        unit: String,
+        mg_coffeine: f64,
+    }
+
+    struct CaffeineConsumption {
+        id: u64,
+        user_id: String,
+        product_id: u64,
+        amount: f64,
+        timestamp: chrono::NaiveDateTime,
+    }
 }
