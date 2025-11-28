@@ -49,9 +49,5 @@ COPY --from=builder /app/target/x86_64-unknown-linux-musl/release/twitch-1337 /t
 # Note: In FROM scratch, we can't use RUN commands, so the app creates this at runtime
 # Users must mount a volume at /data for persistence (e.g., -v ./data:/data)
 
-# Set environment variables (override these at runtime)
-ENV TWITCH_CHANNEL=REDACTED_CHANNEL
-ENV RUST_LOG=info
-
 # Run the bot
 ENTRYPOINT ["/twitch-1337"]
