@@ -765,6 +765,8 @@ pub async fn main() -> Result<()> {
     let _ = &*STREAMELEMENTS_API_TOKEN;
     info!("Environment variables validated");
 
+    ensure_data_dir().await?;
+
     // Setup, connect, join channel, and verify authentication (all in one step)
     let (incoming_messages, client) = setup_and_verify_twitch_client().await?;
 
@@ -805,7 +807,9 @@ pub async fn main() -> Result<()> {
 
         (Some(loader), Some(handler))
     } else {
-        warn!("Google Sheets not configured (GOOGLE_SHEETS_SPREADSHEET_ID and GOOGLE_SERVICE_ACCOUNT_PATH required). Scheduled messages disabled.");
+        warn!(
+            "Google Sheets not configured (GOOGLE_SHEETS_SPREADSHEET_ID and GOOGLE_SERVICE_ACCOUNT_PATH required). Scheduled messages disabled."
+        );
         (None, None)
     };
 
@@ -901,6 +905,21 @@ pub async fn main() -> Result<()> {
     }
 
     info!("Bot shutdown complete");
+    Ok(())
+}
+
+fn get_data_dir() -> PathBuf {
+    std::env::var("DATA_DIR")
+        .unwrap_or_else(|_| "/var/lib/twitch-1337".to_string())
+        .into()
+}
+
+#[instrument]
+async fn ensure_data_dir() -> Result<()> {
+    let data_dir = get_data_dir();
+    if !data_dir.exists() {
+        tokio::fs::create_dir_all(data_dir).await?;
+    }
     Ok(())
 }
 
@@ -1420,7 +1439,7 @@ async fn run_schedule_task(
     cache: Arc<tokio::sync::RwLock<database::ScheduleCache>>,
 ) {
     use chrono::Utc;
-    use tokio::time::{sleep, Duration};
+    use tokio::time::{Duration, sleep};
 
     info!(
         schedule = %schedule.name,
@@ -1468,7 +1487,10 @@ async fn run_schedule_task(
             "Posting scheduled message"
         );
 
-        if let Err(e) = client.say(CHANNEL_LOGIN.clone(), schedule.message.clone()).await {
+        if let Err(e) = client
+            .say(CHANNEL_LOGIN.clone(), schedule.message.clone())
+            .await
+        {
             error!(
                 error = ?e,
                 schedule = %schedule.name,
@@ -1491,7 +1513,7 @@ async fn run_scheduled_message_handler(
 ) {
     use std::collections::HashMap;
     use tokio::task::JoinHandle;
-    use tokio::time::{interval, Duration};
+    use tokio::time::{Duration, interval};
 
     info!("Dynamic scheduled message handler started");
 
@@ -1557,7 +1579,7 @@ async fn run_scheduled_message_handler(
 mod database {
     use chrono::{DateTime, NaiveDateTime, NaiveTime, TimeDelta, Utc};
     use chrono_tz::Tz;
-    use eyre::{eyre, Result};
+    use eyre::{Result, eyre};
     use serde::{Deserialize, Serialize};
 
     struct CaffeineProduct {
@@ -1718,12 +1740,12 @@ mod database {
                 (Some(_), None) => {
                     return Err(eyre!(
                         "active_time_end must be set if active_time_start is set"
-                    ))
+                    ));
                 }
                 (None, Some(_)) => {
                     return Err(eyre!(
                         "active_time_start must be set if active_time_end is set"
-                    ))
+                    ));
                 }
                 _ => {} // Both set or both None is valid
             }
@@ -1759,36 +1781,44 @@ mod database {
     }
 }
 
+fn get_schedule_cache_dir() -> PathBuf {
+    get_data_dir().join("schedule_cache.ron")
+}
+
 /// Save the schedule cache to disk in RON format.
 fn save_cache_to_disk(cache: &database::ScheduleCache) -> Result<()> {
-    let cache_path = "schedule_cache.ron";
+    let cache_path = get_schedule_cache_dir();
 
     // Serialize to RON format
     let ron_string = ron::ser::to_string_pretty(cache, ron::ser::PrettyConfig::default())
         .wrap_err("Failed to serialize cache to RON")?;
 
     // Write to file
-    std::fs::write(cache_path, ron_string)
-        .wrap_err_with(|| format!("Failed to write cache to {}", cache_path))?;
+    std::fs::write(&cache_path, ron_string)
+        .wrap_err_with(|| format!("Failed to write cache to {}", cache_path.display()))?;
 
-    debug!(path = cache_path, version = cache.version, "Cache saved to disk");
+    debug!(
+        path = %cache_path.display(),
+        version = cache.version,
+        "Cache saved to disk"
+    );
     Ok(())
 }
 
 /// Load the schedule cache from disk.
 fn load_cache_from_disk() -> Result<database::ScheduleCache> {
-    let cache_path = "schedule_cache.ron";
+    let cache_path = get_schedule_cache_dir();
 
     // Read file contents
-    let contents = std::fs::read_to_string(cache_path)
-        .wrap_err_with(|| format!("Failed to read cache from {}", cache_path))?;
+    let contents = std::fs::read_to_string(&cache_path)
+        .wrap_err_with(|| format!("Failed to read cache from {}", cache_path.display()))?;
 
     // Deserialize from RON
-    let cache: database::ScheduleCache = ron::from_str(&contents)
-        .wrap_err("Failed to deserialize cache from RON")?;
+    let cache: database::ScheduleCache =
+        ron::from_str(&contents).wrap_err("Failed to deserialize cache from RON")?;
 
     info!(
-        path = cache_path,
+        path = %cache_path.display(),
         version = cache.version,
         schedule_count = cache.schedules.len(),
         last_updated = %cache.last_updated,
@@ -1801,11 +1831,11 @@ fn load_cache_from_disk() -> Result<database::ScheduleCache> {
 /// Fetch schedules from Google Sheets.
 /// Returns a vector of validated schedules.
 async fn fetch_schedules_from_sheets() -> Result<Vec<database::Schedule>> {
-    use google_sheets4::api::Sheets;
-    use hyper_util::client::legacy::connect::HttpConnector;
-    use hyper_util::client::legacy::Client;
-    use hyper_util::rt::TokioExecutor;
-    use google_sheets4::yup_oauth2::ServiceAccountAuthenticator;
+    use google_sheets4::{api::Sheets, yup_oauth2::ServiceAccountAuthenticator};
+    use hyper_util::{
+        client::legacy::{Client, connect::HttpConnector},
+        rt::TokioExecutor,
+    };
 
     // Get configuration from environment
     let spreadsheet_id = std::env::var("GOOGLE_SHEETS_SPREADSHEET_ID")
@@ -1825,14 +1855,15 @@ async fn fetch_schedules_from_sheets() -> Result<Vec<database::Schedule>> {
     );
 
     // Load service account credentials
-    let service_account_key = google_sheets4::yup_oauth2::read_service_account_key(&service_account_path)
-        .await
-        .wrap_err_with(|| {
-            format!(
-                "Failed to read service account key from {}",
-                service_account_path
-            )
-        })?;
+    let service_account_key =
+        google_sheets4::yup_oauth2::read_service_account_key(&service_account_path)
+            .await
+            .wrap_err_with(|| {
+                format!(
+                    "Failed to read service account key from {}",
+                    service_account_path
+                )
+            })?;
 
     // Create authenticator
     let auth = ServiceAccountAuthenticator::builder(service_account_key)
@@ -1919,8 +1950,8 @@ fn parse_schedule_row(row: &[serde_json::Value], row_num: usize) -> Result<datab
     };
 
     // Parse required fields
-    let name = get_string(0)
-        .wrap_err_with(|| format!("Row {}: Name (column A) is required", row_num))?;
+    let name =
+        get_string(0).wrap_err_with(|| format!("Row {}: Name (column A) is required", row_num))?;
 
     let message = get_string(1)
         .wrap_err_with(|| format!("Row {}: Message (column B) is required", row_num))?;
@@ -1934,13 +1965,12 @@ fn parse_schedule_row(row: &[serde_json::Value], row_num: usize) -> Result<datab
     // Parse optional date fields (ISO 8601 format)
     let start_date = if let Some(s) = get_optional_string(3) {
         Some(
-            NaiveDateTime::parse_from_str(&s, "%Y-%m-%dT%H:%M:%S")
-                .wrap_err_with(|| {
-                    format!(
-                        "Row {}: Invalid start date format (expected YYYY-MM-DDTHH:MM:SS)",
-                        row_num
-                    )
-                })?,
+            NaiveDateTime::parse_from_str(&s, "%Y-%m-%dT%H:%M:%S").wrap_err_with(|| {
+                format!(
+                    "Row {}: Invalid start date format (expected YYYY-MM-DDTHH:MM:SS)",
+                    row_num
+                )
+            })?,
         )
     } else {
         None
@@ -1948,13 +1978,12 @@ fn parse_schedule_row(row: &[serde_json::Value], row_num: usize) -> Result<datab
 
     let end_date = if let Some(s) = get_optional_string(4) {
         Some(
-            NaiveDateTime::parse_from_str(&s, "%Y-%m-%dT%H:%M:%S")
-                .wrap_err_with(|| {
-                    format!(
-                        "Row {}: Invalid end date format (expected YYYY-MM-DDTHH:MM:SS)",
-                        row_num
-                    )
-                })?,
+            NaiveDateTime::parse_from_str(&s, "%Y-%m-%dT%H:%M:%S").wrap_err_with(|| {
+                format!(
+                    "Row {}: Invalid end date format (expected YYYY-MM-DDTHH:MM:SS)",
+                    row_num
+                )
+            })?,
         )
     } else {
         None
@@ -1962,29 +1991,23 @@ fn parse_schedule_row(row: &[serde_json::Value], row_num: usize) -> Result<datab
 
     // Parse optional time window fields (HH:MM format)
     let active_time_start = if let Some(s) = get_optional_string(5) {
-        Some(
-            NaiveTime::parse_from_str(&s, "%H:%M")
-                .wrap_err_with(|| {
-                    format!(
-                        "Row {}: Invalid active time start format (expected HH:MM)",
-                        row_num
-                    )
-                })?,
-        )
+        Some(NaiveTime::parse_from_str(&s, "%H:%M").wrap_err_with(|| {
+            format!(
+                "Row {}: Invalid active time start format (expected HH:MM)",
+                row_num
+            )
+        })?)
     } else {
         None
     };
 
     let active_time_end = if let Some(s) = get_optional_string(6) {
-        Some(
-            NaiveTime::parse_from_str(&s, "%H:%M")
-                .wrap_err_with(|| {
-                    format!(
-                        "Row {}: Invalid active time end format (expected HH:MM)",
-                        row_num
-                    )
-                })?,
-        )
+        Some(NaiveTime::parse_from_str(&s, "%H:%M").wrap_err_with(|| {
+            format!(
+                "Row {}: Invalid active time end format (expected HH:MM)",
+                row_num
+            )
+        })?)
     } else {
         None
     };
@@ -2003,10 +2026,8 @@ fn parse_schedule_row(row: &[serde_json::Value], row_num: usize) -> Result<datab
 /// Schedule loader service that polls Google Sheets and updates the cache.
 /// Runs continuously in a background task.
 #[instrument]
-async fn run_schedule_loader_service(
-    cache: Arc<tokio::sync::RwLock<database::ScheduleCache>>,
-) {
-    use tokio::time::{interval, Duration};
+async fn run_schedule_loader_service(cache: Arc<tokio::sync::RwLock<database::ScheduleCache>>) {
+    use tokio::time::{Duration, interval};
 
     info!("Schedule loader service started");
 
@@ -2105,7 +2126,10 @@ async fn try_load_schedules_from_any_source() -> Result<Vec<database::Schedule>>
 
         match fetch_schedules_from_sheets().await {
             Ok(schedules) => {
-                info!(count = schedules.len(), "Loaded schedules from Google Sheets");
+                info!(
+                    count = schedules.len(),
+                    "Loaded schedules from Google Sheets"
+                );
                 return Ok(schedules);
             }
             Err(e) => {
