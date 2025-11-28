@@ -32,6 +32,7 @@ mod streamelements {
     use eyre::{Result, WrapErr as _};
     use reqwest::header::{self, HeaderValue};
     use serde::{Deserialize, Serialize};
+    use tracing::instrument;
 
     use crate::APP_USER_AGENT;
 
@@ -95,6 +96,7 @@ mod streamelements {
     /// HTTP client for the StreamElements API.
     ///
     /// Handles authentication and provides methods to interact with bot commands.
+    #[derive(Debug)]
     pub struct SEClient(reqwest::Client);
 
     impl SEClient {
@@ -103,6 +105,7 @@ mod streamelements {
         /// # Errors
         ///
         /// Returns an error if the token format is invalid or the HTTP client cannot be built.
+        #[instrument]
         pub fn new(token: &str) -> Result<Self> {
             let mut headers = header::HeaderMap::new();
             let mut auth_value = header::HeaderValue::from_str(&format!("Bearer {token}"))?;
@@ -131,6 +134,7 @@ mod streamelements {
         /// # Errors
         ///
         /// Returns an error if the API request fails or the response cannot be parsed.
+        #[instrument]
         pub async fn get_all_commands(&self, channel_id: &str) -> Result<Vec<Command>> {
             let commands = self
                 .0
@@ -151,6 +155,7 @@ mod streamelements {
         /// # Errors
         ///
         /// Returns an error if the API request fails or the response cannot be parsed.
+        #[instrument]
         pub async fn update_command(&self, channel_id: &str, command: Command) -> Result<()> {
             self.0
                 .put(format!(
@@ -183,7 +188,7 @@ const MAX_USERS: usize = 10_000;
 
 /// Expected Latency of the Twitch IRC Server
 /// Will adjust all schedules by the latency in order to increase accuracy
-const EXPECTED_LATENCY: u32 = 90;
+const EXPECTED_LATENCY: u32 = 89;
 
 /// Scheduled message configuration: (message, hours_between_posts)
 const SCHEDULED_MESSAGES: &[(&str, u64)] = &[(
@@ -259,6 +264,7 @@ fn calculate_next_occurrence(hour: u32, minute: u32) -> chrono::DateTime<Utc> {
 }
 
 /// Sleeps until the next occurrence of a daily time in Europe/Berlin timezone.
+#[instrument]
 async fn wait_until_schedule(hour: u32, minute: u32) {
     let next_run = calculate_next_occurrence(hour, minute);
     let now = Utc::now();
@@ -282,6 +288,7 @@ async fn wait_until_schedule(hour: u32, minute: u32) {
 /// Sleeps until a specific time today in Europe/Berlin timezone.
 ///
 /// If the target time has already passed, returns immediately.
+#[instrument]
 async fn sleep_until_hms(hour: u32, minute: u32, second: u32, expected_latency: u32) {
     let now = Utc::now().with_timezone(&chrono_tz::Europe::Berlin);
     let time = now
@@ -403,6 +410,7 @@ fn one_of<const L: usize, T>(array: &[T; L]) -> &T {
 ///
 /// Runs in a loop until the broadcast channel closes or an error occurs.
 /// Only tracks messages sent during the configured TARGET_HOUR:TARGET_MINUTE.
+#[instrument]
 async fn monitor_1337_messages(
     mut broadcast_rx: broadcast::Receiver<ServerMessage>,
     total_users: Arc<Mutex<HashSet<String>>>,
@@ -616,6 +624,7 @@ fn format_countdown(duration: chrono::Duration) -> String {
 /// Processes a PRIVMSG to check if it's asking about Minecraft and sends a response.
 ///
 /// Returns true if a response was sent, false otherwise.
+#[instrument]
 async fn process_minecraft_message(
     privmsg: &PrivmsgMessage,
     client: &Arc<AuthenticatedTwitchClient>,
@@ -688,6 +697,7 @@ impl TokenStorage for FileBasedTokenStorage {
     type LoadError = eyre::Report;
     type UpdateError = eyre::Report;
 
+    #[instrument]
     async fn load_token(&mut self) -> Result<UserAccessToken, Self::LoadError> {
         // Try to load from file first
         match fs::read_to_string(&self.path).await {
@@ -716,6 +726,7 @@ impl TokenStorage for FileBasedTokenStorage {
         }
     }
 
+    #[instrument]
     async fn update_token(&mut self, token: &UserAccessToken) -> Result<(), Self::UpdateError> {
         debug!(path = %self.path.display(), "Updating token in file");
         let buffer = ron::to_string(token)?.into_bytes();
@@ -841,6 +852,7 @@ pub async fn main() -> Result<()> {
     Ok(())
 }
 
+#[instrument]
 fn setup_twitch_client() -> (UnboundedReceiver<ServerMessage>, AuthenticatedTwitchClient) {
     // Create authenticated IRC client with refreshing tokens
     let credentials = RefreshingLoginCredentials::init_with_username(
@@ -934,6 +946,7 @@ async fn setup_and_verify_twitch_client()
 ///
 /// Reads from the twitch-irc receiver and broadcasts to all subscribed handlers.
 /// Exits when the incoming_messages channel is closed.
+#[instrument]
 async fn run_message_router(
     mut incoming_messages: UnboundedReceiver<ServerMessage>,
     broadcast_tx: broadcast::Sender<ServerMessage>,
@@ -954,6 +967,7 @@ async fn run_message_router(
 ///
 /// Monitors messages during the 13:37 window, tracks unique users, and posts stats at 13:38.
 /// Runs continuously, resetting state daily.
+#[instrument]
 async fn run_1337_handler(
     broadcast_tx: broadcast::Sender<ServerMessage>,
     client: Arc<AuthenticatedTwitchClient>,
@@ -1024,6 +1038,7 @@ async fn run_1337_handler(
 ///
 /// Monitors chat for users asking about Minecraft and responds.
 /// Runs continuously.
+#[instrument]
 async fn run_minecraft_handler(
     broadcast_tx: broadcast::Sender<ServerMessage>,
     client: Arc<AuthenticatedTwitchClient>,
@@ -1061,6 +1076,7 @@ async fn run_minecraft_handler(
 /// - `!toggle-ping <command>` - Adds/removes user from StreamElements ping command
 ///
 /// Runs continuously in a loop, processing all incoming messages.
+#[instrument]
 async fn run_generic_command_handler(
     broadcast_tx: broadcast::Sender<ServerMessage>,
     client: Arc<AuthenticatedTwitchClient>,
@@ -1117,6 +1133,7 @@ async fn run_generic_command_handler(
 /// # Errors
 ///
 /// Returns an error if command execution fails, but does not crash the handler.
+#[instrument]
 async fn handle_generic_commands(
     privmsg: &PrivmsgMessage,
     client: &Arc<AuthenticatedTwitchClient>,
@@ -1184,6 +1201,7 @@ const PING_COMMANDS: &[&str] = &[
 ///
 /// Returns an error if IRC communication or StreamElements API calls fail.
 /// User-facing errors are sent as chat messages before returning the error.
+#[instrument]
 async fn toggle_ping_command(
     privmsg: &PrivmsgMessage,
     client: &Arc<AuthenticatedTwitchClient>,
@@ -1290,6 +1308,7 @@ async fn toggle_ping_command(
     Ok(())
 }
 
+#[instrument]
 async fn list_pings_command(
     privmsg: &PrivmsgMessage,
     client: &Arc<AuthenticatedTwitchClient>,
@@ -1343,6 +1362,7 @@ async fn list_pings_command(
 ///
 /// Spawns a separate task for each scheduled message. Each task runs independently
 /// and posts its message at its configured interval.
+#[instrument]
 async fn run_scheduled_message_handler(client: Arc<AuthenticatedTwitchClient>) {
     info!("Scheduled message handler started");
 
