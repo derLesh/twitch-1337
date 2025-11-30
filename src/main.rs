@@ -313,7 +313,7 @@ async fn sleep_until_hms(hour: u32, minute: u32, second: u32, expected_latency: 
 ///
 /// Returns true if the username matches any bot in the ignore list.
 fn is_ignored_bot(username: &str) -> bool {
-    ["supibot", "potatbotat"].contains(&username)
+    ["supibot", "potatbotat", "streamelements"].contains(&username)
 }
 
 /// Determines if a message should be counted as a valid 1337 message.
