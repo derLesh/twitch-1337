@@ -637,7 +637,7 @@ async fn process_minecraft_message(
         let now = Utc::now().with_timezone(&chrono_tz::Europe::Berlin);
         info!(current_time = %now, "Processing Minecraft query");
 
-        let mut response = if is_server_online(now) {
+        let response = if is_server_online(now) {
             "Der Server ist online Okayge 👉 REDACTED_HOST:255652 PogChamp".to_string()
         } else {
             let next_start = get_next_session_start(now);
@@ -650,19 +650,19 @@ async fn process_minecraft_message(
             );
 
             // Special response for REDACTED_USER: raw milliseconds only
-            if privmsg.sender.login == "REDACTED_USER" {
-                duration.num_milliseconds().to_string()
-            } else {
-                let countdown = format_countdown(duration);
-                info!(countdown = %countdown, "Formatted countdown");
-                format!("Noch {} WannMinecraft", countdown)
-            }
+            //if privmsg.sender.login == "REDACTED_USER" {
+            //    duration.num_milliseconds().to_string()
+            //} else {
+            let countdown = format_countdown(duration);
+            info!(countdown = %countdown, "Formatted countdown");
+            format!("Noch {} WannMinecraft", countdown)
+            //}
         };
 
         // Hex-encode all replies to REDACTED_USER
-        if privmsg.sender.login == "REDACTED_USER" {
-            response = encode_hex(&response);
-        }
+        //if privmsg.sender.login == "REDACTED_USER" {
+        //    response = encode_hex(&response);
+        //}
 
         if let Err(e) = client.say_in_reply_to(privmsg, response).await {
             error!(error = ?e, "Failed to send Minecraft response");
