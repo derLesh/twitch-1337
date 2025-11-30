@@ -23,6 +23,8 @@ use twitch_irc::{
     message::{NoticeMessage, PrivmsgMessage, ServerMessage},
 };
 
+mod storage;
+
 /// StreamElements API client and types for managing bot commands.
 ///
 /// This module provides an HTTP client for interacting with the StreamElements API
@@ -460,10 +462,10 @@ async fn monitor_1337_messages(
 /// Returns the session start and end times for a given date in Berlin timezone.
 ///
 /// Schedule:
-/// - Monday-Thursday: 18:00 - 23:00
-/// - Friday: 18:00 - 01:00 (next day)
-/// - Saturday: 15:00 - 01:00 (next day)
-/// - Sunday: 15:00 - 23:00
+/// - Monday-Thursday: 18:00 - 00:00
+/// - Friday: 18:00 - 02:00 (next day)
+/// - Saturday: 12:00 - 02:00 (next day)
+/// - Sunday: 12:00 - 00:00
 ///
 /// Returns None if the date is before the first session (2025-11-29) or if time calculation fails.
 fn get_session_times(
@@ -480,10 +482,10 @@ fn get_session_times(
 
     let weekday = date.weekday();
     let (start_hour, end_hour, end_next_day) = match weekday {
-        Weekday::Mon | Weekday::Tue | Weekday::Wed | Weekday::Thu => (18, 23, false),
-        Weekday::Fri => (18, 1, true),
-        Weekday::Sat => (15, 1, true),
-        Weekday::Sun => (15, 23, false),
+        Weekday::Mon | Weekday::Tue | Weekday::Wed | Weekday::Thu => (18, 0, true),
+        Weekday::Fri => (18, 2, true),
+        Weekday::Sat => (12, 2, true),
+        Weekday::Sun => (12, 0, true),
     };
 
     let start = date
