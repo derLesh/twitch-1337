@@ -650,8 +650,7 @@ async fn process_minecraft_message(
             );
 
             let time = next_start.time().to_string();
-
-            if duration.num_days() >= 0 {
+            if duration.num_hours() < 24 {
                 format!("Morgen um {time} WannMinecraft")
             } else {
                 format!("Heute um {time} WannMinecraft")
