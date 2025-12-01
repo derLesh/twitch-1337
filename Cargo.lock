@@ -2214,6 +2214,8 @@ dependencies = [
  "eyre",
  "google-sheets4",
  "hyper 1.8.1",
+ "hyper-rustls 0.27.7",
+ "hyper-util",
  "parking_lot",
  "rand",
  "regex",
@@ -2227,6 +2229,7 @@ dependencies = [
  "tracing-error",
  "tracing-subscriber",
  "twitch-irc",
+ "yup-oauth2",
 ]
 
 [[package]]

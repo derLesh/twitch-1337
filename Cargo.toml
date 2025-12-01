@@ -34,5 +34,8 @@ reqwest = { version = "0.12", default-features = false, features = [
 eyre = "0.6.12"
 regex = "1.12.2"
 google-sheets4 = "6.0"
-hyper = "1.5"
+yup-oauth2 = "11.0"  # Match version used by google-sheets4 to access HyperClientBuilder trait
+hyper = { version = "1.5", features = ["client"] }
 tracing-error = "0.2.1"
+hyper-util = "0.1.18"
+hyper-rustls = { version = "0.27.7", default-features = false, features = ["webpki-roots", "http1"] }

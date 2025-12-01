@@ -1837,10 +1837,43 @@ fn load_cache_from_disk() -> Result<database::ScheduleCache> {
     Ok(cache)
 }
 
+/// Custom HTTP client builder for yup-oauth2 that uses webpki-roots instead of native certs.
+/// This is required for FROM scratch containers that don't have system CA certificates.
+struct WebPkiHyperClient;
+
+impl yup_oauth2::authenticator::HyperClientBuilder for WebPkiHyperClient {
+    type Connector =
+        hyper_rustls::HttpsConnector<hyper_util::client::legacy::connect::HttpConnector>;
+
+    fn build_hyper_client(
+        self,
+    ) -> std::result::Result<
+        hyper_util::client::legacy::Client<Self::Connector, String>,
+        yup_oauth2::Error,
+    > {
+        let connector = hyper_rustls::HttpsConnectorBuilder::new()
+            .with_webpki_roots() // Use webpki-roots instead of native-roots
+            .https_or_http()
+            .enable_http1()
+            .build();
+
+        Ok(
+            hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new())
+                .build(connector),
+        )
+    }
+
+    fn build_test_hyper_client(
+        self,
+    ) -> hyper_util::client::legacy::Client<Self::Connector, String> {
+        self.build_hyper_client().unwrap()
+    }
+}
+
 /// Fetch schedules from Google Sheets.
 /// Returns a vector of validated schedules.
 async fn fetch_schedules_from_sheets() -> Result<Vec<database::Schedule>> {
-    use google_sheets4::{api::Sheets, hyper_rustls, hyper_util, yup_oauth2};
+    use google_sheets4::api::Sheets;
 
     // Get configuration from environment
     let spreadsheet_id = std::env::var("GOOGLE_SHEETS_SPREADSHEET_ID")
@@ -1869,24 +1902,31 @@ async fn fetch_schedules_from_sheets() -> Result<Vec<database::Schedule>> {
             )
         })?;
 
-    // Create authenticator
-    let auth = yup_oauth2::ServiceAccountAuthenticator::builder(service_account_key)
-        .build()
-        .await
-        .wrap_err("Failed to create service account authenticator")?;
+    // Create authenticator with custom HTTP client that uses webpki-roots
+    // The default yup-oauth2 client uses native-roots which won't work in FROM scratch containers
+    let auth = yup_oauth2::ServiceAccountAuthenticator::with_client(
+        service_account_key,
+        WebPkiHyperClient,
+    )
+    .build()
+    .await
+    .wrap_err("Failed to create service account authenticator")?;
 
-    // Create HTTP client
-    let client = hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new())
-        .build(
-            hyper_rustls::HttpsConnectorBuilder::new()
-                .with_webpki_roots()
-                .https_or_http()
-                .enable_http1()
-                .build(),
-        );
+    // Build HTTP client with webpki roots for the Sheets API
+    // This must match the connector type from WebPkiHyperClient
+    let https_connector = hyper_rustls::HttpsConnectorBuilder::new()
+        .with_webpki_roots()
+        .https_or_http()
+        .enable_http1()
+        .build();
+
+    // Create hyper client for google-sheets4 (uses BoxBody as the body type)
+    let hyper_client =
+        hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new())
+            .build(https_connector);
 
     // Create Sheets hub
-    let hub = Sheets::new(client, auth);
+    let hub = Sheets::new(hyper_client, auth);
 
     // Fetch data from sheet (A2:G to skip header row, read 7 columns)
     let range = format!("'{}'!A2:G", sheet_name);
