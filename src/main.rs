@@ -639,7 +639,7 @@ async fn process_minecraft_message(
         info!(current_time = %now, "Processing Minecraft query");
 
         let response = if is_server_online(now) {
-            "Der Server ist online Okayge 👉 REDACTED_HOST:255652 PogChamp".to_string()
+            "Der Server ist online Okayge 👉 REDACTED_IP:25565 PogChamp".to_string()
         } else {
             let next_start = get_next_session_start(now);
             let duration = next_start - now;
@@ -1693,10 +1693,7 @@ mod database {
 
                 // Enforce minimum interval of 1 minute to prevent spam
                 if total_seconds < 60 {
-                    return Err(eyre!(
-                        "Interval must be at least 1 minute (got {})",
-                        s
-                    ));
+                    return Err(eyre!("Interval must be at least 1 minute (got {})", s));
                 }
 
                 return TimeDelta::try_seconds(total_seconds)
@@ -1913,7 +1910,9 @@ impl yup_oauth2::authenticator::HyperClientBuilder for WebPkiHyperClient {
 
 /// Build a mapping of column names to their indices from the header row.
 /// Returns a HashMap with normalized (lowercase, trimmed) column names as keys.
-fn build_column_map(header_row: &[serde_json::Value]) -> Result<std::collections::HashMap<String, usize>> {
+fn build_column_map(
+    header_row: &[serde_json::Value],
+) -> Result<std::collections::HashMap<String, usize>> {
     use std::collections::HashMap;
 
     let mut map = HashMap::new();
@@ -2101,7 +2100,13 @@ fn parse_schedule_row(
         row.get(*index)
             .and_then(|v| v.as_str())
             .map(|s| s.to_string())
-            .ok_or_else(|| eyre!("Column '{}' (index {}) is missing or not a string", col_name, index))
+            .ok_or_else(|| {
+                eyre!(
+                    "Column '{}' (index {}) is missing or not a string",
+                    col_name,
+                    index
+                )
+            })
     };
 
     // Helper to get optional string value from named column
@@ -2117,14 +2122,18 @@ fn parse_schedule_row(
     let name = get_string("schedule name")
         .wrap_err_with(|| format!("Row {}: Schedule Name is required", row_num))?;
 
-    let message = get_string("message")
-        .wrap_err_with(|| format!("Row {}: Message is required", row_num))?;
+    let message =
+        get_string("message").wrap_err_with(|| format!("Row {}: Message is required", row_num))?;
 
     let interval_str = get_string("interval")
         .wrap_err_with(|| format!("Row {}: Interval is required", row_num))?;
 
-    let interval = database::Schedule::parse_interval(&interval_str)
-        .wrap_err_with(|| format!("Row {}: Invalid interval format '{}'", row_num, interval_str))?;
+    let interval = database::Schedule::parse_interval(&interval_str).wrap_err_with(|| {
+        format!(
+            "Row {}: Invalid interval format '{}'",
+            row_num, interval_str
+        )
+    })?;
 
     // Check if schedule is enabled (if Enabled column exists)
     // Silently skip disabled schedules by returning Ok(None)
@@ -2161,17 +2170,16 @@ fn parse_schedule_row(
     };
 
     let start_date = if let Some(s) = get_optional_string("start date") {
-        Some(parse_date(&s).wrap_err_with(|| {
-            format!("Row {}: Invalid start date format", row_num)
-        })?)
+        Some(
+            parse_date(&s)
+                .wrap_err_with(|| format!("Row {}: Invalid start date format", row_num))?,
+        )
     } else {
         None
     };
 
     let end_date = if let Some(s) = get_optional_string("end date") {
-        Some(parse_date(&s).wrap_err_with(|| {
-            format!("Row {}: Invalid end date format", row_num)
-        })?)
+        Some(parse_date(&s).wrap_err_with(|| format!("Row {}: Invalid end date format", row_num))?)
     } else {
         None
     };
