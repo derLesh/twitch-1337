@@ -436,30 +436,55 @@ sudo cp target/x86_64-unknown-linux-musl/release/twitch-1337 /usr/local/bin/
 - Posts message to Twitch chat
 - Exits gracefully if schedule removed from cache
 
-**`fetch_schedules_from_sheets() -> Result<Vec<Schedule>>` (src/main.rs:~1762)**
+**`build_column_map(header_row) -> Result<HashMap<String, usize>>` (src/main.rs:~1914)**
+- Builds mapping of column names to indices from header row
+- Normalizes column names (lowercase, trimmed) for case-insensitive matching
+- Validates that required columns exist
+- Returns HashMap for flexible column ordering
+
+**`fetch_schedules_from_sheets() -> Result<Vec<Schedule>>` (src/main.rs:~1945)**
 - Authenticates with Google Sheets API using service account
+- Fetches header row first to build column mapping
 - Fetches data from configured spreadsheet and sheet
-- Parses rows into `Schedule` objects
+- Parses rows into `Schedule` objects using column names (not positions)
 - Validates each schedule (interval >= 1 minute, valid date ranges, etc.)
 - Skips invalid rows with error logging (includes row numbers)
 - Returns vector of validated schedules
 
-**`parse_schedule_row(row, row_num) -> Result<Schedule>` (src/main.rs:~1860)**
-- Parses Google Sheets row into Schedule struct
-- Expected columns: Name, Message, Interval, Start Date, End Date, Active Start, Active End
-- Required: Name, Message, Interval
-- Optional: Date range and time window fields
-- Validates formats: ISO 8601 for dates, HH:MM for times, "30m"/"1h"/"2h30m" for intervals
+**`parse_schedule_row(row, row_num, column_map) -> Result<Schedule>` (src/main.rs:~2081)**
+- Parses Google Sheets row into Schedule struct using column mapping
+- Required columns (by name): Schedule Name, Message, Interval
+- Optional columns: Start Date, End Date, Active Time Start, Active Time End, Enabled
+- Supports flexible column ordering (uses header row to determine positions)
+- Validates formats:
+  - Dates: ISO 8601 (YYYY-MM-DDTHH:MM:SS), DD/MM/YYYY HH:MM, or DD/MM/YYYY
+  - Times: HH:MM format
+  - Intervals: "hh:mm" format (e.g., "01:30" for 1 hour 30 minutes) or legacy "30m"/"1h"/"2h30m"
+- Skips disabled schedules (Enabled column = FALSE, NO, or 0)
 
 **Google Sheets Format:**
+The bot reads the header row to determine column positions, so columns can be in any order. Column names are case-insensitive.
+
+Required columns:
+- **Schedule Name** - Unique identifier for the schedule
+- **Message** - Text to post in chat
+- **Interval** - Posting frequency in "hh:mm" format (e.g., "01:00" for 1 hour, "00:30" for 30 minutes)
+
+Optional columns:
+- **Start Date** - When to start posting (formats: "DD/MM/YYYY", "DD/MM/YYYY HH:MM", or "YYYY-MM-DDTHH:MM:SS")
+- **End Date** - When to stop posting (same formats as Start Date)
+- **Active Time Start** - Daily start time in "HH:MM" format (e.g., "18:00")
+- **Active Time End** - Daily end time in "HH:MM" format (e.g., "23:00")
+- **Enabled** - Set to FALSE, NO, or 0 to disable a schedule without deleting it
+
+Example header row:
 ```
-Column A: Name (required) - Unique identifier
-Column B: Message (required) - Text to post
-Column C: Interval (required) - e.g., "30m", "1h", "2h30m"
-Column D: Start Date (optional) - "2025-12-01T00:00:00"
-Column E: End Date (optional) - "2025-12-15T23:59:59"
-Column F: Active Time Start (optional) - "18:00"
-Column G: Active Time End (optional) - "23:00"
+Schedule Name | Start Date | End Date | Active Time Start | Active Time End | Interval | Enabled | Message
+```
+
+Example data row:
+```
+wichtel-reminder | 27/12/2025 | | 08:00 | 01:00 | 01:00 | TRUE | DinkDonk Don't forget your address!
 ```
 
 **Time Windows:**
@@ -700,10 +725,12 @@ Startup    → Log warning: "Google Sheets not configured. Scheduled messages di
 **4. Create Google Sheet:**
 - Create new Google Sheet
 - Name first sheet "ScheduledMessages" (or custom name)
-- Add header row:
+- Add header row (columns can be in any order, names are case-insensitive):
   ```
-  Name | Message | Interval | Start Date | End Date | Active Start | Active End
+  Schedule Name | Message | Interval | Start Date | End Date | Active Time Start | Active Time End | Enabled
   ```
+  Required columns: Schedule Name, Message, Interval
+  Optional columns: Start Date, End Date, Active Time Start, Active Time End, Enabled
 - Share sheet with service account email (found in JSON key as `client_email`)
 - Grant "Editor" permissions
 
@@ -722,11 +749,21 @@ GOOGLE_SERVICE_ACCOUNT_PATH=/path/to/service-account.json
 
 **Example Schedule Row:**
 ```
-wichtel-reminder | DinkDonk Don't forget your address! | 1h | 2025-12-01T00:00:00 | 2025-12-15T23:59:59 | 18:00 | 23:00
+Schedule Name: wichtel-reminder
+Start Date: 27/12/2025
+End Date: (empty)
+Active Time Start: 08:00
+Active Time End: 01:00
+Interval: 01:00
+Enabled: TRUE
+Message: DinkDonk Don't forget your address!
 ```
 
 **Troubleshooting:**
 - **"Failed to read service account key"**: Check file path and permissions
 - **"Failed to fetch data from Google Sheets"**: Verify spreadsheet ID and sheet name
 - **"No data found"**: Check sheet has data rows (not just headers)
-- **"Schedule validation failed"**: Check interval format (e.g., "1h" not "1 hour")
+- **"Required column not found"**: Ensure header row has "Schedule Name", "Message", and "Interval" columns
+- **"Invalid interval format"**: Use "hh:mm" format (e.g., "01:00" for 1 hour, "00:30" for 30 minutes)
+- **"Invalid date format"**: Use DD/MM/YYYY, DD/MM/YYYY HH:MM, or YYYY-MM-DDTHH:MM:SS format
+- use ?error instead of %error when logging errors to include the backtrace as well

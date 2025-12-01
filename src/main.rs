@@ -1656,14 +1656,55 @@ mod database {
             true
         }
 
-        /// Parse interval string (e.g., "30m", "1h", "2h30m") into TimeDelta.
-        /// Supports formats like: "10s", "5m", "2h", "1h30m", "2h15m30s"
+        /// Parse interval string into TimeDelta.
+        /// Supports formats:
+        /// - "hh:mm" (e.g., "01:30" for 1 hour 30 minutes)
+        /// - Legacy "30m", "1h", "2h30m" format (backwards compatibility)
         pub fn parse_interval(s: &str) -> Result<TimeDelta> {
-            let s = s.trim().to_lowercase();
+            let s = s.trim();
             if s.is_empty() {
                 return Err(eyre!("Interval string is empty"));
             }
 
+            // Try parsing as hh:mm format first
+            if s.contains(':') {
+                let parts: Vec<&str> = s.split(':').collect();
+                if parts.len() != 2 {
+                    return Err(eyre!("Invalid hh:mm format: {}", s));
+                }
+
+                let hours: i64 = parts[0]
+                    .parse()
+                    .map_err(|_| eyre!("Invalid hours in hh:mm format: {}", parts[0]))?;
+
+                let minutes: i64 = parts[1]
+                    .parse()
+                    .map_err(|_| eyre!("Invalid minutes in hh:mm format: {}", parts[1]))?;
+
+                if hours < 0 || minutes < 0 || minutes >= 60 {
+                    return Err(eyre!(
+                        "Invalid hh:mm values (hours={}, minutes={})",
+                        hours,
+                        minutes
+                    ));
+                }
+
+                let total_seconds = hours * 3600 + minutes * 60;
+
+                // Enforce minimum interval of 1 minute to prevent spam
+                if total_seconds < 60 {
+                    return Err(eyre!(
+                        "Interval must be at least 1 minute (got {})",
+                        s
+                    ));
+                }
+
+                return TimeDelta::try_seconds(total_seconds)
+                    .ok_or_else(|| eyre!("Interval too large: {} seconds", total_seconds));
+            }
+
+            // Legacy format parsing (e.g., "30m", "1h", "2h30m")
+            let s = s.to_lowercase();
             let mut total_seconds = 0i64;
             let mut current_num = String::new();
 
@@ -1870,6 +1911,37 @@ impl yup_oauth2::authenticator::HyperClientBuilder for WebPkiHyperClient {
     }
 }
 
+/// Build a mapping of column names to their indices from the header row.
+/// Returns a HashMap with normalized (lowercase, trimmed) column names as keys.
+fn build_column_map(header_row: &[serde_json::Value]) -> Result<std::collections::HashMap<String, usize>> {
+    use std::collections::HashMap;
+
+    let mut map = HashMap::new();
+
+    for (index, cell) in header_row.iter().enumerate() {
+        if let Some(name) = cell.as_str() {
+            let normalized = name.trim().to_lowercase();
+            if !normalized.is_empty() {
+                map.insert(normalized, index);
+            }
+        }
+    }
+
+    // Check for required columns
+    let required_columns = ["schedule name", "message", "interval"];
+    for col in &required_columns {
+        if !map.contains_key(*col) {
+            return Err(eyre!(
+                "Required column '{}' not found in header row. Available columns: {:?}",
+                col,
+                map.keys().collect::<Vec<_>>()
+            ));
+        }
+    }
+
+    Ok(map)
+}
+
 /// Fetch schedules from Google Sheets.
 /// Returns a vector of validated schedules.
 async fn fetch_schedules_from_sheets() -> Result<Vec<database::Schedule>> {
@@ -1928,8 +2000,36 @@ async fn fetch_schedules_from_sheets() -> Result<Vec<database::Schedule>> {
     // Create Sheets hub
     let hub = Sheets::new(hyper_client, auth);
 
-    // Fetch data from sheet (A2:G to skip header row, read 7 columns)
-    let range = format!("'{}'!A2:G", sheet_name);
+    // First, fetch the header row to determine column positions
+    let header_range = format!("'{}'!A1:Z1", sheet_name);
+    let header_result = hub
+        .spreadsheets()
+        .values_get(&spreadsheet_id, &header_range)
+        .doit()
+        .await
+        .wrap_err("Failed to fetch header row from Google Sheets")?;
+
+    let header_values = header_result
+        .1
+        .values
+        .ok_or_else(|| eyre!("No header row found in Google Sheets"))?;
+
+    let header_row = header_values
+        .first()
+        .ok_or_else(|| eyre!("Header row is empty"))?;
+
+    // Build column name -> index mapping (case-insensitive)
+    let column_map = build_column_map(header_row)?;
+
+    debug!(columns = ?column_map, "Column mapping created");
+
+    // Determine the last column to fetch based on max index
+    let max_index = column_map.values().max().copied().unwrap_or(0);
+    let last_column = std::char::from_u32(65 + max_index as u32)
+        .ok_or_else(|| eyre!("Column index too large"))?;
+
+    // Fetch data from sheet (A2:LAST to skip header row)
+    let range = format!("'{}'!A2:{}", sheet_name, last_column);
 
     let result = hub
         .spreadsheets()
@@ -1952,18 +2052,21 @@ async fn fetch_schedules_from_sheets() -> Result<Vec<database::Schedule>> {
     for (index, row) in values.iter().enumerate() {
         let row_num = index + 2; // +2 because we skip header (row 1) and are 0-indexed
 
-        match parse_schedule_row(row, row_num) {
-            Ok(schedule) => {
+        match parse_schedule_row(row, row_num, &column_map) {
+            Ok(Some(schedule)) => {
                 // Validate schedule
                 if let Err(e) = schedule.validate() {
-                    error!(row = row_num, error = %e, "Schedule validation failed");
+                    error!(row = row_num, error = ?e, "Schedule validation failed");
                     skipped_rows += 1;
                 } else {
                     schedules.push(schedule);
                 }
             }
+            Ok(None) => {
+                // Schedule is disabled, skip silently (already logged at debug level)
+            }
             Err(e) => {
-                error!(row = row_num, error = %e, "Failed to parse schedule row");
+                error!(row = row_num, content = ?row, error = ?e, "Failed to parse schedule row");
                 skipped_rows += 1;
             }
         }
@@ -1978,21 +2081,32 @@ async fn fetch_schedules_from_sheets() -> Result<Vec<database::Schedule>> {
     Ok(schedules)
 }
 
-/// Parse a Google Sheets row into a Schedule.
-/// Expected columns: Name, Message, Interval, Start Date, End Date, Active Start, Active End
-fn parse_schedule_row(row: &[serde_json::Value], row_num: usize) -> Result<database::Schedule> {
+/// Parse a Google Sheets row into a Schedule using the column mapping.
+/// Required columns: Schedule Name, Message, Interval
+/// Optional columns: Start Date, End Date, Active Time Start, Active Time End, Enabled
+/// Returns Ok(None) if schedule is disabled (no error logged).
+fn parse_schedule_row(
+    row: &[serde_json::Value],
+    row_num: usize,
+    column_map: &std::collections::HashMap<String, usize>,
+) -> Result<Option<database::Schedule>> {
     use chrono::{NaiveDateTime, NaiveTime};
 
-    // Helper to get string value from column
-    let get_string = |index: usize| -> Result<String> {
-        row.get(index)
+    // Helper to get string value from named column
+    let get_string = |col_name: &str| -> Result<String> {
+        let index = column_map
+            .get(col_name)
+            .ok_or_else(|| eyre!("Column '{}' not found in mapping", col_name))?;
+
+        row.get(*index)
             .and_then(|v| v.as_str())
             .map(|s| s.to_string())
-            .ok_or_else(|| eyre!("Column {} is missing or not a string", index))
+            .ok_or_else(|| eyre!("Column '{}' (index {}) is missing or not a string", col_name, index))
     };
 
-    // Helper to get optional string value
-    let get_optional_string = |index: usize| -> Option<String> {
+    // Helper to get optional string value from named column
+    let get_optional_string = |col_name: &str| -> Option<String> {
+        let index = *column_map.get(col_name)?;
         row.get(index)
             .and_then(|v| v.as_str())
             .filter(|s| !s.trim().is_empty())
@@ -2000,69 +2114,92 @@ fn parse_schedule_row(row: &[serde_json::Value], row_num: usize) -> Result<datab
     };
 
     // Parse required fields
-    let name =
-        get_string(0).wrap_err_with(|| format!("Row {}: Name (column A) is required", row_num))?;
+    let name = get_string("schedule name")
+        .wrap_err_with(|| format!("Row {}: Schedule Name is required", row_num))?;
 
-    let message = get_string(1)
-        .wrap_err_with(|| format!("Row {}: Message (column B) is required", row_num))?;
+    let message = get_string("message")
+        .wrap_err_with(|| format!("Row {}: Message is required", row_num))?;
 
-    let interval_str = get_string(2)
-        .wrap_err_with(|| format!("Row {}: Interval (column C) is required", row_num))?;
+    let interval_str = get_string("interval")
+        .wrap_err_with(|| format!("Row {}: Interval is required", row_num))?;
 
     let interval = database::Schedule::parse_interval(&interval_str)
-        .wrap_err_with(|| format!("Row {}: Invalid interval format", row_num))?;
+        .wrap_err_with(|| format!("Row {}: Invalid interval format '{}'", row_num, interval_str))?;
 
-    // Parse optional date fields (ISO 8601 format)
-    let start_date = if let Some(s) = get_optional_string(3) {
-        Some(
-            NaiveDateTime::parse_from_str(&s, "%Y-%m-%dT%H:%M:%S").wrap_err_with(|| {
-                format!(
-                    "Row {}: Invalid start date format (expected YYYY-MM-DDTHH:MM:SS)",
-                    row_num
-                )
-            })?,
-        )
+    // Check if schedule is enabled (if Enabled column exists)
+    // Silently skip disabled schedules by returning Ok(None)
+    if let Some(enabled_str) = get_optional_string("enabled") {
+        let enabled = enabled_str.to_lowercase();
+        if enabled == "false" || enabled == "no" || enabled == "0" {
+            debug!(row = row_num, name = %name, "Skipping disabled schedule");
+            return Ok(None);
+        }
+    }
+
+    // Parse optional date fields
+    // Support multiple date formats: ISO 8601, DD/MM/YYYY, and DD/MM/YYYY HH:MM
+    let parse_date = |s: &str| -> Result<NaiveDateTime> {
+        // Try ISO 8601 format first (YYYY-MM-DDTHH:MM:SS)
+        if let Ok(dt) = NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S") {
+            return Ok(dt);
+        }
+
+        // Try DD/MM/YYYY HH:MM format
+        if let Ok(dt) = NaiveDateTime::parse_from_str(s, "%d/%m/%Y %H:%M") {
+            return Ok(dt);
+        }
+
+        // Try DD/MM/YYYY format (assume midnight)
+        if let Ok(date) = chrono::NaiveDate::parse_from_str(s, "%d/%m/%Y") {
+            return Ok(date.and_hms_opt(0, 0, 0).unwrap());
+        }
+
+        Err(eyre!(
+            "Invalid date format '{}' (expected YYYY-MM-DDTHH:MM:SS, DD/MM/YYYY HH:MM, or DD/MM/YYYY)",
+            s
+        ))
+    };
+
+    let start_date = if let Some(s) = get_optional_string("start date") {
+        Some(parse_date(&s).wrap_err_with(|| {
+            format!("Row {}: Invalid start date format", row_num)
+        })?)
     } else {
         None
     };
 
-    let end_date = if let Some(s) = get_optional_string(4) {
-        Some(
-            NaiveDateTime::parse_from_str(&s, "%Y-%m-%dT%H:%M:%S").wrap_err_with(|| {
-                format!(
-                    "Row {}: Invalid end date format (expected YYYY-MM-DDTHH:MM:SS)",
-                    row_num
-                )
-            })?,
-        )
+    let end_date = if let Some(s) = get_optional_string("end date") {
+        Some(parse_date(&s).wrap_err_with(|| {
+            format!("Row {}: Invalid end date format", row_num)
+        })?)
     } else {
         None
     };
 
     // Parse optional time window fields (HH:MM format)
-    let active_time_start = if let Some(s) = get_optional_string(5) {
+    let active_time_start = if let Some(s) = get_optional_string("active time start") {
         Some(NaiveTime::parse_from_str(&s, "%H:%M").wrap_err_with(|| {
             format!(
-                "Row {}: Invalid active time start format (expected HH:MM)",
-                row_num
+                "Row {}: Invalid active time start format '{}' (expected HH:MM)",
+                row_num, s
             )
         })?)
     } else {
         None
     };
 
-    let active_time_end = if let Some(s) = get_optional_string(6) {
+    let active_time_end = if let Some(s) = get_optional_string("active time end") {
         Some(NaiveTime::parse_from_str(&s, "%H:%M").wrap_err_with(|| {
             format!(
-                "Row {}: Invalid active time end format (expected HH:MM)",
-                row_num
+                "Row {}: Invalid active time end format '{}' (expected HH:MM)",
+                row_num, s
             )
         })?)
     } else {
         None
     };
 
-    Ok(database::Schedule {
+    Ok(Some(database::Schedule {
         name,
         start_date,
         end_date,
@@ -2070,7 +2207,7 @@ fn parse_schedule_row(row: &[serde_json::Value], row_num: usize) -> Result<datab
         active_time_end,
         interval,
         message,
-    })
+    }))
 }
 
 /// Schedule loader service that polls Google Sheets and updates the cache.
