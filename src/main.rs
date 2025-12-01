@@ -107,7 +107,8 @@ mod streamelements {
         /// # Errors
         ///
         /// Returns an error if the token format is invalid or the HTTP client cannot be built.
-        #[instrument]
+        #[instrument(skip(token))]
+        // TODO: make secret
         pub fn new(token: &str) -> Result<Self> {
             let mut headers = header::HeaderMap::new();
             let mut auth_value = header::HeaderValue::from_str(&format!("Bearer {token}"))?;
@@ -157,7 +158,7 @@ mod streamelements {
         /// # Errors
         ///
         /// Returns an error if the API request fails or the response cannot be parsed.
-        #[instrument]
+        #[instrument(skip(command))]
         pub async fn update_command(&self, channel_id: &str, command: Command) -> Result<()> {
             self.0
                 .put(format!(
@@ -686,7 +687,7 @@ impl TokenStorage for FileBasedTokenStorage {
     type LoadError = eyre::Report;
     type UpdateError = eyre::Report;
 
-    #[instrument]
+    #[instrument(skip(self))]
     async fn load_token(&mut self) -> Result<UserAccessToken, Self::LoadError> {
         // Try to load from file first
         match fs::read_to_string(&self.path).await {
@@ -715,7 +716,7 @@ impl TokenStorage for FileBasedTokenStorage {
         }
     }
 
-    #[instrument]
+    #[instrument(skip(self, token))]
     async fn update_token(&mut self, token: &UserAccessToken) -> Result<(), Self::UpdateError> {
         debug!(path = %self.path.display(), "Updating token in file");
         let buffer = ron::to_string(token)?.into_bytes();
@@ -1012,7 +1013,7 @@ async fn setup_and_verify_twitch_client()
 ///
 /// Reads from the twitch-irc receiver and broadcasts to all subscribed handlers.
 /// Exits when the incoming_messages channel is closed.
-#[instrument]
+#[instrument(skip(incoming_messages, broadcast_tx))]
 async fn run_message_router(
     mut incoming_messages: UnboundedReceiver<ServerMessage>,
     broadcast_tx: broadcast::Sender<ServerMessage>,
@@ -1033,7 +1034,7 @@ async fn run_message_router(
 ///
 /// Monitors messages during the 13:37 window, tracks unique users, and posts stats at 13:38.
 /// Runs continuously, resetting state daily.
-#[instrument]
+#[instrument(skip(broadcast_tx, client))]
 async fn run_1337_handler(
     broadcast_tx: broadcast::Sender<ServerMessage>,
     client: Arc<AuthenticatedTwitchClient>,
@@ -1104,7 +1105,7 @@ async fn run_1337_handler(
 ///
 /// Monitors chat for users asking about Minecraft and responds.
 /// Runs continuously.
-#[instrument]
+#[instrument(skip(broadcast_tx, client))]
 async fn run_minecraft_handler(
     broadcast_tx: broadcast::Sender<ServerMessage>,
     client: Arc<AuthenticatedTwitchClient>,
@@ -1142,7 +1143,7 @@ async fn run_minecraft_handler(
 /// - `!toggle-ping <command>` - Adds/removes user from StreamElements ping command
 ///
 /// Runs continuously in a loop, processing all incoming messages.
-#[instrument]
+#[instrument(skip(broadcast_tx, client))]
 async fn run_generic_command_handler(
     broadcast_tx: broadcast::Sender<ServerMessage>,
     client: Arc<AuthenticatedTwitchClient>,
@@ -1199,7 +1200,7 @@ async fn run_generic_command_handler(
 /// # Errors
 ///
 /// Returns an error if command execution fails, but does not crash the handler.
-#[instrument]
+#[instrument(skip(privmsg, client, se_client))]
 async fn handle_generic_commands(
     privmsg: &PrivmsgMessage,
     client: &Arc<AuthenticatedTwitchClient>,
@@ -1267,7 +1268,7 @@ const PING_COMMANDS: &[&str] = &[
 ///
 /// Returns an error if IRC communication or StreamElements API calls fail.
 /// User-facing errors are sent as chat messages before returning the error.
-#[instrument]
+#[instrument(skip(privmsg, client, se_client))]
 async fn toggle_ping_command(
     privmsg: &PrivmsgMessage,
     client: &Arc<AuthenticatedTwitchClient>,
@@ -1374,7 +1375,7 @@ async fn toggle_ping_command(
     Ok(())
 }
 
-#[instrument]
+#[instrument(skip(privmsg, client, se_client))]
 async fn list_pings_command(
     privmsg: &PrivmsgMessage,
     client: &Arc<AuthenticatedTwitchClient>,
@@ -1501,7 +1502,7 @@ async fn run_schedule_task(
 
 /// Dynamic scheduled message handler that monitors cache for changes.
 /// Spawns and stops tasks dynamically based on cache updates.
-#[instrument]
+#[instrument(skip(client, cache))]
 async fn run_scheduled_message_handler(
     client: Arc<AuthenticatedTwitchClient>,
     cache: Arc<tokio::sync::RwLock<database::ScheduleCache>>,
