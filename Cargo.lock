@@ -503,7 +503,7 @@ dependencies = [
  "serde_with",
  "tokio",
  "url",
- "yup-oauth2 11.0.0",
+ "yup-oauth2",
 ]
 
 [[package]]
@@ -523,7 +523,7 @@ dependencies = [
  "serde_with",
  "tokio",
  "url",
- "yup-oauth2 11.0.0",
+ "yup-oauth2",
 ]
 
 [[package]]
@@ -2214,7 +2214,6 @@ dependencies = [
  "eyre",
  "google-sheets4",
  "hyper 1.8.1",
- "hyper-util",
  "parking_lot",
  "rand",
  "regex",
@@ -2228,7 +2227,6 @@ dependencies = [
  "tracing-error",
  "tracing-subscriber",
  "twitch-irc",
- "yup-oauth2 12.1.0",
 ]
 
 [[package]]
@@ -2777,32 +2775,6 @@ dependencies = [
  "seahash",
  "serde",
  "serde_json",
- "time",
- "tokio",
- "url",
-]
-
-[[package]]
-name = "yup-oauth2"
-version = "12.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4964039ac787bbd306fba65f6a8963b7974ae99515087e506a862674abae6a30"
-dependencies = [
- "async-trait",
- "base64 0.22.1",
- "http 1.4.0",
- "http-body-util",
- "hyper 1.8.1",
- "hyper-rustls 0.27.7",
- "hyper-util",
- "log",
- "percent-encoding",
- "rustls 0.23.35",
- "rustls-pemfile 2.2.0",
- "seahash",
- "serde",
- "serde_json",
- "thiserror 2.0.17",
  "time",
  "tokio",
  "url",

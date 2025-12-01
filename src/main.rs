@@ -1840,11 +1840,7 @@ fn load_cache_from_disk() -> Result<database::ScheduleCache> {
 /// Fetch schedules from Google Sheets.
 /// Returns a vector of validated schedules.
 async fn fetch_schedules_from_sheets() -> Result<Vec<database::Schedule>> {
-    use google_sheets4::{api::Sheets, yup_oauth2::ServiceAccountAuthenticator};
-    use hyper_util::{
-        client::legacy::{Client, connect::HttpConnector},
-        rt::TokioExecutor,
-    };
+    use google_sheets4::{api::Sheets, hyper_rustls, hyper_util, yup_oauth2};
 
     // Get configuration from environment
     let spreadsheet_id = std::env::var("GOOGLE_SHEETS_SPREADSHEET_ID")
@@ -1864,24 +1860,30 @@ async fn fetch_schedules_from_sheets() -> Result<Vec<database::Schedule>> {
     );
 
     // Load service account credentials
-    let service_account_key =
-        google_sheets4::yup_oauth2::read_service_account_key(&service_account_path)
-            .await
-            .wrap_err_with(|| {
-                format!(
-                    "Failed to read service account key from {}",
-                    service_account_path
-                )
-            })?;
+    let service_account_key = yup_oauth2::read_service_account_key(&service_account_path)
+        .await
+        .wrap_err_with(|| {
+            format!(
+                "Failed to read service account key from {}",
+                service_account_path
+            )
+        })?;
 
     // Create authenticator
-    let auth = ServiceAccountAuthenticator::builder(service_account_key)
+    let auth = yup_oauth2::ServiceAccountAuthenticator::builder(service_account_key)
         .build()
         .await
         .wrap_err("Failed to create service account authenticator")?;
 
     // Create HTTP client
-    let client = Client::builder(TokioExecutor::new()).build(HttpConnector::new());
+    let client = hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new())
+        .build(
+            hyper_rustls::HttpsConnectorBuilder::new()
+                .with_webpki_roots()
+                .https_or_http()
+                .enable_http1()
+                .build(),
+        );
 
     // Create Sheets hub
     let hub = Sheets::new(client, auth);
@@ -1939,8 +1941,7 @@ async fn fetch_schedules_from_sheets() -> Result<Vec<database::Schedule>> {
 /// Parse a Google Sheets row into a Schedule.
 /// Expected columns: Name, Message, Interval, Start Date, End Date, Active Start, Active End
 fn parse_schedule_row(row: &[serde_json::Value], row_num: usize) -> Result<database::Schedule> {
-    use chrono::NaiveDateTime;
-    use chrono::NaiveTime;
+    use chrono::{NaiveDateTime, NaiveTime};
 
     // Helper to get string value from column
     let get_string = |index: usize| -> Result<String> {
