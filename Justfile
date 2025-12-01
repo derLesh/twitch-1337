@@ -20,5 +20,9 @@ push:
 restart:
   ssh docker.homelab 'docker compose --ansi always --project-directory twitch up -d'
 
+# Tail logs on docker host
+logs:
+  ssh docker.homelab 'docker compose --ansi always --project-directory twitch logs -f'
+
 # Deploy image and restart pod
 deploy: build push restart
