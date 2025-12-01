@@ -2225,6 +2225,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "tracing",
+ "tracing-error",
  "tracing-subscriber",
  "twitch-irc",
  "yup-oauth2 12.1.0",

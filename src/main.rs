@@ -725,6 +725,23 @@ impl TokenStorage for FileBasedTokenStorage {
     }
 }
 
+fn install_tracing() {
+    use tracing_error::ErrorLayer;
+    use tracing_subscriber::prelude::*;
+    use tracing_subscriber::{EnvFilter, fmt};
+
+    let fmt_layer = fmt::layer().with_target(false);
+    let filter_layer = EnvFilter::try_from_default_env()
+        .or_else(|_| EnvFilter::try_new("info"))
+        .unwrap();
+
+    tracing_subscriber::registry()
+        .with(filter_layer)
+        .with(fmt_layer)
+        .with(ErrorLayer::default())
+        .init();
+}
+
 /// Main entry point for the twitch-1337 bot.
 ///
 /// Establishes a persistent Twitch IRC connection and runs multiple handlers in parallel:
@@ -735,17 +752,13 @@ impl TokenStorage for FileBasedTokenStorage {
 ///
 /// Returns an error if required environment variables are missing or connection fails.
 #[tokio::main]
+#[instrument]
 pub async fn main() -> Result<()> {
     // Initialize error handling
     color_eyre::install()?;
 
     // Initialize tracing subscriber
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
-        )
-        .init();
+    install_tracing();
 
     let local = Utc::now().with_timezone(&chrono_tz::Europe::Berlin);
 
