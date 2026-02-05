@@ -63,50 +63,76 @@ cargo test
 # Build the image
 docker build -t chronophylos/twitch-1337:latest .
 
-# Run with environment variables
+# Run with config.toml mounted as a volume
 docker run -d \
   --name twitch-1337 \
-  -e TWITCH_USERNAME=your_bot \
-  -e TWITCH_ACCESS_TOKEN=your_access_token \
-  -e TWITCH_REFRESH_TOKEN=your_refresh_token \
-  -e TWITCH_CLIENT_ID=your_client_id \
-  -e TWITCH_CLIENT_SECRET=your_client_secret \
-  -e TWITCH_CHANNEL=REDACTED_CHANNEL \
+  -v ./config.toml:/app/config.toml:ro \
   chronophylos/twitch-1337:latest
-
-# Run with .env file
-docker run -d --name twitch-1337 --env-file .env chronophylos/twitch-1337:latest
 
 # View logs
 docker logs -f twitch-1337
 ```
 
-## Environment Variables
+## Configuration
 
-**Required:**
-- `TWITCH_USERNAME` - Bot username for posting messages
-- `TWITCH_ACCESS_TOKEN` - OAuth access token (with chat:read and chat:edit scopes)
-- `TWITCH_REFRESH_TOKEN` - OAuth refresh token
-- `TWITCH_CLIENT_ID` - Twitch application client ID
-- `TWITCH_CLIENT_SECRET` - Twitch application client secret
-- `STREAMELEMENTS_API_TOKEN` - StreamElements API token for command management
+The bot is configured via a `config.toml` file. To get started:
 
-**Optional:**
-- `TWITCH_CHANNEL` - Channel to monitor (default: "REDACTED_CHANNEL")
-- `RUST_LOG` - Logging level (default: "info", options: trace, debug, info, warn, error)
+```bash
+cp config.toml.example config.toml
+# Edit config.toml with your credentials
+cargo run
+```
 
-**Google Sheets Configuration (Optional - for scheduled messages):**
-- `GOOGLE_SHEETS_SPREADSHEET_ID` - Spreadsheet ID from the Google Sheets URL
-- `GOOGLE_SHEETS_SHEET_NAME` - Sheet name within spreadsheet (default: "ScheduledMessages")
-- `GOOGLE_SERVICE_ACCOUNT_PATH` - Path to service account JSON key file
+### Configuration File Structure
 
-If Google Sheets variables are not configured, scheduled messages feature will be disabled with a warning.
+The config.toml file has three sections:
+
+**[twitch]** - Twitch IRC connection and authentication
+- `channel` - Channel to monitor (without # prefix)
+- `username` - Bot's Twitch username
+- `refresh_token` - OAuth refresh token (automatically refreshed and persisted to `token.ron`)
+- `client_id` - Twitch application client ID
+- `client_secret` - Twitch application client secret
+- `expected_latency` - IRC latency in milliseconds (50-150ms typical)
+
+**[streamelements]** - StreamElements API configuration
+- `api_token` - StreamElements API token
+- `channel_id` - StreamElements channel ID (numeric)
+
+**[google_sheets]** (optional) - Dynamic scheduled messages
+- `spreadsheet_id` - Google Sheets spreadsheet ID
+- `sheet_name` - Sheet name (default: "ScheduledMessages")
+- `service_account_path` - Path to service account JSON key
+
+See `config.toml.example` for a complete annotated example.
+
+### Docker Deployment
+
+For Docker deployments, mount config.toml as a volume:
+
+```bash
+docker run -d \
+  --name twitch-1337 \
+  -v ./config.toml:/app/config.toml:ro \
+  chronophylos/twitch-1337:latest
+```
+
+Or with Docker Compose:
+
+```yaml
+services:
+  twitch-1337:
+    image: chronophylos/twitch-1337:latest
+    restart: unless-stopped
+    volumes:
+      - ./config.toml:/app/config.toml:ro
+```
 
 ## Token Storage
 
 The bot persists refreshed OAuth tokens to `./token.ron` (Rust Object Notation format):
 - Automatically saves updated tokens when they're refreshed by twitch-irc
-- Falls back to environment variables on first run if file doesn't exist
+- Falls back to refresh token from `config.toml` on first run if file doesn't exist
 - Eliminates need to manually update tokens when they expire
 - Uses `FileBasedTokenStorage` implementing the `TokenStorage` trait
 
@@ -222,7 +248,7 @@ The bot maintains a **single persistent IRC connection** and uses a **broadcast 
 - `Dockerfile` - Multi-stage build with cargo-chef optimization, FROM scratch final image
 - `Justfile` - Task runner for common development and Docker operations
 - `.dockerignore` - Excludes unnecessary files from Docker build context
-- `.env.example` - Template for environment variables
+- `config.toml.example` - Template configuration file with all available options
 
 ## System Dependencies & Deployment
 
@@ -289,7 +315,7 @@ services:
 ```bash
 # Copy musl binary
 sudo cp target/x86_64-unknown-linux-musl/release/twitch-1337 /usr/local/bin/
-# Create systemd service with environment variables
+# Create systemd service with config.toml in working directory
 ```
 
 **Alpine/busybox:**
@@ -300,12 +326,12 @@ sudo cp target/x86_64-unknown-linux-musl/release/twitch-1337 /usr/local/bin/
 
 ### Main Entry Point
 
-**`main() -> Result<()>` (src/main.rs:711-804)**
+**`main() -> Result<()>` (src/main.rs:~745-915)**
 - Initializes error handling (color-eyre) and logging (tracing-subscriber)
-- Validates all environment variables at startup (panics if missing)
+- Loads and validates configuration from `config.toml`
 - Calls `setup_and_verify_twitch_client()` to establish authenticated connection
 - Creates broadcast channel with 100-message capacity
-- Spawns 4 concurrent tasks: message router, 1337 handler, Minecraft handler, generic command handler
+- Spawns handler tasks based on configuration
 - Uses `tokio::select!` to wait for Ctrl+C or any task exit
 
 ### Connection Management
@@ -411,7 +437,7 @@ sudo cp target/x86_64-unknown-linux-musl/release/twitch-1337 /usr/local/bin/
 
 ### Handler: Scheduled Messages (Dynamic Google Sheets)
 
-**Only runs if Google Sheets is configured** (`GOOGLE_SHEETS_SPREADSHEET_ID` and `GOOGLE_SERVICE_ACCOUNT_PATH` set).
+**Only runs if Google Sheets is configured** (the `[google_sheets]` section in `config.toml`).
 
 **`run_schedule_loader_service(cache)` (src/main.rs:~1960)**
 - Polls Google Sheets every 5 minutes for schedule updates
@@ -531,10 +557,10 @@ wichtel-reminder | 27/12/2025 | | 08:00 | 01:00 | 01:00 | TRUE | DinkDonk Don't 
 
 ### Token Storage
 
-**`FileBasedTokenStorage` (src/main.rs:647-699)**
+**`FileBasedTokenStorage` (src/main.rs:~658-720)**
 - Implements `TokenStorage` trait for twitch-irc
 - Stores tokens in `./token.ron` file
-- `load_token()`: Reads from file, falls back to environment variables on first run
+- `load_token()`: Reads from file, falls back to refresh token from config.toml on first run
 - `update_token()`: Writes updated tokens to file (called automatically by twitch-irc)
 
 ### Utility Functions
@@ -579,16 +605,30 @@ wichtel-reminder | 27/12/2025 | | 08:00 | 01:00 | 01:00 | TRUE | DinkDonk Don't 
 - `user: i64` - Per-user cooldown in seconds
 - `global: i64` - Global cooldown in seconds
 
-### Static Configuration (LazyLock)
+### Configuration Types
 
-- `APP_USER_AGENT: &str` - User agent for HTTP requests (src/main.rs:187)
-- `CHANNEL_LOGIN: LazyLock<String>` - Channel name from env or "REDACTED_CHANNEL" (src/main.rs:189-191)
-- `TWITCH_USERNAME: LazyLock<String>` - Required env var (src/main.rs:193-195)
-- `TWITCH_ACCESS_TOKEN: LazyLock<SecretString>` - Required env var, wrapped for security (src/main.rs:197-201)
-- `TWITCH_REFRESH_TOKEN: LazyLock<SecretString>` - Required env var, wrapped for security (src/main.rs:203-207)
-- `TWITCH_CLIENT_ID: LazyLock<String>` - Required env var (src/main.rs:209-211)
-- `TWITCH_CLIENT_SECRET: LazyLock<SecretString>` - Required env var, wrapped for security (src/main.rs:213-217)
-- `STREAMELEMENTS_API_TOKEN: LazyLock<SecretString>` - Required env var, wrapped for security (src/main.rs:219-223)
+**`Configuration` (src/main.rs:~260-265)**
+- Main configuration struct loaded from config.toml
+- Contains: `twitch`, `streamelements`, `google_sheets` (optional)
+- `validate()` method ensures all required fields are present and valid
+
+**`TwitchConfiguration` (src/main.rs:~233-244)**
+- `channel`, `username` - Twitch channel and bot username
+- `refresh_token`, `client_id`, `client_secret` - OAuth credentials (SecretString)
+- `expected_latency` - IRC latency adjustment in milliseconds
+
+**`StreamelementsConfig` (src/main.rs:~246-251)**
+- `api_token` - StreamElements API token (SecretString)
+- `channel_id` - StreamElements channel ID
+
+**`GoogleSheetsConfig` (src/main.rs:~253-258)**
+- `spreadsheet_id` - Google Sheets spreadsheet ID
+- `sheet_name` - Sheet name (defaults to "ScheduledMessages")
+- `service_account_path` - Path to service account JSON key
+
+### Static Configuration
+
+- `APP_USER_AGENT: &str` - User agent for HTTP requests (src/main.rs:~192)
 
 ### Constants
 
@@ -673,7 +713,7 @@ Startup    → Log warning: "Google Sheets not configured. Scheduled messages di
 - Handlers are independent - errors in one handler don't crash others
 - Broadcast channel capacity: 100 messages (handlers warned if lagging)
 - All handlers run in infinite loops - only exit on channel close or panic
-- LazyLock panics if environment variables are missing at startup
+- Configuration is loaded from `config.toml` at startup and validated before connecting
 
 ### Adding New Handlers
 1. Create handler function: `async fn run_my_handler(broadcast_tx, client)`
@@ -694,11 +734,12 @@ Startup    → Log warning: "Google Sheets not configured. Scheduled messages di
 - Docker image: ~6MB (FROM scratch with musl binary)
 - Verify static linking: `ldd target/x86_64-unknown-linux-musl/release/twitch-1337` (should show "statically linked")
 
-### Environment Configuration
-- Copy `.env.example` to `.env` for local development
-- Never commit `.env` to git (already in .gitignore)
+### Configuration
+- Copy `config.toml.example` to `config.toml` for local development
+- Never commit `config.toml` to git with real credentials
 - Get OAuth credentials from your Twitch application at https://dev.twitch.tv/console
 - StreamElements API token from StreamElements dashboard
+- All configuration is in `config.toml` - no environment variables needed
 
 ### Google Sheets Setup (Optional - for Scheduled Messages)
 
@@ -734,11 +775,12 @@ Startup    → Log warning: "Google Sheets not configured. Scheduled messages di
 - Share sheet with service account email (found in JSON key as `client_email`)
 - Grant "Editor" permissions
 
-**5. Configure Environment Variables:**
-```bash
-GOOGLE_SHEETS_SPREADSHEET_ID=<from URL: docs.google.com/spreadsheets/d/SPREADSHEET_ID/edit>
-GOOGLE_SHEETS_SHEET_NAME=ScheduledMessages  # Optional, default is "ScheduledMessages"
-GOOGLE_SERVICE_ACCOUNT_PATH=/path/to/service-account.json
+**5. Configure in config.toml:**
+```toml
+[google_sheets]
+spreadsheet_id = "SPREADSHEET_ID"  # from URL: docs.google.com/spreadsheets/d/SPREADSHEET_ID/edit
+sheet_name = "ScheduledMessages"   # Optional, default is "ScheduledMessages"
+service_account_path = "/path/to/service-account.json"
 ```
 
 **6. Test:**

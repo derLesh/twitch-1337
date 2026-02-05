@@ -1,0 +1,42 @@
+# Twitch 1337 Bot Configuration
+# Copy this file to config.toml and fill in your credentials
+
+[twitch]
+# Twitch channel to monitor (without the # prefix)
+channel = "REDACTED_CHANNEL"
+
+# Bot's Twitch username
+username = "your_bot_username"
+
+# OAuth refresh token (used to get new access tokens automatically)
+refresh_token = "your_refresh_token_here"
+
+# Twitch application client ID
+client_id = "your_client_id"
+
+# Twitch application client secret
+client_secret = "your_client_secret"
+
+# Expected IRC message latency in milliseconds (used for precise 13:37 timing)
+# Typical values: 50-150ms. Adjust based on your connection.
+expected_latency = 89
+
+[streamelements]
+# StreamElements API token for managing bot commands
+api_token = "your_streamelements_api_token"
+
+# StreamElements channel ID (numeric ID, not channel name)
+channel_id = "your_channel_id"
+
+# Optional: Google Sheets configuration for dynamic scheduled messages
+# If not configured, scheduled messages feature will be disabled
+#
+# [google_sheets]
+# # Google Sheets spreadsheet ID (from the URL)
+# spreadsheet_id = "your_spreadsheet_id"
+#
+# # Sheet name within the spreadsheet (default: "ScheduledMessages")
+# sheet_name = "ScheduledMessages"
+#
+# # Path to Google service account JSON key file
+# service_account_path = "/path/to/service-account.json"

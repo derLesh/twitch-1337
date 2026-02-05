@@ -1,7 +1,7 @@
 use std::{
     collections::HashSet,
     path::PathBuf,
-    sync::{Arc, LazyLock},
+    sync::Arc,
 };
 
 use async_trait::async_trait;
@@ -10,6 +10,7 @@ use color_eyre::eyre::{self, Result, WrapErr, bail, eyre};
 use rand::seq::IndexedRandom as _;
 use regex::Regex;
 use secrecy::{ExposeSecret, SecretString};
+use serde::{Deserialize, Serialize, Serializer};
 use tokio::{
     fs::{self, File},
     io::AsyncWriteExt,
@@ -22,8 +23,6 @@ use twitch_irc::{
     login::{RefreshingLoginCredentials, TokenStorage, UserAccessToken},
     message::{NoticeMessage, PrivmsgMessage, ServerMessage},
 };
-
-mod storage;
 
 /// StreamElements API client and types for managing bot commands.
 ///
@@ -79,6 +78,7 @@ mod streamelements {
     }
 
     /// Error response from the StreamElements API.
+    #[allow(dead_code)]
     #[derive(Debug, Clone, Serialize, Deserialize)]
     #[serde(rename_all = "camelCase")]
     pub struct Error {
@@ -89,6 +89,7 @@ mod streamelements {
     }
 
     /// Detailed error information for a specific field.
+    #[allow(dead_code)]
     #[derive(Debug, Clone, Serialize, Deserialize)]
     pub struct ErrorDetail {
         path: Vec<String>,
@@ -189,47 +190,88 @@ const TARGET_MINUTE: u32 = 37;
 /// Maximum number of unique users to track (prevents unbounded memory growth)
 const MAX_USERS: usize = 10_000;
 
-/// Expected Latency of the Twitch IRC Server
-/// Will adjust all schedules by the latency in order to increase accuracy
-const EXPECTED_LATENCY: u32 = 89;
-
 static APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
 
-static CHANNEL_LOGIN: LazyLock<String> = LazyLock::new(|| {
-    std::env::var("TWITCH_CHANNEL").unwrap_or_else(|_| "REDACTED_CHANNEL".to_string())
-});
+#[derive(Debug, Clone, Deserialize, Serialize)]
+struct TwitchConfiguration {
+    channel: String,
+    username: String,
+    #[serde(serialize_with = "serialize_secret_string")]
+    refresh_token: SecretString,
+    #[serde(serialize_with = "serialize_secret_string")]
+    client_id: SecretString,
+    #[serde(serialize_with = "serialize_secret_string")]
+    client_secret: SecretString,
+    expected_latency: u32,
+}
 
-static TWITCH_USERNAME: LazyLock<String> = LazyLock::new(|| {
-    std::env::var("TWITCH_USERNAME").expect("TWITCH_USERNAME environment variable must be set")
-});
+#[derive(Debug, Clone, Deserialize, Serialize)]
+struct StreamelementsConfig {
+    #[serde(serialize_with = "serialize_secret_string")]
+    api_token: SecretString,
+    channel_id: String,
+}
 
-static TWITCH_ACCESS_TOKEN: LazyLock<SecretString> = LazyLock::new(|| {
-    let token = std::env::var("TWITCH_ACCESS_TOKEN")
-        .expect("TWITCH_ACCESS_TOKEN environment variable must be set");
-    SecretString::new(token.into())
-});
+#[derive(Debug, Clone, Deserialize, Serialize)]
+struct GoogleSheetsConfig {
+    spreadsheet_id: String,
+    #[serde(default = "default_sheet_name")]
+    sheet_name: String,
+    service_account_path: PathBuf,
+}
 
-static TWITCH_REFRESH_TOKEN: LazyLock<SecretString> = LazyLock::new(|| {
-    let token = std::env::var("TWITCH_REFRESH_TOKEN")
-        .expect("TWITCH_REFRESH_TOKEN environment variable must be set");
-    SecretString::new(token.into())
-});
+fn default_sheet_name() -> String {
+    "ScheduledMessages".to_string()
+}
 
-static TWITCH_CLIENT_ID: LazyLock<String> = LazyLock::new(|| {
-    std::env::var("TWITCH_CLIENT_ID").expect("TWITCH_CLIENT_ID environment variable must be set")
-});
+#[derive(Debug, Clone, Deserialize, Serialize)]
+struct Configuration {
+    twitch: TwitchConfiguration,
+    streamelements: StreamelementsConfig,
+    #[serde(default)]
+    google_sheets: Option<GoogleSheetsConfig>,
+}
 
-static TWITCH_CLIENT_SECRET: LazyLock<SecretString> = LazyLock::new(|| {
-    let secret = std::env::var("TWITCH_CLIENT_SECRET")
-        .expect("TWITCH_CLIENT_SECRET environment variable must be set");
-    SecretString::new(secret.into())
-});
+fn serialize_secret_string<S>(secret: &SecretString, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    serializer.serialize_str(secret.expose_secret())
+}
 
-static STREAMELEMENTS_API_TOKEN: LazyLock<SecretString> = LazyLock::new(|| {
-    let secret = std::env::var("STREAMELEMENTS_API_TOKEN")
-        .expect("STREAMELEMENTS_API_TOKEN environment variable must be set");
-    SecretString::new(secret.into())
-});
+impl Configuration {
+    fn validate(&self) -> Result<()> {
+        if self.twitch.channel.trim().is_empty() {
+            bail!("twitch.channel cannot be empty");
+        }
+
+        if self.twitch.username.trim().is_empty() {
+            bail!("twitch.username cannot be empty");
+        }
+
+        if self.twitch.expected_latency > 1000 {
+            bail!("twitch.expected_latency must be <= 1000ms (got {})", self.twitch.expected_latency);
+        }
+
+        if self.streamelements.channel_id.trim().is_empty() {
+            bail!("streamelements.channel_id cannot be empty");
+        }
+
+        if let Some(ref sheets) = self.google_sheets {
+            if sheets.spreadsheet_id.trim().is_empty() {
+                bail!("google_sheets.spreadsheet_id cannot be empty");
+            }
+            if !sheets.service_account_path.exists() {
+                warn!(
+                    "Google Sheets service account file not found: {}",
+                    sheets.service_account_path.display()
+                );
+            }
+        }
+
+        Ok(())
+    }
+}
 
 /// Calculates the next occurrence of a daily time in Europe/Berlin timezone.
 ///
@@ -394,13 +436,6 @@ fn generate_stats_message(count: usize, user_list: &[String]) -> String {
             )
         }
     }
-}
-
-/// Encodes a string into hexadecimal representation.
-///
-/// Each byte of the input string is converted to its two-digit hex representation.
-fn encode_hex(input: &str) -> String {
-    input.bytes().map(|b| format!("{:02x}", b)).collect()
 }
 
 /// Returns a random element from an array.
@@ -582,49 +617,6 @@ fn get_next_session_start(now: chrono::DateTime<chrono_tz::Tz>) -> chrono::DateT
     now + chrono::Duration::days(1)
 }
 
-/// Formats a duration as a countdown string in German.
-///
-/// Returns a string like "1 Tag, 2 Stunden, 30 Minuten, 45 Sekunden".
-fn format_countdown(duration: chrono::Duration) -> String {
-    let days = duration.num_days();
-    let hours = duration.num_hours() % 24;
-    let minutes = duration.num_minutes() % 60;
-    let seconds = duration.num_seconds() % 60;
-
-    let mut parts = Vec::new();
-
-    if days > 0 {
-        parts.push(format!(
-            "{} {}",
-            days,
-            if days == 1 { "Tag" } else { "Tage" }
-        ));
-    }
-    if hours > 0 {
-        parts.push(format!(
-            "{} {}",
-            hours,
-            if hours == 1 { "Stunde" } else { "Stunden" }
-        ));
-    }
-    if minutes > 0 {
-        parts.push(format!(
-            "{} {}",
-            minutes,
-            if minutes == 1 { "Minute" } else { "Minuten" }
-        ));
-    }
-    if seconds > 0 || parts.is_empty() {
-        parts.push(format!(
-            "{} {}",
-            seconds,
-            if seconds == 1 { "Sekunde" } else { "Sekunden" }
-        ));
-    }
-
-    parts.join(", ")
-}
-
 /// Processes a PRIVMSG to check if it's asking about Minecraft and sends a response.
 ///
 /// Returns true if a response was sent, false otherwise.
@@ -675,16 +667,18 @@ async fn process_minecraft_message(
 
 /// Token storage implementation that persists tokens to disk.
 ///
-/// Falls back to environment variables on first load if no token file exists.
+/// Falls back to initial refresh token from config on first load if no token file exists.
 #[derive(Debug)]
 struct FileBasedTokenStorage {
     path: PathBuf,
+    initial_refresh_token: SecretString,
 }
 
-impl Default for FileBasedTokenStorage {
-    fn default() -> Self {
+impl FileBasedTokenStorage {
+    fn new(initial_refresh_token: SecretString) -> Self {
         Self {
             path: PathBuf::from("./token.ron"),
+            initial_refresh_token,
         }
     }
 }
@@ -706,13 +700,13 @@ impl TokenStorage for FileBasedTokenStorage {
                 Ok(ron::from_str(&contents)?)
             }
             Err(_) => {
-                // File doesn't exist, fall back to environment variables
-                debug!("Token file not found, loading initial values from environment variables");
+                // File doesn't exist, use initial refresh token from configuration
+                warn!("Token file not found, using refresh token from configuration");
                 let token = UserAccessToken {
-                    access_token: TWITCH_ACCESS_TOKEN.expose_secret().to_string(),
-                    refresh_token: TWITCH_REFRESH_TOKEN.expose_secret().to_string(),
+                    access_token: String::new(),
+                    refresh_token: self.initial_refresh_token.expose_secret().to_string(),
                     created_at: chrono::Utc::now(),
-                    expires_at: Some(chrono::Utc::now()), // we do not know when it expires
+                    expires_at: None,
                 };
 
                 // Save the token for future use
@@ -749,6 +743,26 @@ fn install_tracing() {
         .init();
 }
 
+async fn load_configuration() -> Result<Configuration> {
+    const CONFIG_PATH: &str = "./config.toml";
+
+    let data = tokio::fs::read_to_string(CONFIG_PATH)
+        .await
+        .wrap_err_with(|| format!(
+            "Failed to read config file: {}\nPlease create config.toml from config.toml.example",
+            CONFIG_PATH
+        ))?;
+
+    info!("Loading configuration from {}", CONFIG_PATH);
+
+    let config: Configuration = toml::from_str(&data)
+        .wrap_err("Failed to parse config.toml - check for syntax errors")?;
+
+    config.validate()?;
+
+    Ok(config)
+}
+
 /// Main entry point for the twitch-1337 bot.
 ///
 /// Establishes a persistent Twitch IRC connection and runs multiple handlers in parallel:
@@ -767,24 +781,23 @@ pub async fn main() -> Result<()> {
     // Initialize tracing subscriber
     install_tracing();
 
+    let config = load_configuration().await?;
+
     let local = Utc::now().with_timezone(&chrono_tz::Europe::Berlin);
 
-    info!(local_time = ?local, utc_time = ?Utc::now(), "Starting twitch-1337 bot");
-
-    // Validate environment variables at startup
-    info!(channel = %*CHANNEL_LOGIN, "Channel configured");
-    let _ = &*TWITCH_USERNAME;
-    let _ = &*TWITCH_ACCESS_TOKEN;
-    let _ = &*TWITCH_REFRESH_TOKEN;
-    let _ = &*TWITCH_CLIENT_ID;
-    let _ = &*TWITCH_CLIENT_SECRET;
-    let _ = &*STREAMELEMENTS_API_TOKEN;
-    info!("Environment variables validated");
+    info!(
+        local_time = ?local,
+        utc_time = ?Utc::now(),
+        channel = %config.twitch.channel,
+        username = %config.twitch.username,
+        google_sheets_enabled = config.google_sheets.is_some(),
+        "Starting twitch-1337 bot"
+    );
 
     ensure_data_dir().await?;
 
     // Setup, connect, join channel, and verify authentication (all in one step)
-    let (incoming_messages, client) = setup_and_verify_twitch_client().await?;
+    let (incoming_messages, client) = setup_and_verify_twitch_client(&config.twitch).await?;
 
     // Wrap client in Arc for sharing across handlers
     let client = Arc::new(client);
@@ -795,22 +808,23 @@ pub async fn main() -> Result<()> {
     // Spawn message router task
     let router_handle = tokio::spawn(run_message_router(incoming_messages, broadcast_tx.clone()));
 
-    // Check if Google Sheets is configured for scheduled messages
-    let sheets_configured = std::env::var("GOOGLE_SHEETS_SPREADSHEET_ID").is_ok()
-        && std::env::var("GOOGLE_SERVICE_ACCOUNT_PATH").is_ok();
-
     // Optionally spawn schedule loader service and handler
-    let (loader_service, handler_scheduled_messages) = if sheets_configured {
+    let (loader_service, handler_scheduled_messages) = if let Some(ref sheets_config) = config.google_sheets {
         info!("Google Sheets configured, starting scheduled message system");
 
         // Create schedule cache for dynamic scheduled messages
-        let schedule_cache = Arc::new(tokio::sync::RwLock::new(database::ScheduleCache::new()));
+        let schedule_cache = Arc::new(tokio::sync::RwLock::new(
+            load_cache_from_disk()
+                .inspect_err(|e| warn!("Failed to load cache from disk: {:?}", e))
+                .unwrap_or_else(|_| database::ScheduleCache::new())
+        ));
 
         // Spawn schedule loader service
         let loader = tokio::spawn({
             let cache = schedule_cache.clone();
+            let sheets_config = sheets_config.clone();
             async move {
-                run_schedule_loader_service(cache).await;
+                run_schedule_loader_service(cache, sheets_config).await;
             }
         });
 
@@ -818,14 +832,13 @@ pub async fn main() -> Result<()> {
         let handler = tokio::spawn({
             let client = client.clone();
             let cache = schedule_cache.clone();
-            async move { run_scheduled_message_handler(client, cache).await }
+            let channel = config.twitch.channel.clone();
+            async move { run_scheduled_message_handler(client, cache, channel).await }
         });
 
         (Some(loader), Some(handler))
     } else {
-        warn!(
-            "Google Sheets not configured (GOOGLE_SHEETS_SPREADSHEET_ID and GOOGLE_SERVICE_ACCOUNT_PATH required). Scheduled messages disabled."
-        );
+        info!("Google Sheets not configured, scheduled messages disabled");
         (None, None)
     };
 
@@ -833,8 +846,10 @@ pub async fn main() -> Result<()> {
     let handler_1337 = tokio::spawn({
         let broadcast_tx = broadcast_tx.clone();
         let client = client.clone();
+        let channel = config.twitch.channel.clone();
+        let expected_latency = config.twitch.expected_latency;
         async move {
-            run_1337_handler(broadcast_tx, client).await;
+            run_1337_handler(broadcast_tx, client, channel, expected_latency).await;
         }
     });
 
@@ -850,10 +865,11 @@ pub async fn main() -> Result<()> {
     let handler_generic_commands = tokio::spawn({
         let broadcast_tx = broadcast_tx.clone();
         let client = client.clone();
-        async move { run_generic_command_handler(broadcast_tx, client).await }
+        let se_config = config.streamelements.clone();
+        async move { run_generic_command_handler(broadcast_tx, client, se_config).await }
     });
 
-    if sheets_configured {
+    if config.google_sheets.is_some() {
         info!(
             "Bot running with continuous connection. Handlers: Schedule loader, 1337 tracker, Minecraft responder, Generic commands, Scheduled messages"
         );
@@ -939,18 +955,18 @@ async fn ensure_data_dir() -> Result<()> {
     Ok(())
 }
 
-#[instrument]
-fn setup_twitch_client() -> (UnboundedReceiver<ServerMessage>, AuthenticatedTwitchClient) {
+#[instrument(skip(config))]
+fn setup_twitch_client(config: &TwitchConfiguration) -> (UnboundedReceiver<ServerMessage>, AuthenticatedTwitchClient) {
     // Create authenticated IRC client with refreshing tokens
     let credentials = RefreshingLoginCredentials::init_with_username(
-        Some(TWITCH_USERNAME.clone()),
-        TWITCH_CLIENT_ID.clone(),
-        TWITCH_CLIENT_SECRET.expose_secret().to_string(),
-        FileBasedTokenStorage::default(),
+        Some(config.username.clone()),
+        config.client_id.expose_secret().to_string(),
+        config.client_secret.expose_secret().to_string(),
+        FileBasedTokenStorage::new(config.refresh_token.clone()),
     );
-    let config = ClientConfig::new_simple(credentials);
+    let twitch_config = ClientConfig::new_simple(credentials);
     TwitchIRCClient::<SecureTCPTransport, RefreshingLoginCredentials<FileBasedTokenStorage>>::new(
-        config,
+        twitch_config,
     )
 }
 
@@ -962,20 +978,21 @@ fn setup_twitch_client() -> (UnboundedReceiver<ServerMessage>, AuthenticatedTwit
 /// # Errors
 ///
 /// Returns an error if connection times out (30s) or authentication fails.
-#[instrument]
-async fn setup_and_verify_twitch_client()
--> Result<(UnboundedReceiver<ServerMessage>, AuthenticatedTwitchClient)> {
+#[instrument(skip(config))]
+async fn setup_and_verify_twitch_client(
+    config: &TwitchConfiguration,
+) -> Result<(UnboundedReceiver<ServerMessage>, AuthenticatedTwitchClient)> {
     info!("Setting up and verifying Twitch connection");
 
-    let (mut incoming_messages, client) = setup_twitch_client();
+    let (mut incoming_messages, client) = setup_twitch_client(config);
 
     // Connect to Twitch IRC
     info!("Connecting to Twitch IRC");
     client.connect().await;
 
     // Join the configured channel
-    info!(channel = %*CHANNEL_LOGIN, "Joining channel");
-    let channels = [CHANNEL_LOGIN.to_string()].into();
+    info!(channel = %config.channel, "Joining channel");
+    let channels = [config.channel.clone()].into();
     client.set_wanted_channels(channels)?;
 
     // Verify authentication by waiting for GlobalUserState message
@@ -1054,10 +1071,12 @@ async fn run_message_router(
 ///
 /// Monitors messages during the 13:37 window, tracks unique users, and posts stats at 13:38.
 /// Runs continuously, resetting state daily.
-#[instrument(skip(broadcast_tx, client))]
+#[instrument(skip(broadcast_tx, client, channel))]
 async fn run_1337_handler(
     broadcast_tx: broadcast::Sender<ServerMessage>,
     client: Arc<AuthenticatedTwitchClient>,
+    channel: String,
+    expected_latency: u32,
 ) {
     info!("1337 handler started");
 
@@ -1082,18 +1101,18 @@ async fn run_1337_handler(
         });
 
         // Wait until 13:36:30 to send reminder
-        sleep_until_hms(TARGET_HOUR, TARGET_MINUTE - 1, 30, EXPECTED_LATENCY).await;
+        sleep_until_hms(TARGET_HOUR, TARGET_MINUTE - 1, 30, expected_latency).await;
 
         info!("Posting reminder to channel");
         if let Err(e) = client
-            .say(CHANNEL_LOGIN.clone(), "PausersHype".to_string())
+            .say(channel.clone(), "PausersHype".to_string())
             .await
         {
             error!(error = ?e, "Failed to send reminder message");
         }
 
         // Wait until 13:38 to post stats
-        sleep_until_hms(TARGET_HOUR, TARGET_MINUTE + 1, 0, EXPECTED_LATENCY).await;
+        sleep_until_hms(TARGET_HOUR, TARGET_MINUTE + 1, 0, expected_latency).await;
 
         // Get user list and count
         let (count, user_list) = {
@@ -1108,7 +1127,7 @@ async fn run_1337_handler(
 
         // Post stats message
         info!(count = count, "Posting stats to channel");
-        if let Err(e) = client.say(CHANNEL_LOGIN.clone(), message).await {
+        if let Err(e) = client.say(channel.clone(), message).await {
             error!(error = ?e, count = count, "Failed to send stats message");
         } else {
             info!("Stats posted successfully");
@@ -1163,10 +1182,11 @@ async fn run_minecraft_handler(
 /// - `!toggle-ping <command>` - Adds/removes user from StreamElements ping command
 ///
 /// Runs continuously in a loop, processing all incoming messages.
-#[instrument(skip(broadcast_tx, client))]
+#[instrument(skip(broadcast_tx, client, se_config))]
 async fn run_generic_command_handler(
     broadcast_tx: broadcast::Sender<ServerMessage>,
     client: Arc<AuthenticatedTwitchClient>,
+    se_config: StreamelementsConfig,
 ) {
     info!("Generic Command Handler started");
 
@@ -1174,7 +1194,7 @@ async fn run_generic_command_handler(
     let mut broadcast_rx = broadcast_tx.subscribe();
 
     // Initialize StreamElements client
-    let se_client = match SEClient::new(STREAMELEMENTS_API_TOKEN.expose_secret()) {
+    let se_client = match SEClient::new(se_config.api_token.expose_secret()) {
         Ok(client) => client,
         Err(e) => {
             error!(error = ?e, "Failed to initialize StreamElements client");
@@ -1191,7 +1211,7 @@ async fn run_generic_command_handler(
                 };
 
                 // Catch any errors from command handling to prevent task crash
-                if let Err(e) = handle_generic_commands(&privmsg, &client, &se_client).await {
+                if let Err(e) = handle_generic_commands(&privmsg, &client, &se_client, &se_config.channel_id).await {
                     error!(
                         error = ?e,
                         user = %privmsg.sender.login,
@@ -1220,11 +1240,12 @@ async fn run_generic_command_handler(
 /// # Errors
 ///
 /// Returns an error if command execution fails, but does not crash the handler.
-#[instrument(skip(privmsg, client, se_client))]
+#[instrument(skip(privmsg, client, se_client, channel_id))]
 async fn handle_generic_commands(
     privmsg: &PrivmsgMessage,
     client: &Arc<AuthenticatedTwitchClient>,
     se_client: &SEClient,
+    channel_id: &str,
 ) -> Result<()> {
     let mut words = privmsg.message_text.split_whitespace();
     let Some(first_word) = words.next() else {
@@ -1232,16 +1253,14 @@ async fn handle_generic_commands(
     };
 
     if first_word == "!toggle-ping" {
-        toggle_ping_command(privmsg, client, se_client, words.next()).await?;
+        toggle_ping_command(privmsg, client, se_client, channel_id, words.next()).await?;
     } else if first_word == "!list-pings" {
-        list_pings_command(privmsg, client, se_client, words.next()).await?;
+        list_pings_command(privmsg, client, se_client, channel_id, words.next()).await?;
     }
 
     Ok(())
 }
 
-// TODO: use layzlock and request id dynamically
-const STREAMELEMENTS_CHANNEL_ID: &str = "REDACTED_SE_ID";
 const PING_COMMANDS: &[&str] = &[
     "ackern",
     "amra",
@@ -1288,11 +1307,12 @@ const PING_COMMANDS: &[&str] = &[
 ///
 /// Returns an error if IRC communication or StreamElements API calls fail.
 /// User-facing errors are sent as chat messages before returning the error.
-#[instrument(skip(privmsg, client, se_client))]
+#[instrument(skip(privmsg, client, se_client, channel_id))]
 async fn toggle_ping_command(
     privmsg: &PrivmsgMessage,
     client: &Arc<AuthenticatedTwitchClient>,
     se_client: &SEClient,
+    channel_id: &str,
     command_name: Option<&str>,
 ) -> Result<()> {
     let Some(command_name) = command_name else {
@@ -1318,7 +1338,7 @@ async fn toggle_ping_command(
 
     // Fetch all commands from StreamElements
     let commands = se_client
-        .get_all_commands(STREAMELEMENTS_CHANNEL_ID)
+        .get_all_commands(channel_id)
         .await
         .wrap_err("Failed to fetch commands from StreamElements API")?;
 
@@ -1373,7 +1393,7 @@ async fn toggle_ping_command(
 
     // Update the command via StreamElements API
     se_client
-        .update_command(STREAMELEMENTS_CHANNEL_ID, command)
+        .update_command(channel_id, command)
         .await
         .wrap_err("Failed to update command via StreamElements API")?;
 
@@ -1395,17 +1415,18 @@ async fn toggle_ping_command(
     Ok(())
 }
 
-#[instrument(skip(privmsg, client, se_client))]
+#[instrument(skip(privmsg, client, se_client, channel_id))]
 async fn list_pings_command(
     privmsg: &PrivmsgMessage,
     client: &Arc<AuthenticatedTwitchClient>,
     se_client: &SEClient,
+    channel_id: &str,
     enabled_option: Option<&str>,
 ) -> Result<()> {
     let filter = enabled_option.unwrap_or("enabled");
 
     let commands = se_client
-        .get_all_commands(STREAMELEMENTS_CHANNEL_ID)
+        .get_all_commands(channel_id)
         .await
         .wrap_err("Failed to fetch commands from StreamElements API")?;
 
@@ -1448,11 +1469,12 @@ async fn list_pings_command(
 /// Run a single schedule task.
 /// This task will run the schedule at its configured interval,
 /// checking if it's still active before each post.
-#[instrument(skip(client, cache), fields(schedule = %schedule.name))]
+#[instrument(skip(client, cache, channel), fields(schedule = %schedule.name))]
 async fn run_schedule_task(
     schedule: database::Schedule,
     client: Arc<AuthenticatedTwitchClient>,
     cache: Arc<tokio::sync::RwLock<database::ScheduleCache>>,
+    channel: String,
 ) {
     use chrono::Utc;
     use tokio::time::{Duration, sleep};
@@ -1504,7 +1526,7 @@ async fn run_schedule_task(
         );
 
         if let Err(e) = client
-            .say(CHANNEL_LOGIN.clone(), schedule.message.clone())
+            .say(channel.clone(), schedule.message.clone())
             .await
         {
             error!(
@@ -1522,10 +1544,11 @@ async fn run_schedule_task(
 
 /// Dynamic scheduled message handler that monitors cache for changes.
 /// Spawns and stops tasks dynamically based on cache updates.
-#[instrument(skip(client, cache))]
+#[instrument(skip(client, cache, channel))]
 async fn run_scheduled_message_handler(
     client: Arc<AuthenticatedTwitchClient>,
     cache: Arc<tokio::sync::RwLock<database::ScheduleCache>>,
+    channel: String,
 ) {
     use std::collections::HashMap;
     use tokio::task::JoinHandle;
@@ -1576,6 +1599,7 @@ async fn run_scheduled_message_handler(
 
             // Start tasks for new schedules
             for (name, schedule) in desired_schedules {
+                let channel = channel.clone();
                 running_tasks.entry(name.clone()).or_insert_with(|| {
                     info!(schedule = %name, "Starting task for new schedule");
 
@@ -1583,6 +1607,7 @@ async fn run_scheduled_message_handler(
                         schedule.clone(),
                         client.clone(),
                         cache.clone(),
+                        channel,
                     ))
                 });
             }
@@ -1597,19 +1622,6 @@ mod database {
     use chrono_tz::Tz;
     use eyre::{Result, eyre};
     use serde::{Deserialize, Serialize};
-
-    struct CaffeineProduct {
-        name: String,
-        unit: String,
-        mg_coffeine: f64,
-    }
-
-    struct CaffeineConsumption {
-        username: String,
-        product: u64,
-        amount: f64,
-        timestamp: chrono::NaiveDateTime,
-    }
 
     #[derive(Debug, Clone, Deserialize, Serialize)]
     pub struct Schedule {
@@ -1950,33 +1962,25 @@ fn build_column_map(
 
 /// Fetch schedules from Google Sheets.
 /// Returns a vector of validated schedules.
-async fn fetch_schedules_from_sheets() -> Result<Vec<database::Schedule>> {
+async fn fetch_schedules_from_sheets(
+    sheets_config: &GoogleSheetsConfig,
+) -> Result<Vec<database::Schedule>> {
     use google_sheets4::api::Sheets;
 
-    // Get configuration from environment
-    let spreadsheet_id = std::env::var("GOOGLE_SHEETS_SPREADSHEET_ID")
-        .wrap_err("GOOGLE_SHEETS_SPREADSHEET_ID environment variable not set")?;
-
-    let sheet_name = std::env::var("GOOGLE_SHEETS_SHEET_NAME")
-        .unwrap_or_else(|_| "ScheduledMessages".to_string());
-
-    let service_account_path = std::env::var("GOOGLE_SERVICE_ACCOUNT_PATH")
-        .wrap_err("GOOGLE_SERVICE_ACCOUNT_PATH environment variable not set")?;
-
     debug!(
-        spreadsheet_id = %spreadsheet_id,
-        sheet_name = %sheet_name,
-        service_account_path = %service_account_path,
+        spreadsheet_id = %sheets_config.spreadsheet_id,
+        sheet_name = %sheets_config.sheet_name,
+        service_account_path = %sheets_config.service_account_path.display(),
         "Fetching schedules from Google Sheets"
     );
 
     // Load service account credentials
-    let service_account_key = yup_oauth2::read_service_account_key(&service_account_path)
+    let service_account_key = yup_oauth2::read_service_account_key(&sheets_config.service_account_path)
         .await
         .wrap_err_with(|| {
             format!(
                 "Failed to read service account key from {}",
-                service_account_path
+                sheets_config.service_account_path.display()
             )
         })?;
 
@@ -2007,10 +2011,10 @@ async fn fetch_schedules_from_sheets() -> Result<Vec<database::Schedule>> {
     let hub = Sheets::new(hyper_client, auth);
 
     // First, fetch the header row to determine column positions
-    let header_range = format!("'{}'!A1:Z1", sheet_name);
+    let header_range = format!("'{}'!A1:Z1", sheets_config.sheet_name);
     let header_result = hub
         .spreadsheets()
-        .values_get(&spreadsheet_id, &header_range)
+        .values_get(&sheets_config.spreadsheet_id, &header_range)
         .doit()
         .await
         .wrap_err("Failed to fetch header row from Google Sheets")?;
@@ -2035,11 +2039,11 @@ async fn fetch_schedules_from_sheets() -> Result<Vec<database::Schedule>> {
         .ok_or_else(|| eyre!("Column index too large"))?;
 
     // Fetch data from sheet (A2:LAST to skip header row)
-    let range = format!("'{}'!A2:{}", sheet_name, last_column);
+    let range = format!("'{}'!A2:{}", sheets_config.sheet_name, last_column);
 
     let result = hub
         .spreadsheets()
-        .values_get(&spreadsheet_id, &range)
+        .values_get(&sheets_config.spreadsheet_id, &range)
         .doit()
         .await
         .wrap_err("Failed to fetch data from Google Sheets")?;
@@ -2227,14 +2231,17 @@ fn parse_schedule_row(
 
 /// Schedule loader service that polls Google Sheets and updates the cache.
 /// Runs continuously in a background task.
-#[instrument(skip(cache))]
-async fn run_schedule_loader_service(cache: Arc<tokio::sync::RwLock<database::ScheduleCache>>) {
+#[instrument(skip(cache, sheets_config))]
+async fn run_schedule_loader_service(
+    cache: Arc<tokio::sync::RwLock<database::ScheduleCache>>,
+    sheets_config: GoogleSheetsConfig,
+) {
     use tokio::time::{Duration, interval};
 
     info!("Schedule loader service started");
 
     // Initial load on startup
-    let initial_schedules = match try_load_schedules_from_any_source().await {
+    let initial_schedules = match try_load_schedules_from_any_source(&sheets_config).await {
         Ok(schedules) => {
             info!(count = schedules.len(), "Initial schedules loaded");
             schedules
@@ -2270,7 +2277,7 @@ async fn run_schedule_loader_service(cache: Arc<tokio::sync::RwLock<database::Sc
 
         debug!("Polling Google Sheets for schedule updates");
 
-        match fetch_schedules_from_sheets().await {
+        match fetch_schedules_from_sheets(&sheets_config).await {
             Ok(schedules) => {
                 consecutive_failures = 0;
 
@@ -2315,31 +2322,25 @@ async fn run_schedule_loader_service(cache: Arc<tokio::sync::RwLock<database::Sc
 }
 
 /// Try to load schedules from any available source in priority order:
-/// 1. Google Sheets (if configured)
+/// 1. Google Sheets
 /// 2. Disk cache
 /// 3. Empty (last resort)
-async fn try_load_schedules_from_any_source() -> Result<Vec<database::Schedule>> {
-    // Check if Google Sheets is configured
-    let sheets_configured = std::env::var("GOOGLE_SHEETS_SPREADSHEET_ID").is_ok()
-        && std::env::var("GOOGLE_SERVICE_ACCOUNT_PATH").is_ok();
+async fn try_load_schedules_from_any_source(
+    sheets_config: &GoogleSheetsConfig,
+) -> Result<Vec<database::Schedule>> {
+    info!("Google Sheets configured, attempting to load from Google Sheets");
 
-    if sheets_configured {
-        info!("Google Sheets configured, attempting to load from Google Sheets");
-
-        match fetch_schedules_from_sheets().await {
-            Ok(schedules) => {
-                info!(
-                    count = schedules.len(),
-                    "Loaded schedules from Google Sheets"
-                );
-                return Ok(schedules);
-            }
-            Err(e) => {
-                warn!(error = ?e, "Failed to load from Google Sheets, trying disk cache");
-            }
+    match fetch_schedules_from_sheets(sheets_config).await {
+        Ok(schedules) => {
+            info!(
+                count = schedules.len(),
+                "Loaded schedules from Google Sheets"
+            );
+            return Ok(schedules);
         }
-    } else {
-        info!("Google Sheets not configured, skipping");
+        Err(e) => {
+            warn!(error = ?e, "Failed to load from Google Sheets, trying disk cache");
+        }
     }
 
     // Try disk cache
