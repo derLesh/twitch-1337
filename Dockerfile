@@ -45,9 +45,5 @@ WORKDIR /
 # Copy the static binary
 COPY --from=builder /app/target/x86_64-unknown-linux-musl/release/twitch-1337 /twitch-1337
 
-# Create /data directory for persistence
-# Note: In FROM scratch, we can't use RUN commands, so the app creates this at runtime
-# Users must mount a volume at /data for persistence (e.g., -v ./data:/data)
-
 # Run the bot
 ENTRYPOINT ["/twitch-1337"]
