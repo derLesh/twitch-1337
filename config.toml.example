@@ -28,6 +28,14 @@ api_token = "your_streamelements_api_token"
 # StreamElements channel ID (numeric ID, not channel name)
 channel_id = "your_channel_id"
 
+# Optional: OpenRouter AI configuration for the !ai command
+# If not configured, the !ai command will be disabled.
+# Get an API key from: https://openrouter.ai/keys
+#
+# [openrouter]
+# api_key = "sk-or-your_openrouter_api_key"
+# model = "google/gemini-2.0-flash-exp:free"  # Optional, defaults to free Gemini model
+
 # Optional: Scheduled messages configuration
 # Add [[schedules]] sections to define scheduled messages.
 # The bot watches config.toml for changes and reloads schedules automatically.

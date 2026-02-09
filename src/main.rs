@@ -523,6 +523,181 @@ mod simbrief {
     }
 }
 
+/// OpenRouter API client for AI-powered chat responses.
+///
+/// This module provides an HTTP client for interacting with the OpenRouter API
+/// (OpenAI-compatible) to generate responses with optional tool/function calling support.
+mod openrouter {
+    use eyre::{Result, WrapErr as _};
+    use reqwest::header::{self, HeaderValue};
+    use serde::{Deserialize, Serialize};
+    use tracing::{debug, instrument};
+
+    use crate::APP_USER_AGENT;
+
+    /// A message in the conversation.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct Message {
+        pub role: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub content: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub tool_calls: Option<Vec<ToolCall>>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub tool_call_id: Option<String>,
+    }
+
+    /// A tool call requested by the model.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct ToolCall {
+        pub id: String,
+        #[serde(rename = "type")]
+        pub call_type: String,
+        pub function: FunctionCall,
+    }
+
+    /// Function call details within a tool call.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct FunctionCall {
+        pub name: String,
+        /// Arguments as a JSON string (needs to be parsed)
+        pub arguments: String,
+    }
+
+    /// Tool definition for the API (OpenAI format).
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct Tool {
+        #[serde(rename = "type")]
+        pub tool_type: String,
+        pub function: ToolFunction,
+    }
+
+    /// Function definition within a tool.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct ToolFunction {
+        pub name: String,
+        pub description: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub parameters: Option<serde_json::Value>,
+    }
+
+    /// Request body for the OpenRouter chat/completions endpoint.
+    #[derive(Debug, Clone, Serialize)]
+    pub struct ChatCompletionRequest {
+        pub model: String,
+        pub messages: Vec<Message>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub tools: Option<Vec<Tool>>,
+    }
+
+    /// A choice in the chat completion response.
+    #[derive(Debug, Clone, Deserialize)]
+    pub struct Choice {
+        pub message: Message,
+        pub finish_reason: Option<String>,
+    }
+
+    /// Response from the OpenRouter chat/completions endpoint.
+    #[derive(Debug, Clone, Deserialize)]
+    pub struct ChatCompletionResponse {
+        pub choices: Vec<Choice>,
+    }
+
+    /// HTTP client for the OpenRouter API.
+    #[derive(Debug, Clone)]
+    pub struct OpenRouterClient {
+        http: reqwest::Client,
+        model: String,
+    }
+
+    impl OpenRouterClient {
+        /// Creates a new OpenRouter API client.
+        ///
+        /// # Errors
+        ///
+        /// Returns an error if the HTTP client cannot be built.
+        #[instrument(skip(api_key))]
+        pub fn new(api_key: &str, model: &str) -> Result<Self> {
+            let mut headers = header::HeaderMap::new();
+            headers.insert(
+                header::CONTENT_TYPE,
+                HeaderValue::from_static("application/json"),
+            );
+
+            // OpenRouter uses Bearer token auth
+            let mut auth_value = HeaderValue::from_str(&format!("Bearer {}", api_key))
+                .wrap_err("Invalid API key format")?;
+            auth_value.set_sensitive(true);
+            headers.insert(header::AUTHORIZATION, auth_value);
+
+            // Required OpenRouter headers
+            headers.insert(
+                "HTTP-Referer",
+                HeaderValue::from_static("https://github.com/chronophylos/twitch-1337"),
+            );
+            headers.insert("X-Title", HeaderValue::from_static("twitch-1337"));
+
+            let http = reqwest::Client::builder()
+                .user_agent(APP_USER_AGENT)
+                .default_headers(headers)
+                .build()
+                .wrap_err("Failed to build HTTP Client")?;
+
+            Ok(Self {
+                http,
+                model: model.to_string(),
+            })
+        }
+
+        /// Sends a chat completion request to OpenRouter.
+        ///
+        /// # Errors
+        ///
+        /// Returns an error if the API request fails or the response cannot be parsed.
+        #[instrument(skip(self, request))]
+        pub async fn chat_completion(
+            &self,
+            request: ChatCompletionRequest,
+        ) -> Result<ChatCompletionResponse> {
+            let url = "https://openrouter.ai/api/v1/chat/completions";
+
+            debug!(model = %self.model, "Sending request to OpenRouter API");
+
+            let response = self
+                .http
+                .post(url)
+                .json(&request)
+                .send()
+                .await
+                .wrap_err("Failed to send request to OpenRouter API")?;
+
+            if !response.status().is_success() {
+                let status = response.status();
+                let error_body = response.text().await.unwrap_or_default();
+                return Err(eyre::eyre!(
+                    "OpenRouter API error (status {}): {}",
+                    status,
+                    error_body
+                ));
+            }
+
+            response
+                .json::<ChatCompletionResponse>()
+                .await
+                .wrap_err("Failed to parse OpenRouter API response")
+        }
+
+        /// Returns the model name.
+        pub fn model(&self) -> &str {
+            &self.model
+        }
+    }
+}
+
+use crate::openrouter::{
+    ChatCompletionRequest, Message, OpenRouterClient, Tool, ToolFunction,
+};
+use crate::simbrief::{DispatchParams, SimBriefClient};
 use crate::streamelements::SEClient;
 
 /// Type alias for the authenticated Twitch IRC client
@@ -557,6 +732,19 @@ struct StreamelementsConfig {
     channel_id: String,
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize)]
+struct OpenRouterConfig {
+    #[serde(serialize_with = "serialize_secret_string")]
+    api_key: SecretString,
+    /// OpenRouter model to use (default: "google/gemini-2.0-flash-exp:free")
+    #[serde(default = "default_openrouter_model")]
+    model: String,
+}
+
+fn default_openrouter_model() -> String {
+    "google/gemini-2.0-flash-exp:free".to_string()
+}
+
 /// Configuration for a scheduled message loaded from config.toml.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 struct ScheduleConfig {
@@ -589,6 +777,8 @@ fn default_enabled() -> bool {
 struct Configuration {
     twitch: TwitchConfiguration,
     streamelements: StreamelementsConfig,
+    #[serde(default)]
+    openrouter: Option<OpenRouterConfig>,
     #[serde(default)]
     schedules: Vec<ScheduleConfig>,
 }
@@ -808,6 +998,322 @@ fn generate_stats_message(count: usize, user_list: &[String]) -> String {
 /// Used for adding variety to bot responses by randomly selecting from predefined options.
 fn one_of<const L: usize, T>(array: &[T; L]) -> &T {
     array.choose(&mut rand::rng()).unwrap()
+}
+
+/// System prompt for the AI command, instructing the model how to behave.
+const AI_SYSTEM_PROMPT: &str = r#"You are a helpful Twitch chat bot assistant. Keep responses brief (2-3 sentences max) since they'll appear in chat. Be friendly and casual. You have access to SimBrief flight planning tools which you can use when users ask about flight plans or aircraft.
+
+When using tools:
+- For flight plans, always ask the user to specify their SimBrief username if not provided
+- Format flight information concisely (origin -> destination, aircraft, key stats)
+- If a tool fails, explain the error briefly
+
+Respond in the same language the user writes in (German or English)."#;
+
+/// Maximum response length for Twitch chat (to stay within limits).
+const MAX_RESPONSE_LENGTH: usize = 500;
+
+/// Maximum number of tool call iterations to prevent infinite loops.
+const MAX_TOOL_ITERATIONS: usize = 5;
+
+/// Builds the SimBrief tool definitions for OpenRouter (OpenAI format).
+fn build_simbrief_tools() -> Vec<Tool> {
+    vec![
+        Tool {
+            tool_type: "function".to_string(),
+            function: ToolFunction {
+                name: "get_flight_plan".to_string(),
+                description: "Fetch the latest flight plan for a SimBrief user. Returns flight details including origin, destination, route, fuel, and times.".to_string(),
+                parameters: Some(serde_json::json!({
+                    "type": "object",
+                    "properties": {
+                        "user": {
+                            "type": "string",
+                            "description": "The SimBrief username or numeric user ID"
+                        }
+                    },
+                    "required": ["user"]
+                })),
+            },
+        },
+        Tool {
+            tool_type: "function".to_string(),
+            function: ToolFunction {
+                name: "get_aircraft_list".to_string(),
+                description: "Get a list of available aircraft types in SimBrief. Returns aircraft codes and names.".to_string(),
+                parameters: Some(serde_json::json!({
+                    "type": "object",
+                    "properties": {}
+                })),
+            },
+        },
+        Tool {
+            tool_type: "function".to_string(),
+            function: ToolFunction {
+                name: "create_dispatch_url".to_string(),
+                description: "Generate a SimBrief dispatch URL for creating a new flight plan. Returns a URL the user can open.".to_string(),
+                parameters: Some(serde_json::json!({
+                    "type": "object",
+                    "properties": {
+                        "origin": {
+                            "type": "string",
+                            "description": "Origin airport ICAO code (e.g., EDDF)"
+                        },
+                        "destination": {
+                            "type": "string",
+                            "description": "Destination airport ICAO code (e.g., LIRF)"
+                        },
+                        "aircraft": {
+                            "type": "string",
+                            "description": "Aircraft type code (e.g., B738, A320)"
+                        },
+                        "route": {
+                            "type": "string",
+                            "description": "Optional route string"
+                        },
+                        "alternate": {
+                            "type": "string",
+                            "description": "Optional alternate airport ICAO code"
+                        },
+                        "airline": {
+                            "type": "string",
+                            "description": "Optional airline ICAO code"
+                        },
+                        "flight_number": {
+                            "type": "string",
+                            "description": "Optional flight number"
+                        }
+                    },
+                    "required": ["origin", "destination", "aircraft"]
+                })),
+            },
+        },
+    ]
+}
+
+/// Executes a single tool call and returns the result as JSON.
+async fn execute_tool(
+    name: &str,
+    args: &serde_json::Value,
+    simbrief_client: &SimBriefClient,
+) -> serde_json::Value {
+    debug!(tool = %name, args = ?args, "Executing tool");
+
+    match name {
+        "get_flight_plan" => {
+            let user = args
+                .get("user")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default();
+
+            if user.is_empty() {
+                return serde_json::json!({
+                    "error": "Missing required parameter: user"
+                });
+            }
+
+            match simbrief_client.get_latest_flight_plan(user).await {
+                Ok(plan) => {
+                    serde_json::json!({
+                        "origin": format!("{} ({})", plan.origin.icao_code, plan.origin.name),
+                        "destination": format!("{} ({})", plan.destination.icao_code, plan.destination.name),
+                        "route": plan.general.route,
+                        "flight_number": plan.general.flight_number,
+                        "airline": plan.general.icao_airline,
+                        "distance_nm": plan.general.air_distance,
+                        "aircraft": plan.aircraft.map(|a| format!("{} ({})", a.icaocode, a.name)),
+                        "fuel_ramp_lbs": plan.fuel.plan_ramp,
+                        "fuel_enroute_lbs": plan.fuel.enroute_burn,
+                        "time_enroute_seconds": plan.times.est_time_enroute,
+                        "passengers": plan.weights.pax_count,
+                    })
+                }
+                Err(e) => {
+                    serde_json::json!({
+                        "error": format!("Failed to fetch flight plan: {}", e)
+                    })
+                }
+            }
+        }
+        "get_aircraft_list" => {
+            match simbrief_client.get_available_aircraft().await {
+                Ok(list) => {
+                    // Return a summary (top 20 aircraft by name for brevity)
+                    let aircraft: Vec<serde_json::Value> = list
+                        .aircraft
+                        .iter()
+                        .take(20)
+                        .map(|(code, info)| {
+                            serde_json::json!({
+                                "code": code,
+                                "name": info.name
+                            })
+                        })
+                        .collect();
+
+                    serde_json::json!({
+                        "aircraft_count": list.aircraft.len(),
+                        "sample_aircraft": aircraft,
+                        "note": "Showing first 20 of available aircraft. Use specific codes like B738, A320, B77W, etc."
+                    })
+                }
+                Err(e) => {
+                    serde_json::json!({
+                        "error": format!("Failed to fetch aircraft list: {}", e)
+                    })
+                }
+            }
+        }
+        "create_dispatch_url" => {
+            let origin = args
+                .get("origin")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default();
+            let destination = args
+                .get("destination")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default();
+            let aircraft = args
+                .get("aircraft")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default();
+
+            if origin.is_empty() || destination.is_empty() || aircraft.is_empty() {
+                return serde_json::json!({
+                    "error": "Missing required parameters: origin, destination, and aircraft are required"
+                });
+            }
+
+            let params = DispatchParams {
+                origin: origin.to_string(),
+                destination: destination.to_string(),
+                aircraft: aircraft.to_string(),
+                route: args.get("route").and_then(|v| v.as_str()).map(String::from),
+                alternate: args.get("alternate").and_then(|v| v.as_str()).map(String::from),
+                airline: args.get("airline").and_then(|v| v.as_str()).map(String::from),
+                flight_number: args.get("flight_number").and_then(|v| v.as_str()).map(String::from),
+            };
+
+            let url = simbrief_client.create_dispatch_url(params);
+
+            serde_json::json!({
+                "url": url,
+                "message": "Open this URL to create your flight plan in SimBrief"
+            })
+        }
+        _ => {
+            serde_json::json!({
+                "error": format!("Unknown tool: {}", name)
+            })
+        }
+    }
+}
+
+/// Executes the AI command with tool support.
+///
+/// Orchestrates the conversation with OpenRouter, handling tool calls in a loop.
+async fn execute_ai_with_tools(
+    instruction: &str,
+    openrouter_client: &OpenRouterClient,
+    simbrief_client: &SimBriefClient,
+) -> Result<String> {
+    let tools = build_simbrief_tools();
+
+    // Build initial messages with system prompt and user instruction
+    let mut messages = vec![
+        Message {
+            role: "system".to_string(),
+            content: Some(AI_SYSTEM_PROMPT.to_string()),
+            tool_calls: None,
+            tool_call_id: None,
+        },
+        Message {
+            role: "user".to_string(),
+            content: Some(instruction.to_string()),
+            tool_calls: None,
+            tool_call_id: None,
+        },
+    ];
+
+    // Tool calling loop
+    for iteration in 0..MAX_TOOL_ITERATIONS {
+        debug!(iteration, "AI tool calling iteration");
+
+        let request = ChatCompletionRequest {
+            model: openrouter_client.model().to_string(),
+            messages: messages.clone(),
+            tools: Some(tools.clone()),
+        };
+
+        let response = openrouter_client.chat_completion(request).await?;
+
+        let choice = response
+            .choices
+            .into_iter()
+            .next()
+            .ok_or_else(|| eyre::eyre!("No choices in OpenRouter response"))?;
+
+        // Check if we got tool calls or final text
+        let has_tool_calls = choice.message.tool_calls.is_some()
+            && !choice.message.tool_calls.as_ref().unwrap().is_empty();
+
+        if has_tool_calls {
+            let tool_calls = choice.message.tool_calls.as_ref().unwrap();
+
+            // Add assistant's message with tool calls to conversation
+            messages.push(choice.message.clone());
+
+            // Execute each tool and add results
+            for tool_call in tool_calls {
+                debug!(
+                    name = %tool_call.function.name,
+                    args = %tool_call.function.arguments,
+                    "OpenRouter requested tool call"
+                );
+
+                // Parse arguments from JSON string
+                let args: serde_json::Value =
+                    serde_json::from_str(&tool_call.function.arguments).unwrap_or_default();
+
+                // Execute the tool
+                let result = execute_tool(&tool_call.function.name, &args, simbrief_client).await;
+
+                // Add tool result message
+                messages.push(Message {
+                    role: "tool".to_string(),
+                    content: Some(serde_json::to_string(&result).unwrap_or_default()),
+                    tool_calls: None,
+                    tool_call_id: Some(tool_call.id.clone()),
+                });
+            }
+        } else {
+            // No tool calls - return final text response
+            if let Some(text) = choice.message.content {
+                return Ok(text);
+            }
+            return Err(eyre::eyre!("No text response from OpenRouter"));
+        }
+    }
+
+    Err(eyre::eyre!("Max tool iterations exceeded"))
+}
+
+/// Truncates a string to the maximum length at a word boundary.
+fn truncate_response(text: &str, max_len: usize) -> String {
+    // Collapse whitespace and newlines
+    let collapsed: String = text.split_whitespace().collect::<Vec<_>>().join(" ");
+
+    if collapsed.len() <= max_len {
+        return collapsed;
+    }
+
+    // Find last space before max_len
+    let truncated = &collapsed[..max_len];
+    if let Some(last_space) = truncated.rfind(' ') {
+        format!("{}...", &truncated[..last_space])
+    } else {
+        format!("{}...", truncated)
+    }
 }
 
 /// Monitors broadcast messages and tracks users who say 1337 during the target minute.
@@ -1272,7 +1778,8 @@ pub async fn main() -> Result<()> {
         let broadcast_tx = broadcast_tx.clone();
         let client = client.clone();
         let se_config = config.streamelements.clone();
-        async move { run_generic_command_handler(broadcast_tx, client, se_config).await }
+        let openrouter_config = config.openrouter.clone();
+        async move { run_generic_command_handler(broadcast_tx, client, se_config, openrouter_config).await }
     });
 
     if schedules_enabled {
@@ -1546,18 +2053,20 @@ async fn run_1337_handler(
 /// Monitors chat for commands and dispatches them to appropriate handlers.
 /// Currently supports:
 /// - `!toggle-ping <command>` - Adds/removes user from StreamElements ping command
+/// - `!ai <instruction>` - AI-powered responses with SimBrief tools (if OpenRouter configured)
 ///
 /// Runs continuously in a loop, processing all incoming messages.
-#[instrument(skip(broadcast_tx, client, se_config))]
+#[instrument(skip(broadcast_tx, client, se_config, openrouter_config))]
 async fn run_generic_command_handler(
     broadcast_tx: broadcast::Sender<ServerMessage>,
     client: Arc<AuthenticatedTwitchClient>,
     se_config: StreamelementsConfig,
+    openrouter_config: Option<OpenRouterConfig>,
 ) {
     info!("Generic Command Handler started");
 
     // Subscribe to the broadcast channel
-    let mut broadcast_rx = broadcast_tx.subscribe();
+    let broadcast_rx = broadcast_tx.subscribe();
 
     // Initialize StreamElements client
     let se_client = match SEClient::new(se_config.api_token.expose_secret()) {
@@ -1569,6 +2078,65 @@ async fn run_generic_command_handler(
         }
     };
 
+    // Initialize OpenRouter and SimBrief clients (optional)
+    let (openrouter_client, simbrief_client) = if let Some(ref openrouter_cfg) = openrouter_config {
+        let openrouter = match OpenRouterClient::new(
+            openrouter_cfg.api_key.expose_secret(),
+            &openrouter_cfg.model,
+        ) {
+            Ok(client) => client,
+            Err(e) => {
+                error!(error = ?e, "Failed to initialize OpenRouter client");
+                error!("AI command will be disabled");
+                return run_generic_command_handler_inner(
+                    broadcast_rx, client, se_client, se_config.channel_id, None, None,
+                ).await;
+            }
+        };
+
+        let simbrief = match SimBriefClient::new() {
+            Ok(client) => client,
+            Err(e) => {
+                error!(error = ?e, "Failed to initialize SimBrief client");
+                error!("AI command will be disabled");
+                return run_generic_command_handler_inner(
+                    broadcast_rx, client, se_client, se_config.channel_id, None, None,
+                ).await;
+            }
+        };
+
+        info!(model = %openrouter_cfg.model, "OpenRouter AI command enabled");
+        (Some(openrouter), Some(simbrief))
+    } else {
+        debug!("OpenRouter not configured, AI command disabled");
+        (None, None)
+    };
+
+    run_generic_command_handler_inner(
+        broadcast_rx,
+        client,
+        se_client,
+        se_config.channel_id,
+        openrouter_client,
+        simbrief_client,
+    )
+    .await;
+}
+
+/// Inner loop for the generic command handler.
+#[instrument(skip(broadcast_rx, client, se_client, openrouter_client, simbrief_client))]
+async fn run_generic_command_handler_inner(
+    mut broadcast_rx: broadcast::Receiver<ServerMessage>,
+    client: Arc<AuthenticatedTwitchClient>,
+    se_client: SEClient,
+    channel_id: String,
+    openrouter_client: Option<OpenRouterClient>,
+    simbrief_client: Option<SimBriefClient>,
+) {
+    // Cooldown tracking for AI command
+    let ai_cooldowns: Arc<Mutex<std::collections::HashMap<String, std::time::Instant>>> =
+        Arc::new(Mutex::new(std::collections::HashMap::new()));
+
     loop {
         match broadcast_rx.recv().await {
             Ok(message) => {
@@ -1577,7 +2145,17 @@ async fn run_generic_command_handler(
                 };
 
                 // Catch any errors from command handling to prevent task crash
-                if let Err(e) = handle_generic_commands(&privmsg, &client, &se_client, &se_config.channel_id).await {
+                if let Err(e) = handle_generic_commands(
+                    &privmsg,
+                    &client,
+                    &se_client,
+                    &channel_id,
+                    openrouter_client.as_ref(),
+                    simbrief_client.as_ref(),
+                    &ai_cooldowns,
+                )
+                .await
+                {
                     error!(
                         error = ?e,
                         user = %privmsg.sender.login,
@@ -1606,12 +2184,15 @@ async fn run_generic_command_handler(
 /// # Errors
 ///
 /// Returns an error if command execution fails, but does not crash the handler.
-#[instrument(skip(privmsg, client, se_client, channel_id))]
+#[instrument(skip(privmsg, client, se_client, channel_id, openrouter_client, simbrief_client, ai_cooldowns))]
 async fn handle_generic_commands(
     privmsg: &PrivmsgMessage,
     client: &Arc<AuthenticatedTwitchClient>,
     se_client: &SEClient,
     channel_id: &str,
+    openrouter_client: Option<&OpenRouterClient>,
+    simbrief_client: Option<&SimBriefClient>,
+    ai_cooldowns: &Arc<Mutex<std::collections::HashMap<String, std::time::Instant>>>,
 ) -> Result<()> {
     let mut words = privmsg.message_text.split_whitespace();
     let Some(first_word) = words.next() else {
@@ -1622,6 +2203,16 @@ async fn handle_generic_commands(
         toggle_ping_command(privmsg, client, se_client, channel_id, words.next()).await?;
     } else if first_word == "!list-pings" {
         list_pings_command(privmsg, client, se_client, channel_id, words.next()).await?;
+    } else if first_word == "!ai" {
+        // Check if AI is enabled
+        if let (Some(openrouter), Some(simbrief)) = (openrouter_client, simbrief_client) {
+            // Collect remaining words as the instruction
+            let instruction: String = words.collect::<Vec<_>>().join(" ");
+            ai_command(privmsg, client, openrouter, simbrief, ai_cooldowns, &instruction).await?;
+        } else {
+            // AI not configured - silently ignore or could add a message
+            debug!("AI command received but OpenRouter not configured");
+        }
     }
 
     Ok(())
@@ -1827,6 +2418,107 @@ async fn list_pings_command(
 
     if let Err(e) = client.say_in_reply_to(privmsg, response.to_string()).await {
         error!(error = ?e, "Failed to send response message");
+    }
+
+    Ok(())
+}
+
+/// Cooldown duration for the AI command (30 seconds).
+const AI_COMMAND_COOLDOWN: Duration = Duration::from_secs(30);
+
+/// Handles the `!ai` command for AI-powered responses.
+///
+/// Takes user instructions, processes them with OpenRouter, and optionally
+/// uses SimBrief tools to fulfill flight planning requests.
+///
+/// # Command Format
+///
+/// `!ai <instruction>`
+///
+/// # Rate Limiting
+///
+/// Per-user cooldown of 30 seconds to prevent spam.
+///
+/// # Errors
+///
+/// Returns an error if the OpenRouter API call fails.
+#[instrument(skip(privmsg, client, openrouter_client, simbrief_client, cooldowns))]
+async fn ai_command(
+    privmsg: &PrivmsgMessage,
+    client: &Arc<AuthenticatedTwitchClient>,
+    openrouter_client: &OpenRouterClient,
+    simbrief_client: &SimBriefClient,
+    cooldowns: &Arc<Mutex<std::collections::HashMap<String, std::time::Instant>>>,
+    instruction: &str,
+) -> Result<()> {
+    let user = &privmsg.sender.login;
+
+    // Check cooldown
+    {
+        let cooldowns_guard = cooldowns.lock().await;
+        if let Some(last_use) = cooldowns_guard.get(user) {
+            let elapsed = last_use.elapsed();
+            if elapsed < AI_COMMAND_COOLDOWN {
+                let remaining = AI_COMMAND_COOLDOWN - elapsed;
+                debug!(
+                    user = %user,
+                    remaining_secs = remaining.as_secs(),
+                    "AI command on cooldown"
+                );
+                if let Err(e) = client
+                    .say_in_reply_to(privmsg, "Bitte warte noch ein bisschen Waiting".to_string())
+                    .await
+                {
+                    error!(error = ?e, "Failed to send cooldown message");
+                }
+                return Ok(());
+            }
+        }
+    }
+
+    // Check for empty instruction
+    if instruction.trim().is_empty() {
+        if let Err(e) = client
+            .say_in_reply_to(privmsg, "Benutzung: !ai <anweisung>".to_string())
+            .await
+        {
+            error!(error = ?e, "Failed to send usage message");
+        }
+        return Ok(());
+    }
+
+    debug!(user = %user, instruction = %instruction, "Processing AI command");
+
+    // Update cooldown before making the API call
+    {
+        let mut cooldowns_guard = cooldowns.lock().await;
+        cooldowns_guard.insert(user.to_string(), std::time::Instant::now());
+    }
+
+    // Execute AI with timeout
+    let result = tokio::time::timeout(
+        Duration::from_secs(30),
+        execute_ai_with_tools(instruction, openrouter_client, simbrief_client),
+    )
+    .await;
+
+    let response = match result {
+        Ok(Ok(text)) => {
+            // Truncate response for Twitch chat
+            truncate_response(&text, MAX_RESPONSE_LENGTH)
+        }
+        Ok(Err(e)) => {
+            error!(error = ?e, "AI execution failed");
+            "Da ist was schiefgelaufen FDM".to_string()
+        }
+        Err(_) => {
+            error!("AI execution timed out");
+            "Das hat zu lange gedauert Waiting".to_string()
+        }
+    };
+
+    if let Err(e) = client.say_in_reply_to(privmsg, response).await {
+        error!(error = ?e, "Failed to send AI response");
     }
 
     Ok(())
