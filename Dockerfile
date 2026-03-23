@@ -7,7 +7,7 @@ FROM docker.io/lukemathwalker/cargo-chef:latest-rust-1 as base
 WORKDIR /app
 # Install musl tools for static linking
 RUN apt-get update \
-  && apt-get install --no-install-recommends --assume-yes musl=1.2.5-3 musl-dev=1.2.5-3 musl-tools=1.2.5-3 \
+  && apt-get install --no-install-recommends --assume-yes musl-tools \
   && rm -rf /var/lib/apt/lists/* \
   && rustup target add x86_64-unknown-linux-musl
 
