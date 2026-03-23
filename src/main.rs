@@ -362,7 +362,7 @@ const TARGET_MINUTE: u32 = 37;
 /// Maximum number of unique users to track (prevents unbounded memory growth)
 const MAX_USERS: usize = 10_000;
 
-const LEADERBOARD_PATH: &str = "./leaderboard.ron";
+const LEADERBOARD_FILENAME: &str = "leaderboard.ron";
 
 static APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
 
@@ -797,13 +797,14 @@ struct PersonalBest {
 ///
 /// Returns an empty HashMap if the file doesn't exist or is corrupted.
 async fn load_leaderboard() -> HashMap<String, PersonalBest> {
-    match fs::read_to_string(LEADERBOARD_PATH).await {
+    let path = get_data_dir().join(LEADERBOARD_FILENAME);
+    match fs::read_to_string(&path).await {
         Ok(contents) => match ron::from_str::<HashMap<String, PersonalBest>>(&contents) {
             Ok(leaderboard) => {
                 info!(
                     entries = leaderboard.len(),
                     "Loaded leaderboard from {}",
-                    LEADERBOARD_PATH
+                    path.display()
                 );
                 leaderboard
             }
@@ -827,15 +828,16 @@ async fn load_leaderboard() -> HashMap<String, PersonalBest> {
 ///
 /// Logs an error and continues if the write fails.
 async fn save_leaderboard(leaderboard: &HashMap<String, PersonalBest>) {
+    let path = get_data_dir().join(LEADERBOARD_FILENAME);
     match ron::to_string(leaderboard) {
         Ok(serialized) => {
-            if let Err(e) = fs::write(LEADERBOARD_PATH, serialized.as_bytes()).await {
+            if let Err(e) = fs::write(&path, serialized.as_bytes()).await {
                 error!(error = ?e, "Failed to write leaderboard file");
             } else {
                 info!(
                     entries = leaderboard.len(),
                     "Saved leaderboard to {}",
-                    LEADERBOARD_PATH
+                    path.display()
                 );
             }
         }
@@ -857,7 +859,7 @@ struct FileBasedTokenStorage {
 impl FileBasedTokenStorage {
     fn new(initial_refresh_token: SecretString) -> Self {
         Self {
-            path: PathBuf::from("./token.ron"),
+            path: get_data_dir().join("token.ron"),
             initial_refresh_token,
         }
     }
