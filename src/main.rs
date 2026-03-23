@@ -725,7 +725,7 @@ fn truncate_response(text: &str, max_len: usize) -> String {
 #[instrument(skip(broadcast_rx, total_users))]
 async fn monitor_1337_messages(
     mut broadcast_rx: broadcast::Receiver<ServerMessage>,
-    total_users: Arc<Mutex<HashSet<String>>>,
+    total_users: Arc<Mutex<HashMap<String, Option<u64>>>>,
 ) {
     loop {
         match broadcast_rx.recv().await {
@@ -743,18 +743,23 @@ async fn monitor_1337_messages(
                 }
 
                 if is_valid_1337_message(&privmsg) {
-                    let username = &privmsg.sender.login;
-                    debug!(user = %username, "User said 1337 at 13:37");
-
                     let mut users = total_users.lock().await;
                     // Double-check minute to prevent race condition
-                    let current_minute = privmsg
-                        .server_timestamp
-                        .with_timezone(&chrono_tz::Europe::Berlin)
-                        .minute();
+                    let current_minute = local.minute();
                     if current_minute == TARGET_MINUTE {
                         if users.len() < MAX_USERS {
-                            users.insert(privmsg.sender.login);
+                            let username = privmsg.sender.login.clone();
+                            if !users.contains_key(username.as_str()) {
+                                let ms_since_minute = local.second() as u64 * 1000
+                                    + local.timestamp_subsec_millis() as u64;
+                                if ms_since_minute < 1000 {
+                                    debug!(user = %username, ms = ms_since_minute, "User said 1337 at 13:37 (sub-second)");
+                                    users.insert(username, Some(ms_since_minute));
+                                } else {
+                                    debug!(user = %username, "User said 1337 at 13:37");
+                                    users.insert(username, None);
+                                }
+                            }
                         } else {
                             error!(max = MAX_USERS, "User limit reached");
                         }
@@ -1458,8 +1463,8 @@ async fn run_1337_handler(
 
         info!("Starting daily 1337 monitoring session");
 
-        // Fresh HashSet for today's users
-        let total_users = Arc::new(Mutex::new(HashSet::with_capacity(MAX_USERS)));
+        // Fresh HashMap for today's users (maps username -> ms_since_minute if sub-second)
+        let total_users = Arc::new(Mutex::new(HashMap::with_capacity(MAX_USERS)));
 
         // Spawn message monitoring subtask
         let monitor_handle = tokio::spawn({
@@ -1487,12 +1492,18 @@ async fn run_1337_handler(
         sleep_until_hms(TARGET_HOUR, TARGET_MINUTE + 1, 0, expected_latency).await;
 
         // Get user list and count
-        let (count, user_list) = {
+        let (count, user_list, fastest) = {
             let users = total_users.lock().await;
             let count = users.len();
-            let mut user_vec: Vec<String> = users.iter().cloned().collect();
+            let mut user_vec: Vec<String> = users.keys().cloned().collect();
             user_vec.sort(); // Sort alphabetically for consistency
-            (count, user_vec)
+
+            let fastest: Option<(String, u64)> = users
+                .iter()
+                .filter_map(|(name, ms)| ms.map(|ms| (name.clone(), ms)))
+                .min_by_key(|(_, ms)| *ms);
+
+            (count, user_vec, fastest)
         };
 
         let message = generate_stats_message(count, &user_list);
