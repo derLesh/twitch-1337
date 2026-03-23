@@ -2218,17 +2218,17 @@ mod database {
     impl Schedule {
         /// Check if the schedule is currently active based on date range and time window.
         pub fn is_active(&self, now: DateTime<Tz>) -> bool {
-            // Check date range
+            // Check date range (dates are Berlin local time from config)
             if let Some(start) = self.start_date {
-                let start_utc = start.and_utc();
-                if now < start_utc {
+                let start_berlin = crate::resolve_berlin_time(start);
+                if now < start_berlin {
                     return false;
                 }
             }
 
             if let Some(end) = self.end_date {
-                let end_utc = end.and_utc();
-                if now > end_utc {
+                let end_berlin = crate::resolve_berlin_time(end);
+                if now > end_berlin {
                     return false;
                 }
             }
