@@ -748,8 +748,9 @@ async fn monitor_1337_messages(
                     let current_minute = local.minute();
                     if current_minute == TARGET_MINUTE {
                         if users.len() < MAX_USERS {
-                            let username = privmsg.sender.login.clone();
-                            if !users.contains_key(username.as_str()) {
+                            // Only insert if user not already present (first message wins)
+                            if !users.contains_key(privmsg.sender.login.as_str()) {
+                                let username = privmsg.sender.login.clone();
                                 let ms_since_minute = local.second() as u64 * 1000
                                     + local.timestamp_subsec_millis() as u64;
                                 if ms_since_minute < 1000 {
