@@ -5,7 +5,7 @@ use std::{
 };
 
 use async_trait::async_trait;
-use chrono::{TimeDelta, Timelike, Utc};
+use chrono::{MappedLocalTime, TimeDelta, Timelike, Utc};
 use color_eyre::eyre::{self, Result, WrapErr, bail};
 use rand::seq::IndexedRandom as _;
 use regex::Regex;
@@ -482,6 +482,18 @@ impl Configuration {
     }
 }
 
+/// Resolves a naive datetime to Berlin local time, handling DST transitions.
+///
+/// During spring-forward (gap), interprets as UTC to land just after the gap.
+/// During fall-back (ambiguous), picks the later occurrence.
+fn resolve_berlin_time(naive: chrono::NaiveDateTime) -> chrono::DateTime<chrono_tz::Tz> {
+    match naive.and_local_timezone(chrono_tz::Europe::Berlin) {
+        MappedLocalTime::Single(t) => t,
+        MappedLocalTime::Ambiguous(_, latest) => latest,
+        MappedLocalTime::None => naive.and_utc().with_timezone(&chrono_tz::Europe::Berlin),
+    }
+}
+
 /// Calculates the next occurrence of a daily time in Europe/Berlin timezone.
 ///
 /// If the specified time has already passed today, returns tomorrow's occurrence.
@@ -489,23 +501,21 @@ fn calculate_next_occurrence(hour: u32, minute: u32) -> chrono::DateTime<Utc> {
     let berlin_now = Utc::now().with_timezone(&chrono_tz::Europe::Berlin);
 
     // Create target time today in Berlin timezone
-    let mut target = berlin_now
-        .date_naive()
-        .and_hms_opt(hour, minute, 0)
-        .expect("Invalid hour/minute for Berlin time")
-        .and_local_timezone(chrono_tz::Europe::Berlin)
-        .single()
-        .expect("Ambiguous time during DST transition");
+    let mut target = resolve_berlin_time(
+        berlin_now
+            .date_naive()
+            .and_hms_opt(hour, minute, 0)
+            .expect("Invalid hour/minute for Berlin time"),
+    );
 
     // If target time has already passed today, schedule for tomorrow
     if target <= berlin_now {
-        target = (berlin_now + chrono::Duration::days(1))
-            .date_naive()
-            .and_hms_opt(hour, minute, 0)
-            .expect("Invalid hour/minute for Berlin time")
-            .and_local_timezone(chrono_tz::Europe::Berlin)
-            .single()
-            .expect("Ambiguous time during DST transition");
+        target = resolve_berlin_time(
+            (berlin_now + chrono::Duration::days(1))
+                .date_naive()
+                .and_hms_opt(hour, minute, 0)
+                .expect("Invalid hour/minute for Berlin time"),
+        );
     }
 
     target.with_timezone(&Utc)
@@ -539,13 +549,11 @@ async fn wait_until_schedule(hour: u32, minute: u32) {
 #[instrument]
 async fn sleep_until_hms(hour: u32, minute: u32, second: u32, expected_latency: u32) {
     let now = Utc::now().with_timezone(&chrono_tz::Europe::Berlin);
-    let time = now
-        .date_naive()
-        .and_hms_opt(hour, minute, second)
-        .expect("Invalid stats time")
-        .and_local_timezone(chrono_tz::Europe::Berlin)
-        .single()
-        .expect("Ambiguous time during DST transition");
+    let time = resolve_berlin_time(
+        now.date_naive()
+            .and_hms_opt(hour, minute, second)
+            .expect("Invalid stats time"),
+    );
 
     let wait_duration =
         (time.with_timezone(&Utc) - Utc::now() - TimeDelta::milliseconds(expected_latency as i64))
