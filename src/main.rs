@@ -908,7 +908,9 @@ impl TokenStorage for FileBasedTokenStorage {
     async fn update_token(&mut self, token: &UserAccessToken) -> Result<(), Self::UpdateError> {
         debug!(path = %self.path.display(), "Updating token in file");
         let buffer = ron::to_string(token)?.into_bytes();
-        File::create(&self.path).await?.write_all(&buffer).await?;
+        let tmp_path = self.path.with_extension("ron.tmp");
+        File::create(&tmp_path).await?.write_all(&buffer).await?;
+        fs::rename(&tmp_path, &self.path).await?;
         Ok(())
     }
 }
