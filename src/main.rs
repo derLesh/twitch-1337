@@ -883,8 +883,8 @@ impl TokenStorage for FileBasedTokenStorage {
                 );
                 Ok(ron::from_str(&contents)?)
             }
-            Err(_) => {
-                // File doesn't exist, use initial refresh token from configuration
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                // File doesn't exist yet, use initial refresh token from configuration
                 warn!("Token file not found, using refresh token from configuration");
                 let token = UserAccessToken {
                     access_token: String::new(),
@@ -897,6 +897,9 @@ impl TokenStorage for FileBasedTokenStorage {
                 self.update_token(&token).await?;
 
                 Ok(token)
+            }
+            Err(e) => {
+                Err(eyre::Report::from(e).wrap_err("Failed to read token file"))
             }
         }
     }
