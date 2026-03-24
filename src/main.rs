@@ -1779,6 +1779,8 @@ async fn handle_generic_commands(
             // AI not configured - silently ignore or could add a message
             debug!("AI command received but OpenRouter not configured");
         }
+    } else if first_word == "!fl" {
+        flight_command(privmsg, client, words.next(), words.next()).await?;
     }
 
     Ok(())
@@ -2087,6 +2089,95 @@ async fn ai_command(
     if let Err(e) = client.say_in_reply_to(privmsg, response).await {
         error!(error = ?e, "Failed to send AI response");
     }
+
+    Ok(())
+}
+
+#[instrument(skip(privmsg, client))]
+async fn flight_command(
+    privmsg: &PrivmsgMessage,
+    client: &Arc<AuthenticatedTwitchClient>,
+    aircraft_code: Option<&str>,
+    duration_str: Option<&str>,
+) -> Result<()> {
+    // Validate arguments
+    let (Some(aircraft_code), Some(duration_str)) = (aircraft_code, duration_str) else {
+        if let Err(e) = client
+            .say_in_reply_to(privmsg, "Gib mir nen Flugzeug und ne Zeit, z.B. !fl A20N 1h FDM".to_string())
+            .await
+        {
+            error!(error = ?e, "Failed to send usage message");
+        }
+        return Ok(());
+    };
+
+    // Look up aircraft
+    let Some(aircraft) = random_flight::aircraft_by_icao_type(aircraft_code) else {
+        if let Err(e) = client
+            .say_in_reply_to(privmsg, "Das Flugzeug kenn ich nich FDM".to_string())
+            .await
+        {
+            error!(error = ?e, "Failed to send error message");
+        }
+        return Ok(());
+    };
+
+    // Parse duration
+    let Some(duration) = parse_flight_duration(duration_str) else {
+        if let Err(e) = client
+            .say_in_reply_to(privmsg, "Gib mir nen Flugzeug und ne Zeit, z.B. !fl A20N 1h FDM".to_string())
+            .await
+        {
+            error!(error = ?e, "Failed to send usage message");
+        }
+        return Ok(());
+    };
+
+    // Generate flight plan in blocking task (can take many retries)
+    let result = tokio::task::spawn_blocking(move || {
+        random_flight::generate_flight_plan(aircraft, duration, None)
+    })
+    .await
+    .wrap_err("Flight plan generation task panicked")?;
+
+    let fp = match result {
+        Ok(fp) => fp,
+        Err(e) => {
+            warn!(error = ?e, "Flight plan generation failed");
+            if let Err(e) = client
+                .say_in_reply_to(
+                    privmsg,
+                    "Hab keine Route gefunden, versuch mal ne andere Zeit FDM".to_string(),
+                )
+                .await
+            {
+                error!(error = ?e, "Failed to send error message");
+            }
+            return Ok(());
+        }
+    };
+
+    // Format block time as compact string (e.g. "1h12m", "45m")
+    let total_mins = fp.block_time.as_secs() / 60;
+    let hours = total_mins / 60;
+    let mins = total_mins % 60;
+    let time_str = if hours > 0 {
+        format!("{}h{}m", hours, mins)
+    } else {
+        format!("{}m", mins)
+    };
+
+    let response = format!(
+        "{} → {} | {:.0} nm | {} | FL{} | {}",
+        fp.departure.icao,
+        fp.arrival.icao,
+        fp.distance_nm,
+        time_str,
+        fp.cruise_altitude_ft / 100,
+        fp.simbrief_url(),
+    );
+
+    client.say_in_reply_to(privmsg, response).await?;
 
     Ok(())
 }
