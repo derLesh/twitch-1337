@@ -693,7 +693,6 @@ fn parse_flight_duration(s: &str) -> Option<std::time::Duration> {
         }
     }
 
-    // Reject if there are leftover digits (no unit suffix) or zero duration
     if !current_num.is_empty() || total_secs == 0 {
         return None;
     }
@@ -2106,40 +2105,37 @@ async fn flight_command(
 ) -> Result<()> {
     const USAGE_MSG: &str = "Gib mir nen Flugzeug und ne Zeit, z.B. !fl A20N 1h FDM";
 
-    // Validate arguments
     let (Some(aircraft_code), Some(duration_str)) = (aircraft_code, duration_str) else {
         if let Err(e) = client
             .say_in_reply_to(privmsg, String::from(USAGE_MSG))
             .await
         {
-            error!(error = ?e, "Failed to send usage message");
+            error!(error = ?e, "Failed to send flight usage message");
         }
         return Ok(());
     };
 
-    // Look up aircraft
     let Some(aircraft) = random_flight::aircraft_by_icao_type(aircraft_code) else {
         if let Err(e) = client
             .say_in_reply_to(privmsg, String::from("Das Flugzeug kenn ich nich FDM"))
             .await
         {
-            error!(error = ?e, "Failed to send error message");
+            error!(error = ?e, "Failed to send 'unknown aircraft' error message");
         }
         return Ok(());
     };
 
-    // Parse duration
     let Some(duration) = parse_flight_duration(duration_str) else {
         if let Err(e) = client
             .say_in_reply_to(privmsg, String::from(USAGE_MSG))
             .await
         {
-            error!(error = ?e, "Failed to send usage message");
+            error!(error = ?e, "Failed to send flight duration usage message");
         }
         return Ok(());
     };
 
-    // Generate flight plan in blocking task (can take many retries)
+    // Can take many retries internally
     let result = tokio::task::spawn_blocking(move || {
         random_flight::generate_flight_plan(aircraft, duration, None)
     })
@@ -2157,13 +2153,13 @@ async fn flight_command(
                 )
                 .await
             {
-                error!(error = ?e, "Failed to send error message");
+                error!(error = ?e, "Failed to send 'no route found' error message");
             }
             return Ok(());
         }
     };
 
-    // Format block time as compact string (e.g. "1h12m", "45m")
+    // Format: "1h12m" or "45m"
     let total_mins = fp.block_time.as_secs() / 60;
     let hours = total_mins / 60;
     let mins = total_mins % 60;
