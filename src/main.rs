@@ -665,7 +665,7 @@ fn one_of<const L: usize, T>(array: &[T; L]) -> &T {
 
 /// Parse a compact duration string like "1h", "30m", "2h30m" into a Duration.
 fn parse_flight_duration(s: &str) -> Option<std::time::Duration> {
-    let s = s.trim().to_lowercase();
+    let s = s.trim();
     if s.is_empty() {
         return None;
     }
@@ -676,16 +676,20 @@ fn parse_flight_duration(s: &str) -> Option<std::time::Duration> {
     for ch in s.chars() {
         if ch.is_ascii_digit() {
             current_num.push(ch);
-        } else if ch == 'h' {
-            let hours: u64 = current_num.parse().ok()?;
-            total_secs += hours * 3600;
-            current_num.clear();
-        } else if ch == 'm' {
-            let minutes: u64 = current_num.parse().ok()?;
-            total_secs += minutes * 60;
-            current_num.clear();
         } else {
-            return None;
+            match ch.to_ascii_lowercase() {
+                'h' => {
+                    let hours: u64 = current_num.parse().ok()?;
+                    total_secs += hours * 3600;
+                    current_num.clear();
+                }
+                'm' => {
+                    let minutes: u64 = current_num.parse().ok()?;
+                    total_secs += minutes * 60;
+                    current_num.clear();
+                }
+                _ => return None,
+            }
         }
     }
 
@@ -2093,17 +2097,19 @@ async fn ai_command(
     Ok(())
 }
 
-#[instrument(skip(privmsg, client))]
+#[instrument(skip(privmsg, client), fields(user = %privmsg.sender.login))]
 async fn flight_command(
     privmsg: &PrivmsgMessage,
     client: &Arc<AuthenticatedTwitchClient>,
     aircraft_code: Option<&str>,
     duration_str: Option<&str>,
 ) -> Result<()> {
+    const USAGE_MSG: &str = "Gib mir nen Flugzeug und ne Zeit, z.B. !fl A20N 1h FDM";
+
     // Validate arguments
     let (Some(aircraft_code), Some(duration_str)) = (aircraft_code, duration_str) else {
         if let Err(e) = client
-            .say_in_reply_to(privmsg, "Gib mir nen Flugzeug und ne Zeit, z.B. !fl A20N 1h FDM".to_string())
+            .say_in_reply_to(privmsg, String::from(USAGE_MSG))
             .await
         {
             error!(error = ?e, "Failed to send usage message");
@@ -2114,7 +2120,7 @@ async fn flight_command(
     // Look up aircraft
     let Some(aircraft) = random_flight::aircraft_by_icao_type(aircraft_code) else {
         if let Err(e) = client
-            .say_in_reply_to(privmsg, "Das Flugzeug kenn ich nich FDM".to_string())
+            .say_in_reply_to(privmsg, String::from("Das Flugzeug kenn ich nich FDM"))
             .await
         {
             error!(error = ?e, "Failed to send error message");
@@ -2125,7 +2131,7 @@ async fn flight_command(
     // Parse duration
     let Some(duration) = parse_flight_duration(duration_str) else {
         if let Err(e) = client
-            .say_in_reply_to(privmsg, "Gib mir nen Flugzeug und ne Zeit, z.B. !fl A20N 1h FDM".to_string())
+            .say_in_reply_to(privmsg, String::from(USAGE_MSG))
             .await
         {
             error!(error = ?e, "Failed to send usage message");
@@ -2147,7 +2153,7 @@ async fn flight_command(
             if let Err(e) = client
                 .say_in_reply_to(
                     privmsg,
-                    "Hab keine Route gefunden, versuch mal ne andere Zeit FDM".to_string(),
+                    String::from("Hab keine Route gefunden, versuch mal ne andere Zeit FDM"),
                 )
                 .await
             {
