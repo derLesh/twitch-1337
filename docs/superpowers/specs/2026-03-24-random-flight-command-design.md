@@ -9,7 +9,10 @@ Add a `!fl <ICAO_TYPE> <DURATION>` command to the Twitch bot that generates a ra
 ```
 !fl A20N 1h
 !fl B738 2h30m
+!fl C172 45m
 ```
+
+Duration supports: `Nh`, `Nm`, `NhNm` (e.g. `1h`, `30m`, `2h30m`).
 
 ## Response Format
 
@@ -17,7 +20,11 @@ Add a `!fl <ICAO_TYPE> <DURATION>` command to the Twitch bot that generates a ra
 EDDF → EGLL | 280 nm | 1h12m | FL360 | https://dispatch.simbrief.com/...
 ```
 
-Fields: departure ICAO → arrival ICAO | distance in nm | block time | cruise flight level | SimBrief dispatch URL.
+Fields: departure ICAO → arrival ICAO | distance (rounded) | block time | cruise flight level (altitude / 100) | SimBrief dispatch URL.
+
+Block time formatted as compact `NhNm` (e.g. `1h12m`, `45m`, `3h0m`).
+
+Flight level: `cruise_altitude_ft / 100`, e.g. 36000 ft → `FL360`.
 
 ## Error Responses
 
@@ -25,18 +32,21 @@ Fields: departure ICAO → arrival ICAO | distance in nm | block time | cruise f
 |-----------|----------|
 | Missing arguments | `Gib mir nen Flugzeug und ne Zeit, z.B. !fl A20N 1h FDM` |
 | Unknown aircraft | `Das Flugzeug kenn ich nich FDM` |
-| No route found | `Hab keine Route gefunden, versuch mal ne andere Zeit FDM` |
+| Generation failure (all error variants) | `Hab keine Route gefunden, versuch mal ne andere Zeit FDM` |
+
+All `random_flight::Error` variants (`NoValidAirports`, `NoCandidateArrivals`, `RetriesExhausted`, `RangeExceeded`, `RunwayTooShort`) map to the same user-facing message. `UnknownAirport` cannot occur since we don't pin departure/arrival.
 
 ## Integration
 
 ### Dependency
 
-Add `random-flight` as a path dependency and `humantime` for duration parsing:
+Add `random-flight` as a path dependency:
 
 ```toml
 random-flight = { path = "../random-flight" }
-humantime = "2"
 ```
+
+No `humantime` dependency needed — use a small custom duration parser (same style as the existing `parse_interval` in the codebase) that handles `1h`, `30m`, `2h30m` formats and returns `std::time::Duration`.
 
 ### Command Dispatch
 
@@ -46,12 +56,19 @@ Add `!fl` branch in `handle_generic_commands()` alongside existing commands.
 
 New `flight_command()` async fn:
 
-1. Parse aircraft ICAO from first argument via `aircraft_by_icao_type()`
-2. Parse duration from second argument via `humantime::parse_duration()`
-3. Call `generate_flight_plan()` wrapped in `tokio::task::spawn_blocking` (sync + potentially slow with retries)
-4. Format response: `"{dep} → {arr} | {dist:.0} nm | {time} | FL{alt} | {simbrief_url}"`
-5. Reply in chat
+1. Parse aircraft ICAO from first argument via `aircraft_by_icao_type()` — returns `Option<&'static Aircraft>`
+2. Parse duration from second argument via custom `parse_flight_duration()` helper
+3. Clone the `Aircraft` and move into `tokio::task::spawn_blocking` closure (the `&'static` ref from `aircraft_by_icao_type` can be moved directly, but clone is clearer)
+4. Call `generate_flight_plan(&aircraft, duration, None)` inside the blocking task
+5. Format response: `"{dep} → {arr} | {dist:.0} nm | {time} | FL{alt} | {url}"`
+   - `alt` = `fp.cruise_altitude_ft / 100`
+   - `time` = custom compact format (`NhNm`)
+6. Reply in chat
 
 ### No Config Changes
 
 The command is self-contained with no external API calls or configuration needed.
+
+### Docker Build Note
+
+The `random-flight` crate's `build.rs` downloads airport data from OurAirports at compile time (falls back to bundled `data/airports.csv`). This should work fine with the existing multi-stage Docker build since the builder stage has network access.
