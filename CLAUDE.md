@@ -8,6 +8,7 @@ A Rust-based Twitch IRC bot with multiple features:
 1. **1337 Tracker**: Monitors for "1337"/"DANKIES" messages at 13:37 Berlin time, posts stats at 13:38
 2. **Ping Toggle**: Allows users to toggle their @mention in StreamElements ping commands
 3. **Scheduled Messages**: Dynamic message scheduling via config.toml with file watching
+4. **Latency Monitor**: Measures IRC latency via PING/PONG every 5 minutes, auto-adjusts timing offsets
 
 Uses a persistent IRC connection with broadcast-based message routing to multiple handlers.
 
@@ -92,7 +93,7 @@ The config.toml file has three sections:
 - `refresh_token` - OAuth refresh token (automatically refreshed and persisted to `token.ron`)
 - `client_id` - Twitch application client ID
 - `client_secret` - Twitch application client secret
-- `expected_latency` - IRC latency in milliseconds (50-150ms typical)
+- `expected_latency` - Initial seed for IRC latency estimate in milliseconds (optional, default: 100). Auto-measured via PING/PONG.
 
 **[streamelements]** - StreamElements API configuration
 - `api_token` - StreamElements API token
@@ -162,6 +163,7 @@ The bot maintains a **single persistent IRC connection** and uses a **broadcast 
    - **Scheduled Message Handler**: Posts messages based on config.toml schedules (if configured)
    - **1337 Handler**: Daily scheduled monitoring (13:36-13:38)
    - **Generic Command Handler**: Processes `!toggle-ping` commands 24/7
+   - **Latency Monitor**: Measures IRC latency via PING/PONG every 5 minutes
    - Each handler runs independently
    - Handlers filter for relevant messages and act accordingly
 
@@ -374,6 +376,17 @@ sudo cp target/x86_64-unknown-linux-musl/release/twitch-1337 /usr/local/bin/
   - 8+: "insane quota Pag"
 - Uses `one_of()` to randomly select from message variants
 
+### Handler: Latency Monitor
+
+**`run_latency_handler(client, broadcast_tx, latency)`**
+- Runs in infinite loop, sleeps `LATENCY_PING_INTERVAL` (5 min) between cycles
+- Sends `PING` with timestamp nonce via `irc!["PING", nonce]`
+- Subscribes to broadcast channel before sending (avoids race)
+- Matches `ServerMessage::Pong` where `source.params[1]` equals nonce
+- Computes one-way latency (RTT/2), updates EMA with `LATENCY_EMA_ALPHA` (0.2)
+- Stores rounded EMA in shared `Arc<AtomicU32>` with `Relaxed` ordering
+- Handles: PING failure (warn, skip), PONG timeout (warn, skip), channel lagged (warn, continue)
+
 ### Handler: Generic Commands
 
 **`run_generic_command_handler(broadcast_tx, client)`**
@@ -480,7 +493,7 @@ sudo cp target/x86_64-unknown-linux-musl/release/twitch-1337 /usr/local/bin/
 **`TwitchConfiguration`**
 - `channel`, `username` - Twitch channel and bot username
 - `refresh_token`, `client_id`, `client_secret` - OAuth credentials (SecretString)
-- `expected_latency` - IRC latency adjustment in milliseconds
+- `expected_latency` - Initial latency seed in milliseconds (optional, default: 100, auto-measured via PING/PONG)
 
 **`StreamelementsConfig`**
 - `api_token` - StreamElements API token (SecretString)
@@ -501,6 +514,10 @@ sudo cp target/x86_64-unknown-linux-musl/release/twitch-1337 /usr/local/bin/
 - `TARGET_MINUTE: u32 = 37` - Minute for 1337 tracking
 - `MAX_USERS: usize = 10_000` - Maximum tracked users
 - `CONFIG_PATH: &str = "./config.toml"` - Configuration file path
+- `LATENCY_PING_INTERVAL: Duration = 300s` - Time between PING measurements
+- `LATENCY_PING_TIMEOUT: Duration = 10s` - Max wait for PONG response
+- `LATENCY_EMA_ALPHA: f64 = 0.2` - EMA smoothing factor
+- `LATENCY_LOG_THRESHOLD: u32 = 10` - Minimum EMA change (ms) for info log
 
 ## Important Notes
 
@@ -516,6 +533,7 @@ sudo cp target/x86_64-unknown-linux-musl/release/twitch-1337 /usr/local/bin/
 - **Broadcast Architecture**: Message router distributes to independent handlers
 - **Token Refresh**: Tokens automatically refreshed and saved to `./token.ron`
 - **Hot Reload**: Schedules reload automatically when config.toml changes (2s debounce)
+- **Latency Auto-Measurement**: IRC latency measured via PING/PONG every 5 min, EMA (alpha=0.2) updates shared `AtomicU32` read by timing-sensitive handlers
 
 ## Feature Timelines
 
@@ -558,6 +576,16 @@ Per Task   -> Sleep for schedule's interval
            -> Repeat or exit if removed
 ```
 
+### Latency Monitor (Continuous)
+```
+Startup    -> Seed EMA from config.twitch.expected_latency (default: 100ms)
+Every 5min -> Send PING with timestamp nonce
+           -> Wait up to 10s for matching PONG (nonce in source.params[1])
+           -> Compute one-way latency (RTT/2), update EMA (alpha=0.2)
+           -> Store in shared Arc<AtomicU32>, read by 1337 handler for sleep_until_hms
+           -> Log measurement at debug, log EMA shift >= 10ms at info
+```
+
 **If no schedules configured:**
 ```
 Startup    -> Log info: "No schedules configured, scheduled messages disabled"
@@ -568,6 +596,8 @@ Startup    -> Log info: "No schedules configured, scheduled messages disabled"
 ## Development Tips
 
 ### General
+- The `twitch_irc::irc!` macro requires a standalone `use twitch_irc::irc;` — it cannot be added to the braced `use twitch_irc::{...}` block
+- When doing request-response on the broadcast channel (e.g., PING/PONG), subscribe BEFORE sending to avoid race conditions
 - Use `RUST_LOG=debug` to see all IRC messages and handler activity
 - Use `RUST_LOG=trace` to see every ServerMessage received (very verbose)
 - Handlers are independent - errors in one handler don't crash others
