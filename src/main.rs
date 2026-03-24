@@ -1315,12 +1315,25 @@ pub async fn main() -> Result<()> {
         (None, None)
     };
 
+    // Create shared latency estimate, seeded from config
+    let latency = Arc::new(AtomicU32::new(config.twitch.expected_latency));
+
+    // Spawn latency monitor handler
+    let handler_latency = tokio::spawn({
+        let client = client.clone();
+        let broadcast_tx = broadcast_tx.clone();
+        let latency = latency.clone();
+        async move {
+            run_latency_handler(client, broadcast_tx, latency).await;
+        }
+    });
+
     // Spawn 1337 handler task
     let handler_1337 = tokio::spawn({
         let broadcast_tx = broadcast_tx.clone();
         let client = client.clone();
         let channel = config.twitch.channel.clone();
-        let latency = Arc::new(AtomicU32::new(config.twitch.expected_latency));
+        let latency = latency.clone();
         async move {
             run_1337_handler(broadcast_tx, client, channel, latency).await;
         }
@@ -1336,12 +1349,12 @@ pub async fn main() -> Result<()> {
 
     if schedules_enabled {
         info!(
-            "Bot running with continuous connection. Handlers: Config watcher, 1337 tracker, Generic commands, Scheduled messages"
+            "Bot running with continuous connection. Handlers: Config watcher, 1337 tracker, Generic commands, Scheduled messages, Latency monitor"
         );
         info!("Scheduled messages: Loaded from config.toml, reloads on file change");
     } else {
         info!(
-            "Bot running with continuous connection. Handlers: 1337 tracker, Generic commands"
+            "Bot running with continuous connection. Handlers: 1337 tracker, Generic commands, Latency monitor"
         );
     }
     info!(
@@ -1375,6 +1388,9 @@ pub async fn main() -> Result<()> {
                 result = handler => {
                     error!("Scheduled message handler exited unexpectedly: {result:?}");
                 }
+                result = handler_latency => {
+                    error!("Latency handler exited unexpectedly: {result:?}");
+                }
             }
         }
         _ => {
@@ -1390,6 +1406,9 @@ pub async fn main() -> Result<()> {
                 }
                 result = handler_generic_commands => {
                     error!("Generic Command Handler exited unexpectedly: {result:?}");
+                }
+                result = handler_latency => {
+                    error!("Latency handler exited unexpectedly: {result:?}");
                 }
             }
         }
