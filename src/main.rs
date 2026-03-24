@@ -1320,9 +1320,9 @@ pub async fn main() -> Result<()> {
         let broadcast_tx = broadcast_tx.clone();
         let client = client.clone();
         let channel = config.twitch.channel.clone();
-        let expected_latency = config.twitch.expected_latency;
+        let latency = Arc::new(AtomicU32::new(config.twitch.expected_latency));
         async move {
-            run_1337_handler(broadcast_tx, client, channel, expected_latency).await;
+            run_1337_handler(broadcast_tx, client, channel, latency).await;
         }
     });
 
@@ -1530,12 +1530,12 @@ async fn run_message_router(
 ///
 /// Monitors messages during the 13:37 window, tracks unique users, and posts stats at 13:38.
 /// Runs continuously, resetting state daily.
-#[instrument(skip(broadcast_tx, client, channel))]
+#[instrument(skip(broadcast_tx, client, channel, latency))]
 async fn run_1337_handler(
     broadcast_tx: broadcast::Sender<ServerMessage>,
     client: Arc<AuthenticatedTwitchClient>,
     channel: String,
-    expected_latency: u32,
+    latency: Arc<AtomicU32>,
 ) {
     info!("1337 handler started");
 
@@ -1563,7 +1563,7 @@ async fn run_1337_handler(
         });
 
         // Wait until 13:36:30 to send reminder
-        sleep_until_hms(TARGET_HOUR, TARGET_MINUTE - 1, 30, expected_latency).await;
+        sleep_until_hms(TARGET_HOUR, TARGET_MINUTE - 1, 30, latency.load(Ordering::Relaxed)).await;
 
         info!("Posting reminder to channel");
         if let Err(e) = client
@@ -1574,7 +1574,7 @@ async fn run_1337_handler(
         }
 
         // Wait until 13:38 to post stats
-        sleep_until_hms(TARGET_HOUR, TARGET_MINUTE + 1, 0, expected_latency).await;
+        sleep_until_hms(TARGET_HOUR, TARGET_MINUTE + 1, 0, latency.load(Ordering::Relaxed)).await;
 
         // Abort the monitor and wait for it to fully stop before reading results
         monitor_handle.abort();
