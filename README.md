@@ -39,7 +39,7 @@ Shows aircraft currently flying overhead using live ADS-B data from [adsb.lol](h
 
 **Example output:**
 ```
-✈ 3 Flieger ueber Frankfurt am Main Airport: DLH456 (A321) TXL->CDG FL350 | ...
+✈ 3 Flieger über Frankfurt am Main Airport: DLH456 (A321) TXL→CDG FL350 3.2nm ↘ | ...
 ```
 
 #### Cone Visibility Filter
