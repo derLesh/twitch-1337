@@ -2743,6 +2743,7 @@ mod aviation {
     const UP_COMMAND_TIMEOUT: Duration = Duration::from_secs(20);
     const UP_ADSBLOL_TIMEOUT: Duration = Duration::from_secs(10);
     const UP_ADSBDB_TIMEOUT: Duration = Duration::from_secs(5);
+    const UP_NOMINATIM_TIMEOUT: Duration = Duration::from_secs(5);
     const UP_MAX_CANDIDATES: usize = 10;
     const UP_MAX_RESULTS: usize = 5;
 
@@ -2784,7 +2785,6 @@ mod aviation {
     // --- Airport Lookup ---
 
     const AIRPORT_DATA: &str = include_str!("../data/airports.csv");
-    const UP_NOMINATIM_TIMEOUT: Duration = Duration::from_secs(5);
     const NOMINATIM_BASE_URL: &str = "https://nominatim.openstreetmap.org";
 
     struct AirportData {
@@ -2811,13 +2811,13 @@ mod aviation {
                 let Ok(lat) = record[3].trim().parse::<f64>() else { continue };
                 let Ok(lon) = record[4].trim().parse::<f64>() else { continue };
 
-                // Only insert 4-letter codes into by_icao
+                // Only insert 4-letter codes into by_icao (codes are already uppercase in data)
                 if icao.len() == 4 {
-                    by_icao.insert(icao.to_uppercase(), (lat, lon, name.clone()));
+                    by_icao.insert(icao.to_string(), (lat, lon, name.clone()));
                 }
                 // Insert non-empty IATA codes
                 if iata.len() == 3 {
-                    by_iata.insert(iata.to_uppercase(), (lat, lon, name));
+                    by_iata.insert(iata.to_string(), (lat, lon, name));
                 }
             }
             AirportData { by_icao, by_iata }
@@ -2825,13 +2825,11 @@ mod aviation {
     }
 
     fn icao_to_coords(code: &str) -> Option<(f64, f64, &'static str)> {
-        let data = airport_data();
-        data.by_icao.get(&code.to_uppercase()).map(|(lat, lon, name)| (*lat, *lon, name.as_str()))
+        airport_data().by_icao.get(code).map(|(lat, lon, name)| (*lat, *lon, name.as_str()))
     }
 
     fn iata_to_coords(code: &str) -> Option<(f64, f64, &'static str)> {
-        let data = airport_data();
-        data.by_iata.get(&code.to_uppercase()).map(|(lat, lon, name)| (*lat, *lon, name.as_str()))
+        airport_data().by_iata.get(code).map(|(lat, lon, name)| (*lat, *lon, name.as_str()))
     }
 
     fn is_icao_pattern(s: &str) -> bool {
@@ -3024,8 +3022,11 @@ mod aviation {
             };
         }
 
+        // Uppercase once for airport code lookups (keys stored uppercase)
+        let upper = input.to_uppercase();
+
         // 2. ICAO: 4 ASCII letters — falls through to Nominatim on miss
-        if is_icao_pattern(input) && let Some((lat, lon, name)) = icao_to_coords(input) {
+        if is_icao_pattern(input) && let Some((lat, lon, name)) = icao_to_coords(&upper) {
             return Ok(ResolveResult::Found(ResolvedLocation {
                 lat,
                 lon,
@@ -3034,7 +3035,7 @@ mod aviation {
         }
 
         // 3. IATA: 3 ASCII letters — falls through to Nominatim on miss
-        if is_iata_pattern(input) && let Some((lat, lon, name)) = iata_to_coords(input) {
+        if is_iata_pattern(input) && let Some((lat, lon, name)) = iata_to_coords(&upper) {
             return Ok(ResolveResult::Found(ResolvedLocation {
                 lat,
                 lon,
