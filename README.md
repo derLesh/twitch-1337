@@ -47,29 +47,20 @@ Shows aircraft currently flying overhead using live ADS-B data from [adsb.lol](h
 Instead of a fixed search radius, the `!up` command uses a cone-shaped visibility filter. Aircraft at higher altitudes are visible from further away, while low-altitude aircraft must be nearby. Ground-level aircraft are excluded entirely.
 
 ```
-                          Cone Visibility Filter
-    ┌────────────────────────────────────────────────────────────────┐
-35.0┤ ▞▞ cone boundary                                           ▄▄▟█│
-    │                                                        ▄▄██████│
-29.2┤                                                   ▗▄▟██████████│
-    │                                               ▄▄▟██████████████│
-    │                                           ▄▄███████████████████│
-23.3┤                                      ▗▄▟███████████████████████│
-    │                                  ▄▄▟███████████████████████████│
-17.5┤                             ▗▄▄████████████████████████████████│
-    │                         ▄▄▟████████████████████████████████████│
-11.7┤                     ▄▄█████████████████████████████████████████│
-    │                ▗▄▟█████████████████████████████████████████████│
-    │            ▄▄▟█████████████████████████████████████████████████│
- 5.8┤        ▄▄██████████████████████████████████████████████████████│
-    │   ▗▄▟██████████████████████████████████████████████████████████│
- 0.0┤▄▟██████████████████████████████████████████████████████████████│
-    └┬───────────────┬───────────────┬──────────────┬───────────────┬┘
-    0.0             3.8             7.5           11.2           15.0
-Altitude (×1000 ft)            Distance (NM)
+(Altitude (×1000 ft)) ^
+        35 |
+        30 | ⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣀⣠⠤⠴⠒⠒⠉⠉⠁
+        25 | ⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣀⣀⡤⠤⠖⠒⠊⠉⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀
+        20 | ⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣀⣠⠤⠴⠒⠒⠉⠉⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+        15 | ⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣀⣀⠤⠤⠖⠒⠋⠉⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+        10 | ⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣀⣀⡠⠤⠔⠒⠚⠉⠉⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+         5 | ⡇⠀⠀⠀⠀⠀⠀⢀⣀⣀⠤⠤⠒⠒⠋⠉⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+         0 | ⣇⣤⣤⣔⣒⣚⣉⣉⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀
+-----------|-|---------|---------|---------|---------|---------|---------|-> (Distance (NM))
+           | 0         2.5       5         7.5       10        12.5     15
 ```
 
-The shaded area shows where aircraft are considered "overhead." Aircraft above the line are too far away for their altitude. Regenerate with `uv run scripts/cone_chart.py`.
+Aircraft below the line are considered "overhead." Aircraft above the line are too far away for their altitude. Regenerate with `uv run scripts/cone_chart.py`.
 
 The maximum visible distance scales linearly with altitude:
 
