@@ -2749,8 +2749,8 @@ mod aviation {
 
     const PLZ_DATA: &str = include_str!("../data/plz.csv");
 
-    fn plz_table() -> &'static HashMap<String, (f64, f64)> {
-        static TABLE: OnceLock<HashMap<String, (f64, f64)>> = OnceLock::new();
+    fn plz_table() -> &'static HashMap<&'static str, (f64, f64)> {
+        static TABLE: OnceLock<HashMap<&'static str, (f64, f64)>> = OnceLock::new();
         TABLE.get_or_init(|| {
             let mut map = HashMap::new();
             for line in PLZ_DATA.lines() {
@@ -2766,7 +2766,7 @@ mod aviation {
                     .expect("malformed plz.csv: missing lon")
                     .parse()
                     .expect("malformed plz.csv: invalid lon");
-                map.insert(plz.to_string(), (lat, lon));
+                map.insert(plz, (lat, lon));
             }
             map
         })
@@ -2790,14 +2790,11 @@ mod aviation {
 
     #[derive(Debug, Deserialize)]
     struct NearbyAircraft {
-        #[allow(dead_code)]
-        hex: String,
         flight: Option<String>,
-        t: Option<String>,
         alt_baro: Option<AltBaro>,
     }
 
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     enum AltBaro {
         Feet(i64),
         Ground,
@@ -2925,7 +2922,7 @@ mod aviation {
         }
 
         // Validate PLZ
-        let Some(plz) = plz else {
+        let Some(plz) = plz.filter(|p| is_valid_plz(p)) else {
             if let Err(e) = client
                 .say_in_reply_to(privmsg, "Das ist keine gültige PLZ FDM".to_string())
                 .await
@@ -2934,16 +2931,6 @@ mod aviation {
             }
             return Ok(());
         };
-
-        if !is_valid_plz(plz) {
-            if let Err(e) = client
-                .say_in_reply_to(privmsg, "Das ist keine gültige PLZ FDM".to_string())
-                .await
-            {
-                error!(error = ?e, "Failed to send PLZ error message");
-            }
-            return Ok(());
-        }
 
         // Look up coordinates
         let Some((lat, lon)) = plz_to_coords(plz) else {
@@ -2997,12 +2984,7 @@ mod aviation {
             for (callsign, ac) in &candidates {
                 let client = aviation_client.0.clone();
                 let cs = callsign.clone();
-                let aircraft_type = ac.t.clone();
-                let alt = match &ac.alt_baro {
-                    Some(AltBaro::Feet(ft)) => Some(AltBaro::Feet(*ft)),
-                    Some(AltBaro::Ground) => Some(AltBaro::Ground),
-                    None => None,
-                };
+                let alt = ac.alt_baro.clone();
                 join_set.spawn(async move {
                     let url = format!("{ADSBDB_BASE_URL}/callsign/{cs}");
                     let route = tokio::time::timeout(UP_ADSBDB_TIMEOUT, async {
@@ -3016,7 +2998,7 @@ mod aviation {
                     .await;
 
                     match route {
-                        Ok(Ok(Some(fr))) => Some((cs, aircraft_type, alt, fr)),
+                        Ok(Ok(Some(fr))) => Some((cs, alt, fr)),
                         Ok(Ok(None)) => None,
                         Ok(Err(e)) => {
                             warn!(callsign = %cs, error = ?e, "adsbdb lookup failed");
@@ -3035,6 +3017,7 @@ mod aviation {
                 if let Ok(Some(entry)) = res {
                     results.push(entry);
                     if results.len() >= UP_MAX_RESULTS {
+                        join_set.abort_all();
                         break;
                     }
                 }
@@ -3051,7 +3034,7 @@ mod aviation {
             Ok(Ok(entries)) => {
                 let parts: Vec<String> = entries
                     .iter()
-                    .map(|(cs, _typ, alt, route)| {
+                    .map(|(cs, alt, route)| {
                         format!(
                             "{cs} {origin}→{dest} {alt}",
                             origin = route.origin.iata_code,
