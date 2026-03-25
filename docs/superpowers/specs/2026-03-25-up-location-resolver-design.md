@@ -33,6 +33,10 @@ pub async fn up_command(
 
 Call site changes from `words.next()` to `words.collect::<Vec<_>>().join(" ")`.
 
+### Cooldown sequencing
+
+Cooldown is set **before** calling `resolve_location()`, since Nominatim is a network call and we must prevent abuse. This means even failed lookups consume the cooldown — a change from the current behavior where validation is cheap and cooldown is set after validation. This is acceptable: a user sending invalid inputs repeatedly should still be rate-limited.
+
 ## ResolvedLocation Type
 
 ```rust
@@ -48,20 +52,26 @@ The `display_name` is used in chat output (e.g., "Frankfurt am Main Airport", "5
 ## Resolver Chain
 
 ```rust
+enum ResolveResult {
+    Found(ResolvedLocation),
+    PlzNotFound,       // 5-digit input not in PLZ dataset
+    NotFound,          // all resolvers exhausted
+}
+
 async fn resolve_location(
     input: &str,
     aviation_client: &AviationClient,
-) -> Result<Option<ResolvedLocation>>
+) -> Result<ResolveResult>
 ```
 
-This is a **hybrid waterfall**: pattern-matched resolvers are tried first based on input shape, but Nominatim always serves as the final fallback regardless of input pattern. The chain tries resolvers in order and returns the first `Some` result:
+This is a **hybrid waterfall**: pattern-matched resolvers are tried first based on input shape, but Nominatim always serves as the final fallback regardless of input pattern. The chain tries resolvers in order and returns the first match:
 
-1. **PLZ resolver** (offline): if input is 5 ASCII digits → lookup in PLZ HashMap. If found, return. If not found, return PLZ-specific error (do not fall through — an invalid PLZ should not be sent to Nominatim).
-2. **ICAO resolver** (offline): if input is 4 ASCII letters → uppercase → lookup in `AirportData.by_icao`. If found, return. If not found, **fall through** to Nominatim.
-3. **IATA resolver** (offline): if input is 3 ASCII letters → uppercase → lookup in `AirportData.by_iata`. If found, return. If not found, **fall through** to Nominatim.
+1. **PLZ resolver** (offline): if input is 5 ASCII digits → lookup in PLZ HashMap. If found, return `Found`. If not found, return `PlzNotFound` (do not fall through — a 5-digit number is unambiguously a postal code attempt).
+2. **ICAO resolver** (offline): if input is 4 ASCII letters → uppercase → lookup in `AirportData.by_icao`. If found, return `Found`. If not found, **fall through** to Nominatim.
+3. **IATA resolver** (offline): if input is 3 ASCII letters → uppercase → lookup in `AirportData.by_iata`. If found, return `Found`. If not found, **fall through** to Nominatim.
 4. **Nominatim resolver** (network): always tried as final fallback for any input that wasn't resolved by steps 1-3.
 
-If Nominatim also returns no results, returns `None`.
+If Nominatim also returns no results, returns `NotFound`. Network errors propagate as `Err`.
 
 ## Airport Data Embedding
 
@@ -74,12 +84,11 @@ OurAirports dataset from `https://github.com/davidmegginson/ourairports-data` (p
 Downloads OurAirports `airports.csv`, extracts columns: `ident` (ICAO), `iata_code`, `name`, `latitude_deg`, `longitude_deg`. Writes to `data/airports.csv` with format:
 
 ```
-icao,iata,name,lat,lon
 EDDF,FRA,Frankfurt am Main Airport,50.033333,8.570556
 EDDM,MUC,Munich Airport,48.353783,11.786086
 ```
 
-Rows with empty ICAO codes are skipped. Empty IATA codes are preserved as empty strings (skipped during IATA map construction).
+No header row (matching the existing `plz.csv` convention). Rows with empty ICAO codes are skipped. Empty IATA codes are preserved as empty strings (skipped during IATA map construction).
 
 ### Runtime loading
 
@@ -94,7 +103,7 @@ struct AirportData {
 
 Loaded via `include_str!("../data/airports.csv")`, parsed on first access (same pattern as PLZ data). Keys stored as uppercase. Not all airports have IATA codes; those are only inserted into `by_icao`.
 
-**Note on the `ident` field**: OurAirports uses `ident` for ICAO-style codes, but small airports may have non-standard local identifiers (e.g., US FAA codes). The update script should include all entries — the resolver simply won't match non-4-letter codes via the ICAO pattern, and they won't interfere.
+**Note on the `ident` field**: OurAirports uses `ident` for ICAO-style codes, but small airports may have non-standard local identifiers (e.g., US FAA codes). During map construction, only 4-letter `ident` codes are inserted into `by_icao` (filter by length to avoid unreachable entries). All entries with valid IATA codes are inserted into `by_iata` regardless.
 
 ### Binary size impact
 
@@ -134,7 +143,7 @@ Takes the first result. `display_name` is trimmed to the first comma-separated s
 
 ### Timeout
 
-5 seconds, consistent with other external API calls in the module.
+5 seconds (defined as `UP_NOMINATIM_TIMEOUT` constant, matching the existing `UP_ADSBDB_TIMEOUT`).
 
 ### Error handling
 
