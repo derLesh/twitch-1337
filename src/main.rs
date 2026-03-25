@@ -358,7 +358,7 @@ use crate::openrouter::{ChatCompletionRequest, Message, OpenRouterClient};
 use crate::streamelements::SEClient;
 
 /// Type alias for the authenticated Twitch IRC client
-type AuthenticatedTwitchClient =
+pub(crate) type AuthenticatedTwitchClient =
     TwitchIRCClient<SecureTCPTransport, RefreshingLoginCredentials<FileBasedTokenStorage>>;
 
 const TARGET_HOUR: u32 = 13;
@@ -381,7 +381,7 @@ const LATENCY_LOG_THRESHOLD: u32 = 10;
 
 const LEADERBOARD_FILENAME: &str = "leaderboard.ron";
 
-static APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
+pub(crate) static APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
 
 fn default_expected_latency() -> u32 {
     100
@@ -725,7 +725,7 @@ fn parse_flight_duration(s: &str) -> Option<std::time::Duration> {
 const AI_SYSTEM_PROMPT: &str = r#"You are a helpful Twitch chat bot assistant. Keep responses brief (2-3 sentences max) since they'll appear in chat. Be friendly and casual. Respond in the same language the user writes in (German or English)."#;
 
 /// Maximum response length for Twitch chat (to stay within limits).
-const MAX_RESPONSE_LENGTH: usize = 500;
+pub(crate) const MAX_RESPONSE_LENGTH: usize = 500;
 
 /// Executes the AI command by sending a chat completion request to OpenRouter.
 async fn execute_ai_request(
@@ -768,7 +768,7 @@ async fn execute_ai_request(
 }
 
 /// Truncates a string to the maximum number of characters at a word boundary.
-fn truncate_response(text: &str, max_chars: usize) -> String {
+pub(crate) fn truncate_response(text: &str, max_chars: usize) -> String {
     // Collapse whitespace and newlines
     let collapsed: String = text.split_whitespace().collect::<Vec<_>>().join(" ");
 
@@ -2696,3 +2696,363 @@ mod database {
     }
 }
 
+mod aviation {
+    use eyre::{Result, WrapErr};
+    use serde::Deserialize;
+    use std::collections::HashMap;
+    use std::sync::OnceLock;
+    use std::time::Duration;
+    use tokio::sync::Mutex;
+    use std::sync::Arc;
+    use tracing::{debug, error, warn};
+    use twitch_irc::message::PrivmsgMessage;
+
+    use crate::{APP_USER_AGENT, AuthenticatedTwitchClient, MAX_RESPONSE_LENGTH, truncate_response};
+
+    const ADSBDB_BASE_URL: &str = "https://api.adsbdb.com/v0";
+    const ADSBLOL_BASE_URL: &str = "https://api.adsb.lol/v2";
+    const UP_SEARCH_RADIUS_NM: u16 = 15;
+    const UP_COOLDOWN: Duration = Duration::from_secs(30);
+    const UP_COMMAND_TIMEOUT: Duration = Duration::from_secs(20);
+    const UP_ADSBLOL_TIMEOUT: Duration = Duration::from_secs(10);
+    const UP_ADSBDB_TIMEOUT: Duration = Duration::from_secs(5);
+    const UP_MAX_CANDIDATES: usize = 10;
+    const UP_MAX_RESULTS: usize = 5;
+
+    // --- PLZ Lookup ---
+
+    const PLZ_DATA: &str = include_str!("../data/plz.csv");
+
+    fn plz_table() -> &'static HashMap<String, (f64, f64)> {
+        static TABLE: OnceLock<HashMap<String, (f64, f64)>> = OnceLock::new();
+        TABLE.get_or_init(|| {
+            let mut map = HashMap::new();
+            for line in PLZ_DATA.lines() {
+                let mut parts = line.splitn(3, ',');
+                let plz = parts.next().expect("malformed plz.csv: missing plz");
+                let lat: f64 = parts
+                    .next()
+                    .expect("malformed plz.csv: missing lat")
+                    .parse()
+                    .expect("malformed plz.csv: invalid lat");
+                let lon: f64 = parts
+                    .next()
+                    .expect("malformed plz.csv: missing lon")
+                    .parse()
+                    .expect("malformed plz.csv: invalid lon");
+                map.insert(plz.to_string(), (lat, lon));
+            }
+            map
+        })
+    }
+
+    fn plz_to_coords(plz: &str) -> Option<(f64, f64)> {
+        plz_table().get(plz).copied()
+    }
+
+    fn is_valid_plz(plz: &str) -> bool {
+        plz.len() == 5 && plz.chars().all(|c| c.is_ascii_digit())
+    }
+
+    // --- adsb.lol types ---
+
+    #[derive(Debug, Deserialize)]
+    struct AdsbLolResponse {
+        #[serde(default)]
+        ac: Vec<NearbyAircraft>,
+    }
+
+    #[derive(Debug, Deserialize)]
+    struct NearbyAircraft {
+        #[allow(dead_code)]
+        hex: String,
+        flight: Option<String>,
+        t: Option<String>,
+        alt_baro: Option<AltBaro>,
+    }
+
+    #[derive(Debug)]
+    enum AltBaro {
+        Feet(i64),
+        Ground,
+    }
+
+    impl<'de> Deserialize<'de> for AltBaro {
+        fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+        where
+            D: serde::Deserializer<'de>,
+        {
+            let value = serde_json::Value::deserialize(deserializer)?;
+            match value {
+                serde_json::Value::Number(n) => {
+                    if let Some(i) = n.as_i64() {
+                        Ok(AltBaro::Feet(i))
+                    } else {
+                        Ok(AltBaro::Feet(n.as_f64().unwrap_or(0.0) as i64))
+                    }
+                }
+                serde_json::Value::String(s) if s == "ground" => Ok(AltBaro::Ground),
+                _ => Ok(AltBaro::Ground),
+            }
+        }
+    }
+
+    // --- adsbdb types ---
+
+    #[derive(Debug, Deserialize)]
+    struct AdsbDbResponse {
+        response: AdsbDbResponseInner,
+    }
+
+    #[derive(Debug, Deserialize)]
+    struct AdsbDbResponseInner {
+        flightroute: Option<FlightRoute>,
+    }
+
+    #[derive(Debug, Deserialize)]
+    struct FlightRoute {
+        origin: Airport,
+        destination: Airport,
+    }
+
+    #[derive(Debug, Deserialize)]
+    struct Airport {
+        iata_code: String,
+    }
+
+    // --- AviationClient ---
+
+    pub struct AviationClient(reqwest::Client);
+
+    impl AviationClient {
+        pub fn new() -> Result<Self> {
+            let http = reqwest::Client::builder()
+                .user_agent(APP_USER_AGENT)
+                .build()
+                .wrap_err("Failed to build aviation HTTP client")?;
+            Ok(Self(http))
+        }
+
+        async fn get_aircraft_nearby(
+            &self,
+            lat: f64,
+            lon: f64,
+            radius_nm: u16,
+        ) -> Result<Vec<NearbyAircraft>> {
+            let url = format!("{ADSBLOL_BASE_URL}/point/{lat}/{lon}/{radius_nm}");
+            debug!(url = %url, "Fetching nearby aircraft from adsb.lol");
+
+            let resp: AdsbLolResponse = self
+                .0
+                .get(&url)
+                .send()
+                .await
+                .wrap_err("Failed to send request to adsb.lol")?
+                .error_for_status()
+                .wrap_err("adsb.lol returned error status")?
+                .json()
+                .await
+                .wrap_err("Failed to parse adsb.lol response")?;
+
+            debug!(count = resp.ac.len(), "Received aircraft from adsb.lol");
+            Ok(resp.ac)
+        }
+    }
+
+    // --- Command ---
+
+    fn format_altitude(alt: &Option<AltBaro>) -> String {
+        match alt {
+            Some(AltBaro::Feet(ft)) if *ft >= 1000 => format!("FL{}", ft / 100),
+            Some(AltBaro::Feet(ft)) => format!("{ft}ft"),
+            Some(AltBaro::Ground) => "GND".to_string(),
+            None => "?".to_string(),
+        }
+    }
+
+    pub async fn up_command(
+        privmsg: &PrivmsgMessage,
+        client: &Arc<AuthenticatedTwitchClient>,
+        aviation_client: &AviationClient,
+        plz: Option<&str>,
+        cooldowns: &Arc<Mutex<HashMap<String, std::time::Instant>>>,
+    ) -> Result<()> {
+        let user = &privmsg.sender.login;
+
+        // Check cooldown
+        {
+            let cooldowns_guard = cooldowns.lock().await;
+            if let Some(last_use) = cooldowns_guard.get(user) {
+                let elapsed = last_use.elapsed();
+                if elapsed < UP_COOLDOWN {
+                    let remaining = UP_COOLDOWN - elapsed;
+                    debug!(user = %user, remaining_secs = remaining.as_secs(), "!up on cooldown");
+                    if let Err(e) = client
+                        .say_in_reply_to(privmsg, "Bitte warte noch ein bisschen Waiting".to_string())
+                        .await
+                    {
+                        error!(error = ?e, "Failed to send cooldown message");
+                    }
+                    return Ok(());
+                }
+            }
+        }
+
+        // Validate PLZ
+        let Some(plz) = plz else {
+            if let Err(e) = client
+                .say_in_reply_to(privmsg, "Das ist keine gültige PLZ FDM".to_string())
+                .await
+            {
+                error!(error = ?e, "Failed to send PLZ error message");
+            }
+            return Ok(());
+        };
+
+        if !is_valid_plz(plz) {
+            if let Err(e) = client
+                .say_in_reply_to(privmsg, "Das ist keine gültige PLZ FDM".to_string())
+                .await
+            {
+                error!(error = ?e, "Failed to send PLZ error message");
+            }
+            return Ok(());
+        }
+
+        // Look up coordinates
+        let Some((lat, lon)) = plz_to_coords(plz) else {
+            if let Err(e) = client
+                .say_in_reply_to(privmsg, "Kenne ich nicht die PLZ FDM".to_string())
+                .await
+            {
+                error!(error = ?e, "Failed to send unknown PLZ message");
+            }
+            return Ok(());
+        };
+
+        debug!(plz = %plz, lat = %lat, lon = %lon, "Looking up aircraft");
+
+        // Update cooldown before making API calls
+        {
+            let mut cooldowns_guard = cooldowns.lock().await;
+            cooldowns_guard.insert(user.to_string(), std::time::Instant::now());
+        }
+
+        // Wrap entire API flow in overall timeout
+        let result = tokio::time::timeout(UP_COMMAND_TIMEOUT, async {
+            // Fetch nearby aircraft
+            let aircraft = tokio::time::timeout(
+                UP_ADSBLOL_TIMEOUT,
+                aviation_client.get_aircraft_nearby(lat, lon, UP_SEARCH_RADIUS_NM),
+            )
+            .await
+            .map_err(|_| eyre::eyre!("adsb.lol request timed out"))?
+            .wrap_err("adsb.lol request failed")?;
+
+            // Filter to aircraft with callsigns, take up to MAX_CANDIDATES
+            let candidates: Vec<_> = aircraft
+                .iter()
+                .filter_map(|ac| {
+                    let callsign = ac.flight.as_ref()?.trim();
+                    if callsign.is_empty() {
+                        return None;
+                    }
+                    Some((callsign.to_string(), ac))
+                })
+                .take(UP_MAX_CANDIDATES)
+                .collect();
+
+            if candidates.is_empty() {
+                return Ok(Vec::new());
+            }
+
+            // Fetch routes concurrently
+            let mut join_set = tokio::task::JoinSet::new();
+            for (callsign, ac) in &candidates {
+                let client = aviation_client.0.clone();
+                let cs = callsign.clone();
+                let aircraft_type = ac.t.clone();
+                let alt = match &ac.alt_baro {
+                    Some(AltBaro::Feet(ft)) => Some(AltBaro::Feet(*ft)),
+                    Some(AltBaro::Ground) => Some(AltBaro::Ground),
+                    None => None,
+                };
+                join_set.spawn(async move {
+                    let url = format!("{ADSBDB_BASE_URL}/callsign/{cs}");
+                    let route = tokio::time::timeout(UP_ADSBDB_TIMEOUT, async {
+                        let resp = client.get(&url).send().await?;
+                        if !resp.status().is_success() {
+                            return Ok(None);
+                        }
+                        let body: AdsbDbResponse = resp.json().await?;
+                        Ok::<_, eyre::Report>(body.response.flightroute)
+                    })
+                    .await;
+
+                    match route {
+                        Ok(Ok(Some(fr))) => Some((cs, aircraft_type, alt, fr)),
+                        Ok(Ok(None)) => None,
+                        Ok(Err(e)) => {
+                            warn!(callsign = %cs, error = ?e, "adsbdb lookup failed");
+                            None
+                        }
+                        Err(_) => {
+                            warn!(callsign = %cs, "adsbdb lookup timed out");
+                            None
+                        }
+                    }
+                });
+            }
+
+            let mut results = Vec::new();
+            while let Some(res) = join_set.join_next().await {
+                if let Ok(Some(entry)) = res {
+                    results.push(entry);
+                    if results.len() >= UP_MAX_RESULTS {
+                        break;
+                    }
+                }
+            }
+
+            Ok::<_, eyre::Report>(results)
+        })
+        .await;
+
+        let response = match result {
+            Ok(Ok(entries)) if entries.is_empty() => {
+                format!("Nix los über {plz}")
+            }
+            Ok(Ok(entries)) => {
+                let parts: Vec<String> = entries
+                    .iter()
+                    .map(|(cs, _typ, alt, route)| {
+                        format!(
+                            "{cs} {origin}→{dest} {alt}",
+                            origin = route.origin.iata_code,
+                            dest = route.destination.iata_code,
+                            alt = format_altitude(alt),
+                        )
+                    })
+                    .collect();
+                let count = parts.len();
+                let joined = parts.join(" | ");
+                let msg = format!("✈ {count} aircraft near {plz}: {joined}");
+                truncate_response(&msg, MAX_RESPONSE_LENGTH)
+            }
+            Ok(Err(e)) => {
+                error!(error = ?e, plz = %plz, "!up command failed");
+                "Da ist was schiefgelaufen FDM".to_string()
+            }
+            Err(_) => {
+                error!(plz = %plz, "!up command timed out");
+                "Da ist was schiefgelaufen FDM".to_string()
+            }
+        };
+
+        if let Err(e) = client.say_in_reply_to(privmsg, response).await {
+            error!(error = ?e, "Failed to send !up response");
+        }
+
+        Ok(())
+    }
+}
