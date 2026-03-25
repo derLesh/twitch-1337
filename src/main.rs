@@ -3064,27 +3064,6 @@ mod aviation {
         }
     }
 
-    // --- Geo helpers ---
-
-    /// Computes the initial bearing (forward azimuth) in degrees [0, 360) from
-    /// point 1 to point 2, given coordinates in decimal degrees.
-    fn initial_bearing(lat1: f64, lon1: f64, lat2: f64, lon2: f64) -> f64 {
-        let lat1 = lat1.to_radians();
-        let lat2 = lat2.to_radians();
-        let dlon = (lon2 - lon1).to_radians();
-
-        let x = dlon.sin() * lat2.cos();
-        let y = lat1.cos() * lat2.sin() - lat1.sin() * lat2.cos() * dlon.cos();
-        (x.atan2(y).to_degrees() + 360.0) % 360.0
-    }
-
-    /// Returns a cardinal/intercardinal direction string for a bearing in degrees.
-    fn cardinal_direction(bearing: f64) -> &'static str {
-        const DIRS: [&str; 8] = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
-        let index = ((bearing + 22.5) % 360.0 / 45.0) as usize;
-        DIRS[index]
-    }
-
     // --- Command ---
 
     fn cone_distance_nm(ac: &NearbyAircraft, center_lat: f64, center_lon: f64) -> Option<f64> {
@@ -3217,7 +3196,7 @@ mod aviation {
                 .collect();
 
             if candidates.is_empty() {
-                return Ok(vec![]);
+                return Ok(Vec::new());
             }
 
             // Fetch routes concurrently
@@ -3228,13 +3207,12 @@ mod aviation {
                 let icao_type = ac.t.clone();
                 let alt = ac.alt_baro.clone();
                 let dist = *distance_nm;
-                let direction = match (ac.lat, ac.lon) {
-                    (Some(ac_lat), Some(ac_lon)) => {
-                        let bearing = initial_bearing(*lat, *lon, ac_lat, ac_lon);
-                        cardinal_direction(bearing)
-                    }
-                    _ => "?",
-                };
+                let (ac_lat, ac_lon) = (
+                    ac.lat.expect("lat guaranteed by cone_distance_nm"),
+                    ac.lon.expect("lon guaranteed by cone_distance_nm"),
+                );
+                let bearing = random_flight::geo::initial_bearing(*lat, *lon, ac_lat, ac_lon);
+                let direction = random_flight::geo::cardinal_direction(bearing);
                 join_set.spawn(async move {
                     let url = format!("{ADSBDB_BASE_URL}/callsign/{cs}");
                     let route = tokio::time::timeout(UP_ADSBDB_TIMEOUT, async {
