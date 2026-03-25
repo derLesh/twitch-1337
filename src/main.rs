@@ -1940,7 +1940,8 @@ async fn handle_generic_commands(
     } else if first_word == "!fl" {
         flight_command(privmsg, client, words.next(), words.next()).await?;
     } else if first_word == "!up" {
-        aviation::up_command(privmsg, client, aviation_client, words.next(), up_cooldowns).await?;
+        let input: String = words.collect::<Vec<_>>().join(" ");
+        aviation::up_command(privmsg, client, aviation_client, &input, up_cooldowns).await?;
     }
 
     Ok(())
@@ -2723,7 +2724,6 @@ mod database {
 }
 
 mod aviation {
-    use csv;
     use eyre::{Result, WrapErr};
     use serde::Deserialize;
     use std::collections::HashMap;
@@ -3025,27 +3025,21 @@ mod aviation {
         }
 
         // 2. ICAO: 4 ASCII letters — falls through to Nominatim on miss
-        if is_icao_pattern(input) {
-            if let Some((lat, lon, name)) = icao_to_coords(input) {
-                return Ok(ResolveResult::Found(ResolvedLocation {
-                    lat,
-                    lon,
-                    display_name: name.to_string(),
-                }));
-            }
-            // Fall through to Nominatim
+        if is_icao_pattern(input) && let Some((lat, lon, name)) = icao_to_coords(input) {
+            return Ok(ResolveResult::Found(ResolvedLocation {
+                lat,
+                lon,
+                display_name: name.to_string(),
+            }));
         }
 
         // 3. IATA: 3 ASCII letters — falls through to Nominatim on miss
-        if is_iata_pattern(input) {
-            if let Some((lat, lon, name)) = iata_to_coords(input) {
-                return Ok(ResolveResult::Found(ResolvedLocation {
-                    lat,
-                    lon,
-                    display_name: name.to_string(),
-                }));
-            }
-            // Fall through to Nominatim
+        if is_iata_pattern(input) && let Some((lat, lon, name)) = iata_to_coords(input) {
+            return Ok(ResolveResult::Found(ResolvedLocation {
+                lat,
+                lon,
+                display_name: name.to_string(),
+            }));
         }
 
         // 4. Nominatim: universal fallback
@@ -3081,10 +3075,22 @@ mod aviation {
         privmsg: &PrivmsgMessage,
         client: &Arc<AuthenticatedTwitchClient>,
         aviation_client: &AviationClient,
-        plz: Option<&str>,
+        input: &str,
         cooldowns: &Arc<Mutex<HashMap<String, std::time::Instant>>>,
     ) -> Result<()> {
         let user = &privmsg.sender.login;
+        let input = input.trim();
+
+        // Empty input
+        if input.is_empty() {
+            if let Err(e) = client
+                .say_in_reply_to(privmsg, "Benutzung: !up <PLZ/ICAO/IATA/Ort> FDM".to_string())
+                .await
+            {
+                error!(error = ?e, "Failed to send usage message");
+            }
+            return Ok(());
+        }
 
         // Check cooldown
         {
@@ -3105,42 +3111,54 @@ mod aviation {
             }
         }
 
-        // Validate PLZ
-        let Some(plz) = plz.filter(|p| is_valid_plz(p)) else {
-            if let Err(e) = client
-                .say_in_reply_to(privmsg, "Das ist keine gültige PLZ FDM".to_string())
-                .await
-            {
-                error!(error = ?e, "Failed to send PLZ error message");
-            }
-            return Ok(());
-        };
-
-        // Look up coordinates
-        let Some((lat, lon)) = plz_to_coords(plz) else {
-            if let Err(e) = client
-                .say_in_reply_to(privmsg, "Kenne ich nicht die PLZ FDM".to_string())
-                .await
-            {
-                error!(error = ?e, "Failed to send unknown PLZ message");
-            }
-            return Ok(());
-        };
-
-        debug!(plz = %plz, lat = %lat, lon = %lon, "Looking up aircraft");
-
-        // Update cooldown before making API calls
+        // Set cooldown before resolver (Nominatim is a network call)
         {
             let mut cooldowns_guard = cooldowns.lock().await;
             cooldowns_guard.insert(user.to_string(), std::time::Instant::now());
         }
+
+        // Resolve location
+        let location = match resolve_location(input, aviation_client).await {
+            Ok(ResolveResult::Found(loc)) => loc,
+            Ok(ResolveResult::PlzNotFound) => {
+                if let Err(e) = client
+                    .say_in_reply_to(privmsg, "Kenne ich nicht die PLZ FDM".to_string())
+                    .await
+                {
+                    error!(error = ?e, "Failed to send unknown PLZ message");
+                }
+                return Ok(());
+            }
+            Ok(ResolveResult::NotFound) => {
+                if let Err(e) = client
+                    .say_in_reply_to(privmsg, "Kenne ich nicht FDM".to_string())
+                    .await
+                {
+                    error!(error = ?e, "Failed to send not-found message");
+                }
+                return Ok(());
+            }
+            Err(e) => {
+                error!(error = ?e, input = %input, "Location resolution failed");
+                if let Err(e) = client
+                    .say_in_reply_to(privmsg, "Da ist was schiefgelaufen FDM".to_string())
+                    .await
+                {
+                    error!(error = ?e, "Failed to send error message");
+                }
+                return Ok(());
+            }
+        };
+
+        let ResolvedLocation { lat, lon, display_name } = &location;
+        debug!(input = %input, lat = %lat, lon = %lon, display = %display_name, "Looking up aircraft");
 
         // Wrap entire API flow in overall timeout
         let result = tokio::time::timeout(UP_COMMAND_TIMEOUT, async {
             // Fetch nearby aircraft
             let aircraft = tokio::time::timeout(
                 UP_ADSBLOL_TIMEOUT,
-                aviation_client.get_aircraft_nearby(lat, lon, UP_SEARCH_RADIUS_NM),
+                aviation_client.get_aircraft_nearby(*lat, *lon, UP_SEARCH_RADIUS_NM),
             )
             .await
             .map_err(|_| eyre::eyre!("adsb.lol request timed out"))?
@@ -3210,7 +3228,7 @@ mod aviation {
 
         let response = match result {
             Ok(Ok(entries)) if entries.is_empty() => {
-                format!("Nix los über {plz}")
+                format!("Nix los über {display_name}")
             }
             Ok(Ok(entries)) => {
                 let total = entries.len();
@@ -3228,15 +3246,15 @@ mod aviation {
                     })
                     .collect();
                 let joined = parts.join(" | ");
-                let msg = format!("✈ {total} Flieger über {plz}: {joined}");
+                let msg = format!("✈ {total} Flieger über {display_name}: {joined}");
                 truncate_response(&msg, MAX_RESPONSE_LENGTH)
             }
             Ok(Err(e)) => {
-                error!(error = ?e, plz = %plz, "!up command failed");
+                error!(error = ?e, input = %input, "!up command failed");
                 "Da ist was schiefgelaufen FDM".to_string()
             }
             Err(_) => {
-                error!(plz = %plz, "!up command timed out");
+                error!(input = %input, "!up command timed out");
                 "Da ist was schiefgelaufen FDM".to_string()
             }
         };
