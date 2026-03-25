@@ -2746,6 +2746,8 @@ mod aviation {
     const UP_NOMINATIM_TIMEOUT: Duration = Duration::from_secs(5);
     const UP_MAX_CANDIDATES: usize = 10;
     const UP_MAX_RESULTS: usize = 5;
+    const UP_CONE_REFERENCE_ALT_FT: f64 = 35_000.0;
+    const EARTH_RADIUS_NM: f64 = 3_440.065;
 
     // --- PLZ Lookup ---
 
@@ -2867,6 +2869,8 @@ mod aviation {
         flight: Option<String>,
         t: Option<String>,
         alt_baro: Option<AltBaro>,
+        lat: Option<f64>,
+        lon: Option<f64>,
     }
 
     #[derive(Debug, Clone)]
@@ -3063,6 +3067,32 @@ mod aviation {
 
     // --- Command ---
 
+    /// Great-circle distance between two points in nautical miles. Inputs in degrees.
+    fn haversine_distance_nm(lat1: f64, lon1: f64, lat2: f64, lon2: f64) -> f64 {
+        let (lat1, lon1) = (lat1.to_radians(), lon1.to_radians());
+        let (lat2, lon2) = (lat2.to_radians(), lon2.to_radians());
+        let dlat = lat2 - lat1;
+        let dlon = lon2 - lon1;
+        let a = (dlat / 2.0).sin().powi(2) + lat1.cos() * lat2.cos() * (dlon / 2.0).sin().powi(2);
+        2.0 * a.sqrt().asin() * EARTH_RADIUS_NM
+    }
+
+    fn is_within_cone(
+        aircraft_lat: f64,
+        aircraft_lon: f64,
+        aircraft_alt: &AltBaro,
+        center_lat: f64,
+        center_lon: f64,
+    ) -> bool {
+        let alt_ft = match aircraft_alt {
+            AltBaro::Feet(ft) if *ft > 0 => *ft as f64,
+            _ => return false, // GND or non-positive altitude
+        };
+        let distance = haversine_distance_nm(center_lat, center_lon, aircraft_lat, aircraft_lon);
+        let max_distance = alt_ft * UP_SEARCH_RADIUS_NM as f64 / UP_CONE_REFERENCE_ALT_FT;
+        distance <= max_distance
+    }
+
     fn format_altitude(alt: &Option<AltBaro>) -> String {
         match alt {
             Some(AltBaro::Feet(ft)) if *ft >= 1000 => format!("FL{}", ft / 100),
@@ -3165,9 +3195,17 @@ mod aviation {
             .map_err(|_| eyre::eyre!("adsb.lol request timed out"))?
             .wrap_err("adsb.lol request failed")?;
 
-            // Filter to aircraft with callsigns, take up to MAX_CANDIDATES
+            // Filter by cone visibility, then by callsign
             let candidates: Vec<_> = aircraft
                 .iter()
+                .filter(|ac| {
+                    let (Some(ac_lat), Some(ac_lon), Some(alt)) =
+                        (&ac.lat, &ac.lon, &ac.alt_baro)
+                    else {
+                        return false;
+                    };
+                    is_within_cone(*ac_lat, *ac_lon, alt, *lat, *lon)
+                })
                 .filter_map(|ac| {
                     let callsign = ac.flight.as_ref()?.trim();
                     if callsign.is_empty() {
