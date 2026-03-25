@@ -5,8 +5,10 @@
 .env
 .env.local
 
-# Data directory (persistence history)
-/data
+# Data directory (persistence history) - allow static generated files
+!/data/
+/data/*
+!/data/plz.csv
 
 # Editor files
 *.swp
