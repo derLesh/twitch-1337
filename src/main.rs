@@ -3064,19 +3064,40 @@ mod aviation {
         }
     }
 
+    // --- Geo helpers ---
+
+    /// Computes the initial bearing (forward azimuth) in degrees [0, 360) from
+    /// point 1 to point 2, given coordinates in decimal degrees.
+    fn initial_bearing(lat1: f64, lon1: f64, lat2: f64, lon2: f64) -> f64 {
+        let lat1 = lat1.to_radians();
+        let lat2 = lat2.to_radians();
+        let dlon = (lon2 - lon1).to_radians();
+
+        let x = dlon.sin() * lat2.cos();
+        let y = lat1.cos() * lat2.sin() - lat1.sin() * lat2.cos() * dlon.cos();
+        (x.atan2(y).to_degrees() + 360.0) % 360.0
+    }
+
+    /// Returns a cardinal/intercardinal direction string for a bearing in degrees.
+    fn cardinal_direction(bearing: f64) -> &'static str {
+        const DIRS: [&str; 8] = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+        let index = ((bearing + 22.5) % 360.0 / 45.0) as usize;
+        DIRS[index]
+    }
+
     // --- Command ---
 
-    fn is_within_cone(ac: &NearbyAircraft, center_lat: f64, center_lon: f64) -> bool {
+    fn cone_distance_nm(ac: &NearbyAircraft, center_lat: f64, center_lon: f64) -> Option<f64> {
         let (Some(ac_lat), Some(ac_lon), Some(alt)) = (ac.lat, ac.lon, &ac.alt_baro) else {
-            return false;
+            return None;
         };
         let alt_ft = match alt {
             AltBaro::Feet(ft) if *ft > 0 => *ft as f64,
-            _ => return false,
+            _ => return None,
         };
         let distance = random_flight::geo::haversine_distance_nm(center_lat, center_lon, ac_lat, ac_lon);
         let max_distance = alt_ft * UP_SEARCH_RADIUS_NM as f64 / UP_CONE_REFERENCE_ALT_FT;
-        distance <= max_distance
+        if distance <= max_distance { Some(distance) } else { None }
     }
 
     fn format_altitude(alt: &Option<AltBaro>) -> String {
@@ -3184,28 +3205,36 @@ mod aviation {
             // Filter by cone visibility, then by callsign
             let candidates: Vec<_> = aircraft
                 .iter()
-                .filter(|ac| is_within_cone(ac, *lat, *lon))
                 .filter_map(|ac| {
+                    let distance_nm = cone_distance_nm(ac, *lat, *lon)?;
                     let callsign = ac.flight.as_ref()?.trim();
                     if callsign.is_empty() {
                         return None;
                     }
-                    Some((callsign.to_string(), ac))
+                    Some((callsign.to_string(), ac, distance_nm))
                 })
                 .take(UP_MAX_CANDIDATES)
                 .collect();
 
             if candidates.is_empty() {
-                return Ok(Vec::new());
+                return Ok(vec![]);
             }
 
             // Fetch routes concurrently
             let mut join_set = tokio::task::JoinSet::new();
-            for (callsign, ac) in &candidates {
+            for (callsign, ac, distance_nm) in &candidates {
                 let client = aviation_client.0.clone();
                 let cs = callsign.clone();
                 let icao_type = ac.t.clone();
                 let alt = ac.alt_baro.clone();
+                let dist = *distance_nm;
+                let direction = match (ac.lat, ac.lon) {
+                    (Some(ac_lat), Some(ac_lon)) => {
+                        let bearing = initial_bearing(*lat, *lon, ac_lat, ac_lon);
+                        cardinal_direction(bearing)
+                    }
+                    _ => "?",
+                };
                 join_set.spawn(async move {
                     let url = format!("{ADSBDB_BASE_URL}/callsign/{cs}");
                     let route = tokio::time::timeout(UP_ADSBDB_TIMEOUT, async {
@@ -3219,7 +3248,7 @@ mod aviation {
                     .await;
 
                     match route {
-                        Ok(Ok(Some(fr))) => Some((cs, icao_type, alt, fr)),
+                        Ok(Ok(Some(fr))) => Some((cs, icao_type, alt, fr, dist, direction)),
                         Ok(Ok(None)) => None,
                         Ok(Err(e)) => {
                             warn!(callsign = %cs, error = ?e, "adsbdb lookup failed");
@@ -3253,10 +3282,10 @@ mod aviation {
                 let parts: Vec<String> = entries
                     .iter()
                     .take(UP_MAX_RESULTS)
-                    .map(|(cs, icao_type, alt, route)| {
+                    .map(|(cs, icao_type, alt, route, dist, direction)| {
                         let typ = icao_type.as_deref().unwrap_or("?");
                         format!(
-                            "{cs} ({typ}) {origin}→{dest} {alt}",
+                            "{cs} ({typ}) {origin}→{dest} {alt} {dist:.1}nm {direction}",
                             origin = route.origin.iata_code,
                             dest = route.destination.iata_code,
                             alt = format_altitude(alt),
