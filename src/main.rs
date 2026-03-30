@@ -407,7 +407,7 @@ const AI_SYSTEM_PROMPT: &str = r#"You are a helpful Twitch chat bot assistant. K
 pub(crate) const MAX_RESPONSE_LENGTH: usize = 500;
 
 /// Executes the AI command by sending a chat completion request to OpenRouter.
-async fn execute_ai_request(
+pub(crate) async fn execute_ai_request(
     instruction: &str,
     openrouter_client: &OpenRouterClient,
 ) -> Result<String> {
@@ -1611,7 +1611,7 @@ async fn handle_generic_commands(
         if let Some(openrouter) = openrouter_client {
             // Collect remaining words as the instruction
             let instruction: String = words.collect::<Vec<_>>().join(" ");
-            ai_command(privmsg, client, openrouter, ai_cooldowns, &instruction).await?;
+            commands::ai::ai_command(privmsg, client, openrouter, ai_cooldowns, &instruction).await?;
         } else {
             // AI not configured - silently ignore or could add a message
             debug!("AI command received but OpenRouter not configured");
@@ -1626,105 +1626,6 @@ async fn handle_generic_commands(
     Ok(())
 }
 
-
-/// Cooldown duration for the AI command (30 seconds).
-const AI_COMMAND_COOLDOWN: Duration = Duration::from_secs(30);
-
-/// Handles the `!ai` command for AI-powered responses.
-///
-/// Takes user instructions and processes them with OpenRouter.
-///
-/// # Command Format
-///
-/// `!ai <instruction>`
-///
-/// # Rate Limiting
-///
-/// Per-user cooldown of 30 seconds to prevent spam.
-///
-/// # Errors
-///
-/// Returns an error if the OpenRouter API call fails.
-#[instrument(skip(privmsg, client, openrouter_client, cooldowns))]
-async fn ai_command(
-    privmsg: &PrivmsgMessage,
-    client: &Arc<AuthenticatedTwitchClient>,
-    openrouter_client: &OpenRouterClient,
-    cooldowns: &Arc<Mutex<std::collections::HashMap<String, std::time::Instant>>>,
-    instruction: &str,
-) -> Result<()> {
-    let user = &privmsg.sender.login;
-
-    // Check cooldown
-    {
-        let cooldowns_guard = cooldowns.lock().await;
-        if let Some(last_use) = cooldowns_guard.get(user) {
-            let elapsed = last_use.elapsed();
-            if elapsed < AI_COMMAND_COOLDOWN {
-                let remaining = AI_COMMAND_COOLDOWN - elapsed;
-                debug!(
-                    user = %user,
-                    remaining_secs = remaining.as_secs(),
-                    "AI command on cooldown"
-                );
-                if let Err(e) = client
-                    .say_in_reply_to(privmsg, "Bitte warte noch ein bisschen Waiting".to_string())
-                    .await
-                {
-                    error!(error = ?e, "Failed to send cooldown message");
-                }
-                return Ok(());
-            }
-        }
-    }
-
-    // Check for empty instruction
-    if instruction.trim().is_empty() {
-        if let Err(e) = client
-            .say_in_reply_to(privmsg, "Benutzung: !ai <anweisung>".to_string())
-            .await
-        {
-            error!(error = ?e, "Failed to send usage message");
-        }
-        return Ok(());
-    }
-
-    debug!(user = %user, instruction = %instruction, "Processing AI command");
-
-    // Update cooldown before making the API call
-    {
-        let mut cooldowns_guard = cooldowns.lock().await;
-        cooldowns_guard.insert(user.to_string(), std::time::Instant::now());
-    }
-
-    // Execute AI with timeout
-    let result = tokio::time::timeout(
-        Duration::from_secs(30),
-        execute_ai_request(instruction, openrouter_client),
-    )
-    .await;
-
-    let response = match result {
-        Ok(Ok(text)) => {
-            // Truncate response for Twitch chat
-            truncate_response(&text, MAX_RESPONSE_LENGTH)
-        }
-        Ok(Err(e)) => {
-            error!(error = ?e, "AI execution failed");
-            "Da ist was schiefgelaufen FDM".to_string()
-        }
-        Err(_) => {
-            error!("AI execution timed out");
-            "Das hat zu lange gedauert Waiting".to_string()
-        }
-    };
-
-    if let Err(e) = client.say_in_reply_to(privmsg, response).await {
-        error!(error = ?e, "Failed to send AI response");
-    }
-
-    Ok(())
-}
 
 #[instrument(skip(privmsg, client), fields(user = %privmsg.sender.login))]
 async fn flight_command(
