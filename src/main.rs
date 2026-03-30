@@ -534,11 +534,11 @@ async fn monitor_1337_messages(
 ///
 /// Tracks the fastest sub-1-second message time and the date it was achieved.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct PersonalBest {
+pub(crate) struct PersonalBest {
     /// Milliseconds after 13:37:00.000 (0-999)
-    ms: u64,
+    pub(crate) ms: u64,
     /// The date (Europe/Berlin) when this record was set
-    date: chrono::NaiveDate,
+    pub(crate) date: chrono::NaiveDate,
 }
 
 /// Loads the all-time leaderboard from disk.
@@ -940,6 +940,7 @@ pub async fn main() -> Result<()> {
     );
 
     ensure_data_dir().await?;
+    let leaderboard = Arc::new(tokio::sync::RwLock::new(load_leaderboard().await));
 
     // Setup, connect, join channel, and verify authentication (all in one step)
     let (incoming_messages, client) = setup_and_verify_twitch_client(&config.twitch).await?;
@@ -1013,8 +1014,9 @@ pub async fn main() -> Result<()> {
         let client = client.clone();
         let channel = config.twitch.channel.clone();
         let latency = latency.clone();
+        let leaderboard = leaderboard.clone();
         async move {
-            run_1337_handler(broadcast_tx, client, channel, latency).await;
+            run_1337_handler(broadcast_tx, client, channel, latency, leaderboard).await;
         }
     });
 
@@ -1234,6 +1236,7 @@ async fn run_1337_handler(
     client: Arc<AuthenticatedTwitchClient>,
     channel: String,
     latency: Arc<AtomicU32>,
+    leaderboard: Arc<tokio::sync::RwLock<HashMap<String, PersonalBest>>>,
 ) {
     info!("1337 handler started");
 
@@ -1242,9 +1245,6 @@ async fn run_1337_handler(
         wait_until_schedule(TARGET_HOUR, TARGET_MINUTE - 1).await;
 
         info!("Starting daily 1337 monitoring session");
-
-        // Load the all-time leaderboard
-        let mut leaderboard = load_leaderboard().await;
 
         // Fresh HashMap for today's users (maps username -> ms_since_minute if sub-second)
         let total_users = Arc::new(Mutex::new(HashMap::with_capacity(MAX_USERS)));
@@ -1297,7 +1297,8 @@ async fn run_1337_handler(
 
         if let Some((ref fastest_user, fastest_ms)) = fastest {
             // Check if this is a new all-time record BEFORE updating the leaderboard
-            let previous_best = leaderboard
+            let leaderboard_guard = leaderboard.read().await;
+            let previous_best = leaderboard_guard
                 .values()
                 .map(|pb| pb.ms)
                 .min();
@@ -1305,6 +1306,7 @@ async fn run_1337_handler(
                 Some(best) => fastest_ms < best,
                 None => true, // First ever sub-1s time
             };
+            drop(leaderboard_guard);
 
             message.push_str(&format!(
                 " | {fastest_user} war mass schnellste mit {fastest_ms}ms"
@@ -1320,14 +1322,15 @@ async fn run_1337_handler(
             .date_naive();
         {
             let users = total_users.lock().await;
+            let mut leaderboard_guard = leaderboard.write().await;
             for (username, timing) in users.iter() {
                 if let Some(ms) = timing {
-                    let update = match leaderboard.get(username) {
+                    let update = match leaderboard_guard.get(username) {
                         Some(existing) => *ms < existing.ms,
                         None => true,
                     };
                     if update {
-                        leaderboard.insert(
+                        leaderboard_guard.insert(
                             username.clone(),
                             PersonalBest {
                                 ms: *ms,
@@ -1337,8 +1340,8 @@ async fn run_1337_handler(
                     }
                 }
             }
+            save_leaderboard(&*leaderboard_guard).await;
         }
-        save_leaderboard(&leaderboard).await;
 
         // Post stats message
         info!(count = count, "Posting stats to channel");
