@@ -29,6 +29,7 @@ use twitch_irc::{
 };
 
 mod aviation;
+mod commands;
 mod database;
 mod openrouter;
 mod streamelements;
