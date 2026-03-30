@@ -94,10 +94,25 @@ struct OpenRouterConfig {
     /// OpenRouter model to use (default: "google/gemini-2.0-flash-exp:free")
     #[serde(default = "default_openrouter_model")]
     model: String,
+    /// System prompt sent to the model (default: built-in Twitch bot prompt)
+    #[serde(default = "default_system_prompt")]
+    system_prompt: String,
+    /// Template for the user message. Use `{message}` as placeholder for the user's text.
+    /// (default: "{message}")
+    #[serde(default = "default_instruction_template")]
+    instruction_template: String,
 }
 
 fn default_openrouter_model() -> String {
     "google/gemini-2.0-flash-exp:free".to_string()
+}
+
+fn default_system_prompt() -> String {
+    "You are a helpful Twitch chat bot assistant. Keep responses brief (2-3 sentences max) since they'll appear in chat. Be friendly and casual. Respond in the same language the user writes in (German or English).".to_string()
+}
+
+fn default_instruction_template() -> String {
+    "{message}".to_string()
 }
 
 /// Configuration for a scheduled message loaded from config.toml.
@@ -400,27 +415,25 @@ pub(crate) fn parse_flight_duration(s: &str) -> Option<std::time::Duration> {
     Some(std::time::Duration::from_secs(total_secs))
 }
 
-/// System prompt for the AI command, instructing the model how to behave.
-const AI_SYSTEM_PROMPT: &str = r#"You are a helpful Twitch chat bot assistant. Keep responses brief (2-3 sentences max) since they'll appear in chat. Be friendly and casual. Respond in the same language the user writes in (German or English)."#;
-
 /// Maximum response length for Twitch chat (to stay within limits).
 pub(crate) const MAX_RESPONSE_LENGTH: usize = 500;
 
 /// Executes the AI command by sending a chat completion request to OpenRouter.
 pub(crate) async fn execute_ai_request(
-    instruction: &str,
+    user_message: &str,
     openrouter_client: &OpenRouterClient,
+    system_prompt: &str,
 ) -> Result<String> {
     let messages = vec![
         Message {
             role: "system".to_string(),
-            content: Some(AI_SYSTEM_PROMPT.to_string()),
+            content: Some(system_prompt.to_string()),
             tool_calls: None,
             tool_call_id: None,
         },
         Message {
             role: "user".to_string(),
-            content: Some(instruction.to_string()),
+            content: Some(user_message.to_string()),
             tool_calls: None,
             tool_call_id: None,
         },
@@ -1517,19 +1530,26 @@ async fn run_generic_command_handler(
 
     let data_dir = get_data_dir();
 
-    let commands: Vec<Box<dyn commands::Command>> = vec![
+    let mut commands: Vec<Box<dyn commands::Command>> = vec![
         Box::new(commands::toggle_ping::TogglePingCommand::new(
             se_client.clone(), se_config.channel_id.clone(),
         )),
         Box::new(commands::list_pings::ListPingsCommand::new(
             se_client, se_config.channel_id,
         )),
-        Box::new(commands::ai::AiCommand::new(openrouter_client)),
         Box::new(commands::random_flight::RandomFlightCommand),
         Box::new(commands::flights_above::FlightsAboveCommand::new(aviation_client)),
         Box::new(commands::leaderboard::LeaderboardCommand::new(leaderboard)),
         Box::new(commands::feedback::FeedbackCommand::new(data_dir)),
     ];
+
+    if let (Some(client), Some(cfg)) = (openrouter_client, openrouter_config) {
+        commands.push(Box::new(commands::ai::AiCommand::new(
+            client,
+            cfg.system_prompt,
+            cfg.instruction_template,
+        )));
+    }
 
     run_command_dispatcher(broadcast_rx, client, commands).await;
 }

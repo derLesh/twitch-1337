@@ -35,6 +35,8 @@ channel_id = "your_channel_id"
 # [openrouter]
 # api_key = "sk-or-your_openrouter_api_key"
 # model = "google/gemini-2.0-flash-exp:free"  # Optional, defaults to free Gemini model
+# system_prompt = "You are a helpful Twitch chat bot assistant. Keep responses brief (2-3 sentences max) since they'll appear in chat. Be friendly and casual. Respond in the same language the user writes in (German or English)."
+# instruction_template = "{message}"  # Use {message} as placeholder for the user's message
 
 # Optional: Scheduled messages configuration
 # Add [[schedules]] sections to define scheduled messages.
