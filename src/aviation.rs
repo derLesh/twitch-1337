@@ -103,7 +103,7 @@ fn icao_to_coords(code: &str) -> Option<(f64, f64, &'static str)> {
     airport_data().by_icao.get(code).map(|(lat, lon, name)| (*lat, *lon, name.as_str()))
 }
 
-fn iata_to_coords(code: &str) -> Option<(f64, f64, &'static str)> {
+pub(crate) fn iata_to_coords(code: &str) -> Option<(f64, f64, &'static str)> {
     airport_data().by_iata.get(code).map(|(lat, lon, name)| (*lat, *lon, name.as_str()))
 }
 
@@ -132,22 +132,29 @@ enum ResolveResult {
 // --- adsb.lol types ---
 
 #[derive(Debug, Deserialize)]
-struct AdsbLolResponse {
+pub(crate) struct AdsbLolResponse {
     #[serde(default)]
-    ac: Vec<NearbyAircraft>,
+    pub(crate) ac: Vec<NearbyAircraft>,
 }
 
 #[derive(Debug, Deserialize)]
-struct NearbyAircraft {
-    flight: Option<String>,
-    t: Option<String>,
-    alt_baro: Option<AltBaro>,
-    lat: Option<f64>,
-    lon: Option<f64>,
+pub(crate) struct NearbyAircraft {
+    pub(crate) hex: Option<String>,
+    pub(crate) flight: Option<String>,
+    pub(crate) r: Option<String>,
+    pub(crate) t: Option<String>,
+    pub(crate) alt_baro: Option<AltBaro>,
+    pub(crate) lat: Option<f64>,
+    pub(crate) lon: Option<f64>,
+    pub(crate) gs: Option<f64>,
+    pub(crate) baro_rate: Option<i64>,
+    pub(crate) geom_rate: Option<i64>,
+    pub(crate) squawk: Option<String>,
+    pub(crate) nav_modes: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone)]
-enum AltBaro {
+pub(crate) enum AltBaro {
     Feet(i64),
     Ground,
 }
@@ -185,14 +192,14 @@ struct AdsbDbResponseInner {
 }
 
 #[derive(Debug, Deserialize)]
-struct FlightRoute {
-    origin: Airport,
-    destination: Airport,
+pub(crate) struct FlightRoute {
+    pub(crate) origin: Airport,
+    pub(crate) destination: Airport,
 }
 
 #[derive(Debug, Deserialize)]
-struct Airport {
-    iata_code: String,
+pub(crate) struct Airport {
+    pub(crate) iata_code: String,
 }
 
 // --- Nominatim types ---
@@ -206,6 +213,7 @@ struct NominatimResult {
 
 // --- AviationClient ---
 
+#[derive(Clone)]
 pub struct AviationClient(reqwest::Client);
 
 impl AviationClient {
@@ -240,6 +248,73 @@ impl AviationClient {
 
         debug!(count = resp.ac.len(), "Received aircraft from adsb.lol");
         Ok(resp.ac)
+    }
+
+    pub(crate) async fn get_aircraft_by_hex(&self, hex: &str) -> Result<Option<NearbyAircraft>> {
+        let url = format!("{ADSBLOL_BASE_URL}/hex/{hex}");
+        debug!(hex = %hex, "Fetching aircraft by hex from adsb.lol");
+
+        let resp: AdsbLolResponse = self
+            .0
+            .get(&url)
+            .send()
+            .await
+            .wrap_err("Failed to send request to adsb.lol")?
+            .error_for_status()
+            .wrap_err("adsb.lol returned error status")?
+            .json()
+            .await
+            .wrap_err("Failed to parse adsb.lol response")?;
+
+        Ok(resp.ac.into_iter().next())
+    }
+
+    pub(crate) async fn get_aircraft_by_callsign(
+        &self,
+        callsign: &str,
+    ) -> Result<Option<NearbyAircraft>> {
+        let url = format!("{ADSBLOL_BASE_URL}/callsign/{callsign}");
+        debug!(callsign = %callsign, "Fetching aircraft by callsign from adsb.lol");
+
+        let resp: AdsbLolResponse = self
+            .0
+            .get(&url)
+            .send()
+            .await
+            .wrap_err("Failed to send request to adsb.lol")?
+            .error_for_status()
+            .wrap_err("adsb.lol returned error status")?
+            .json()
+            .await
+            .wrap_err("Failed to parse adsb.lol response")?;
+
+        Ok(resp.ac.into_iter().next())
+    }
+
+    pub(crate) async fn get_flight_route(
+        &self,
+        callsign: &str,
+    ) -> Result<Option<FlightRoute>> {
+        let url = format!("{ADSBDB_BASE_URL}/callsign/{callsign}");
+        debug!(callsign = %callsign, "Fetching flight route from adsbdb");
+
+        let resp = self
+            .0
+            .get(&url)
+            .send()
+            .await
+            .wrap_err("Failed to send request to adsbdb")?;
+
+        if !resp.status().is_success() {
+            return Ok(None);
+        }
+
+        let body: AdsbDbResponse = resp
+            .json()
+            .await
+            .wrap_err("Failed to parse adsbdb response")?;
+
+        Ok(body.response.flightroute)
     }
 
     async fn geocode_nominatim(&self, query: &str) -> Result<Option<ResolvedLocation>> {
@@ -476,7 +551,7 @@ pub async fn up_command(
         // Fetch routes concurrently
         let mut join_set = tokio::task::JoinSet::new();
         for (callsign, ac, distance_nm) in &candidates {
-            let client = aviation_client.0.clone();
+            let av_client = aviation_client.clone();
             let cs = callsign.clone();
             let icao_type = ac.t.clone();
             let alt = ac.alt_baro.clone();
@@ -492,15 +567,10 @@ pub async fn up_command(
                 _ => "?",
             };
             join_set.spawn(async move {
-                let url = format!("{ADSBDB_BASE_URL}/callsign/{cs}");
-                let route = tokio::time::timeout(UP_ADSBDB_TIMEOUT, async {
-                    let resp = client.get(&url).send().await?;
-                    if !resp.status().is_success() {
-                        return Ok(None);
-                    }
-                    let body: AdsbDbResponse = resp.json().await?;
-                    Ok::<_, eyre::Report>(body.response.flightroute)
-                })
+                let route = tokio::time::timeout(
+                    UP_ADSBDB_TIMEOUT,
+                    av_client.get_flight_route(&cs),
+                )
                 .await;
 
                 match route {
