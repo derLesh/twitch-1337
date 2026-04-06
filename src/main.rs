@@ -79,6 +79,8 @@ struct TwitchConfiguration {
     client_secret: SecretString,
     #[serde(default = "default_expected_latency")]
     expected_latency: u32,
+    #[serde(default)]
+    hidden_admins: Vec<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -144,10 +146,29 @@ fn default_enabled() -> bool {
     true
 }
 
+fn default_cooldown() -> u64 {
+    300
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+struct PingsConfig {
+    #[serde(default = "default_cooldown")]
+    default_cooldown: u64,
+}
+
+impl Default for PingsConfig {
+    fn default() -> Self {
+        Self {
+            default_cooldown: default_cooldown(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 struct Configuration {
     twitch: TwitchConfiguration,
-    streamelements: StreamelementsConfig,
+    #[serde(default)]
+    pings: PingsConfig,
     #[serde(default)]
     openrouter: Option<OpenRouterConfig>,
     #[serde(default)]
@@ -173,10 +194,6 @@ impl Configuration {
 
         if self.twitch.expected_latency > 1000 {
             bail!("twitch.expected_latency must be <= 1000ms (got {})", self.twitch.expected_latency);
-        }
-
-        if self.streamelements.channel_id.trim().is_empty() {
-            bail!("streamelements.channel_id cannot be empty");
         }
 
         // Validate each schedule config

@@ -21,12 +21,12 @@ client_secret = "your_client_secret"
 # The bot measures actual latency via PING/PONG every 5 minutes and auto-adjusts.
 # expected_latency = 89
 
-[streamelements]
-# StreamElements API token for managing bot commands
-api_token = "your_streamelements_api_token"
+# Twitch user IDs of hidden admins (can manage pings without being a mod)
+# hidden_admins = ["12345678"]
 
-# StreamElements channel ID (numeric ID, not channel name)
-channel_id = "your_channel_id"
+# Optional: Pings configuration
+# [pings]
+# default_cooldown = 300  # Cooldown in seconds between triggers (default: 300)
 
 # Optional: OpenRouter AI configuration for the !ai command
 # If not configured, the !ai command will be disabled.
