@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A Rust-based Twitch IRC bot with multiple features:
 1. **1337 Tracker**: Monitors for "1337"/"DANKIES" messages at 13:37 Berlin time, posts stats at 13:38
-2. **Ping Toggle**: Allows users to toggle their @mention in StreamElements ping commands
+2. **Ping System**: Local file-based ping commands with admin management, user self-service, and dynamic triggering
 3. **Scheduled Messages**: Dynamic message scheduling via config.toml with file watching
 4. **Latency Monitor**: Measures IRC latency via PING/PONG every 5 minutes, auto-adjusts timing offsets
 
@@ -85,7 +85,7 @@ cargo run
 
 ### Configuration File Structure
 
-The config.toml file has three sections:
+The config.toml file has the following sections:
 
 **[twitch]** - Twitch IRC connection and authentication
 - `channel` - Channel to monitor (without # prefix)
@@ -94,10 +94,10 @@ The config.toml file has three sections:
 - `client_id` - Twitch application client ID
 - `client_secret` - Twitch application client secret
 - `expected_latency` - Initial seed for IRC latency estimate in milliseconds (optional, default: 100). Auto-measured via PING/PONG.
+- `hidden_admins` - (optional) Vec of Twitch user IDs granted admin access to ping commands
 
-**[streamelements]** - StreamElements API configuration
-- `api_token` - StreamElements API token
-- `channel_id` - StreamElements channel ID (numeric)
+**[pings]** - Ping system configuration
+- `default_cooldown` - Default cooldown between ping triggers in seconds (optional, default: 300)
 
 **[[schedules]]** (optional, repeatable) - Scheduled messages
 - `name` - Unique identifier for the schedule
@@ -162,7 +162,7 @@ The bot maintains a **single persistent IRC connection** and uses a **broadcast 
    - **Config Watcher Service**: Watches config.toml for changes (2s debounce)
    - **Scheduled Message Handler**: Posts messages based on config.toml schedules (if configured)
    - **1337 Handler**: Daily scheduled monitoring (13:36-13:38)
-   - **Generic Command Handler**: Processes `!toggle-ping` commands 24/7
+   - **Generic Command Handler**: Processes `!ping` admin/user commands and dynamic `!<name>` ping triggers 24/7
    - **Latency Monitor**: Measures IRC latency via PING/PONG every 5 minutes
    - Each handler runs independently
    - Handlers filter for relevant messages and act accordingly
@@ -185,7 +185,7 @@ The bot maintains a **single persistent IRC connection** and uses a **broadcast 
 
 **IRC & Networking:**
 - `twitch-irc` - Twitch IRC client (features: refreshing-token-rustls-webpki-roots, transport-tcp-rustls-webpki-roots)
-- `reqwest` - HTTP client for StreamElements API (features: json, rustls-tls-webpki-roots)
+- `reqwest` - HTTP client for OpenRouter and aviation APIs (features: json, rustls-tls-webpki-roots)
 
 **File Watching:**
 - `notify-debouncer-mini` - File system watcher with debouncing for config reload
@@ -205,14 +205,13 @@ The bot maintains a **single persistent IRC connection** and uses a **broadcast 
 
 **Serialization:**
 - `serde` - Serialization framework (derive feature)
-- `serde_json` - JSON serialization for StreamElements API
-- `ron` - Rust Object Notation for token storage
+- `serde_json` - JSON serialization for API interactions
+- `ron` - Rust Object Notation for token and ping storage
 - `toml` - Configuration file parsing
 
 **Other:**
-- `regex` - For username matching in ping command
 - `rand` - For randomizing bot response messages
-- `async-trait` - For TokenStorage trait implementation
+- `async-trait` - For TokenStorage and Command trait implementations
 
 ### State Management
 
@@ -228,11 +227,17 @@ The bot maintains a **single persistent IRC connection** and uses a **broadcast 
 - Updated when config.toml changes (file watcher with 2s debounce)
 - Version increments trigger task manager to spawn/stop message tasks
 
+**Ping System State:**
+- `ping_manager`: `Arc<RwLock<PingManager>>` - Manages ping definitions, membership, and cooldowns
+- Persisted to `pings.ron` via atomic write+rename
+- Cooldown tracking via in-memory `HashMap<String, Instant>` (not persisted, resets on restart)
+- Shared across `PingAdminCommand` and `PingTriggerCommand`
+
 **Persistent State:**
 - OAuth tokens in `token.ron`
+- Ping definitions and membership in `pings.ron`
 
 **No Persistent State:**
-- StreamElements commands fetched/updated via API on demand
 - Schedules loaded from config.toml on startup and file changes
 
 ### Configuration Files
@@ -389,22 +394,38 @@ sudo cp target/x86_64-unknown-linux-musl/release/twitch-1337 /usr/local/bin/
 
 ### Handler: Generic Commands
 
-**`run_generic_command_handler(broadcast_tx, client)`**
-- Initializes `SEClient` (StreamElements API client)
+**`run_generic_command_handler(broadcast_tx, client, ping_manager, hidden_admin_ids, default_cooldown)`**
+- Creates `CommandDispatcher` with registered commands (`PingAdminCommand`, `PingTriggerCommand`, etc.)
 - Subscribes to broadcast channel
-- Dispatches commands to `handle_generic_commands()`
+- Dispatches PRIVMSG messages to matching commands via `CommandDispatcher`
 
-**`handle_generic_commands(privmsg, client, se_client) -> Result<()>`**
-- Parses first word of message
-- Routes to specialized handlers (currently only `toggle_ping_command`)
+**`CommandDispatcher`**
+- Holds `Vec<Box<dyn Command>>` of registered commands
+- On each PRIVMSG, extracts first word and finds matching command via `Command::matches()`
+- Builds `CommandContext` with privmsg, client, and args, then calls `command.execute(ctx)`
 
-**`toggle_ping_command(privmsg, client, se_client, command_name) -> Result<()>`**
-- Fetches all StreamElements commands with "pinger" keyword
-- Finds command matching `command_name`
-- Toggles user's @mention in command reply using regex
-- Updates command via StreamElements API
-- Responds with "Hab ich gemacht Okayge" on success
-- Error responses: "Das kann ich nicht FDM" (no name), "Das finde ich nicht FDM" (not found)
+### Ping Admin Command (`!ping`)
+
+**`PingAdminCommand`**
+- Requires broadcaster/moderator badge or `hidden_admins` user ID for admin subcommands
+- Admin subcommands:
+  - `!ping create <name> <template>` - Create new ping with template text
+  - `!ping delete <name>` - Delete a ping
+  - `!ping add <name> <user>` - Add user to ping membership
+  - `!ping remove <name> <user>` - Remove user from ping membership
+- User subcommands (open to all):
+  - `!ping join <name>` - Subscribe yourself to a ping
+  - `!ping leave <name>` - Unsubscribe yourself from a ping
+  - `!ping list` - List your active ping memberships
+
+### Ping Trigger Command (`!<name>`)
+
+**`PingTriggerCommand`**
+- Overrides `Command::matches()` to dynamically match any `!<name>` where `<name>` is a registered ping
+- Only members of the ping can trigger it
+- Checks cooldown (per-ping `cooldown` field, or global `default_cooldown` from config)
+- Renders template with `{mentions}` (space-separated @user list) and `{sender}` (triggering user)
+- Silent on: non-member, cooldown active, empty mentions list
 
 ### Handler: Scheduled Messages (Config-Based)
 
@@ -463,17 +484,32 @@ sudo cp target/x86_64-unknown-linux-musl/release/twitch-1337 /usr/local/bin/
   - `update(schedules)`: Updates schedules, increments version
 - Version number enables change detection for task manager
 
-### StreamElements Module
+### Ping Module
 
-**`streamelements::SEClient`**
-- HTTP client for StreamElements API with Bearer auth
-- `new(token) -> Result<Self>`: Creates client with auth headers
-- `get_all_commands(channel_id) -> Result<Vec<Command>>`: Fetches all bot commands
-- `update_command(channel_id, command) -> Result<()>`: Updates a command
+**`ping::Ping`**
+- A single ping definition
+- Fields: name, template, members (Vec<String>), cooldown (Option<u64>), created_by
 
-**`streamelements::Command`**
-- Represents a StreamElements bot command
-- Fields: cooldown, aliases, keywords, enabled flags, reply text, etc.
+**`ping::PingStore`**
+- Top-level container serialized to/from `pings.ron`
+- Fields: pings (HashMap<String, Ping>)
+
+**`ping::PingManager`**
+- Manages ping state and persistence, shared as `Arc<RwLock<PingManager>>`
+- Fields: store (PingStore), last_triggered (HashMap<String, Instant>), path (PathBuf)
+- Methods:
+  - `load() -> Result<Self>`: Loads from `pings.ron`, creates empty store if file missing
+  - `save() -> Result<()>`: Atomic write via tmp file + rename
+  - `create_ping(name, template, created_by, cooldown) -> Result<()>`: Creates new ping
+  - `delete_ping(name) -> Result<()>`: Deletes a ping
+  - `add_member(ping_name, username) -> Result<()>`: Adds user to ping
+  - `remove_member(ping_name, username) -> Result<()>`: Removes user from ping
+  - `ping_exists(name) -> bool`: Checks if a ping exists
+  - `is_member(ping_name, username) -> bool`: Checks membership
+  - `list_pings_for_user(username) -> Vec<&str>`: Lists pings user belongs to
+  - `check_cooldown(ping_name, default_cooldown) -> bool`: Returns true if cooldown expired
+  - `record_trigger(ping_name)`: Records trigger timestamp for cooldown
+  - `render_template(ping_name, sender) -> Option<String>`: Renders template with `{mentions}` and `{sender}`
 
 ### Token Storage
 
@@ -487,17 +523,17 @@ sudo cp target/x86_64-unknown-linux-musl/release/twitch-1337 /usr/local/bin/
 
 **`Configuration`**
 - Main configuration struct loaded from config.toml
-- Contains: `twitch`, `streamelements`, `schedules` (Vec<ScheduleConfig>)
+- Contains: `twitch`, `pings`, `schedules` (Vec<ScheduleConfig>), optionally `openrouter`
 - `validate()` method ensures all required fields are present and valid
 
 **`TwitchConfiguration`**
 - `channel`, `username` - Twitch channel and bot username
 - `refresh_token`, `client_id`, `client_secret` - OAuth credentials (SecretString)
 - `expected_latency` - Initial latency seed in milliseconds (optional, default: 100, auto-measured via PING/PONG)
+- `hidden_admins` - Vec of Twitch user IDs with admin access to ping commands
 
-**`StreamelementsConfig`**
-- `api_token` - StreamElements API token (SecretString)
-- `channel_id` - StreamElements channel ID
+**`PingsConfig`**
+- `default_cooldown` - Default cooldown between ping triggers in seconds (default: 300)
 
 **`ScheduleConfig`**
 - Configuration for a scheduled message in config.toml
@@ -514,6 +550,7 @@ sudo cp target/x86_64-unknown-linux-musl/release/twitch-1337 /usr/local/bin/
 - `TARGET_MINUTE: u32 = 37` - Minute for 1337 tracking
 - `MAX_USERS: usize = 10_000` - Maximum tracked users
 - `CONFIG_PATH: &str = "./config.toml"` - Configuration file path
+- `PINGS_PATH: &str = "./pings.ron"` - Ping storage file path
 - `LATENCY_PING_INTERVAL: Duration = 300s` - Time between PING measurements
 - `LATENCY_PING_TIMEOUT: Duration = 10s` - Max wait for PONG response
 - `LATENCY_EMA_ALPHA: f64 = 0.2` - EMA smoothing factor
@@ -531,6 +568,7 @@ sudo cp target/x86_64-unknown-linux-musl/release/twitch-1337 /usr/local/bin/
 - **Binary Size**: Optimized with minimal tokio features and single timezone (6MB)
 - **Logging**: Structured logs with tracing, configurable via `RUST_LOG`
 - **Broadcast Architecture**: Message router distributes to independent handlers
+- **Ping Persistence**: Ping definitions and membership stored in `pings.ron` (atomic write+rename)
 - **Token Refresh**: Tokens automatically refreshed and saved to `./token.ron`
 - **Hot Reload**: Schedules reload automatically when config.toml changes (2s debounce)
 - **Latency Auto-Measurement**: IRC latency measured via PING/PONG every 5 min, EMA (alpha=0.2) updates shared `AtomicU32` read by timing-sensitive handlers
@@ -546,11 +584,21 @@ sudo cp target/x86_64-unknown-linux-musl/release/twitch-1337 /usr/local/bin/
          -> Aborts monitor subtask, waits for next day
 ```
 
-### Ping Toggle (24/7)
+### Ping System (24/7)
 ```
-Continuous -> Listens for "!toggle-ping <command>"
-           -> Fetches StreamElements commands, toggles user's @mention
-           -> Updates command via API, confirms success
+Admin commands (!ping create/delete/add/remove):
+           -> Requires broadcaster/moderator badge or hidden_admin user ID
+           -> Modifies PingManager state, persists to pings.ron
+
+User commands (!ping join/leave/list):
+           -> Open to all users
+           -> Self-service subscription management
+
+Ping triggers (!<name>):
+           -> Dynamically matches any registered ping name
+           -> Only members can trigger, checks cooldown
+           -> Renders template with {mentions} and {sender}
+           -> Silent on non-member, cooldown, or empty mentions
 ```
 
 ### Scheduled Messages (Conditional - Only if schedules configured)
@@ -628,7 +676,6 @@ Startup    -> Log info: "No schedules configured, scheduled messages disabled"
 - Copy `config.toml.example` to `config.toml` for local development
 - Never commit `config.toml` to git with real credentials
 - Get OAuth credentials from your Twitch application at https://dev.twitch.tv/console
-- StreamElements API token from StreamElements dashboard
 - All configuration is in `config.toml` - no environment variables needed
 - Edit config.toml while running to add/modify/remove schedules (auto-reloads)
 
