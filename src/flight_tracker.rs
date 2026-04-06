@@ -3,8 +3,11 @@ use std::path::PathBuf;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use tokio::fs;
+use tokio::time::Duration;
 use tracing::{info, warn};
 use twitch_irc::message::PrivmsgMessage;
+
+use crate::aviation::{AltBaro, NearbyAircraft};
 
 const FLIGHTS_FILENAME: &str = "flights.ron";
 
@@ -13,6 +16,45 @@ pub(crate) const MAX_TRACKED_FLIGHTS: usize = 12;
 
 /// Maximum number of flights a single user can track.
 pub(crate) const MAX_FLIGHTS_PER_USER: usize = 3;
+
+/// Vertical rate above which we consider the aircraft climbing.
+const CLIMB_RATE_THRESHOLD: i64 = 500; // ft/min
+/// Vertical rate below which we consider the aircraft descending.
+const DESCENT_RATE_THRESHOLD: i64 = -500; // ft/min
+/// Absolute vertical rate below which cruise is possible.
+const CRUISE_RATE_THRESHOLD: i64 = 300; // ft/min
+/// Minimum altitude for cruise detection.
+const CRUISE_MIN_ALTITUDE: i64 = 10_000; // ft
+/// Maximum altitude for approach detection.
+const APPROACH_MAX_ALTITUDE: i64 = 10_000; // ft
+/// Maximum altitude considered "on ground" (when alt_baro is numeric).
+const GROUND_MAX_ALTITUDE: i64 = 200; // ft
+/// Maximum ground speed considered "on ground".
+const GROUND_MAX_SPEED: f64 = 30.0; // knots
+/// Minimum ground speed for takeoff detection.
+const TAKEOFF_MIN_SPEED: f64 = 60.0; // knots
+/// Number of stable polls required before declaring cruise.
+const CRUISE_STABLE_POLLS: u32 = 2;
+/// No data threshold before declaring tracking lost.
+pub(crate) const TRACKING_LOST_THRESHOLD: Duration = Duration::from_secs(300); // 5 min
+/// Time after tracking lost before auto-removing.
+pub(crate) const TRACKING_LOST_REMOVAL: Duration = Duration::from_secs(1800); // 30 min
+
+// Polling intervals
+pub(crate) const POLL_FAST: Duration = Duration::from_secs(30);
+pub(crate) const POLL_NORMAL: Duration = Duration::from_secs(60);
+pub(crate) const POLL_SLOW: Duration = Duration::from_secs(120);
+/// Timeout for a single adsb.lol request.
+pub(crate) const POLL_TIMEOUT: Duration = Duration::from_secs(10);
+
+// Divert detection
+const DIVERT_BEARING_THRESHOLD: f64 = 90.0; // degrees
+const DIVERT_CONSECUTIVE_POLLS: u32 = 3;
+
+// Emergency squawk codes
+const SQUAWK_HIJACK: &str = "7500";
+const SQUAWK_RADIO_FAILURE: &str = "7600";
+const SQUAWK_EMERGENCY: &str = "7700";
 
 /// Identifies a flight either by callsign or ICAO24 hex code.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -196,4 +238,131 @@ pub(crate) enum TrackerCommand {
         identifier: Option<String>,
         reply_to: PrivmsgMessage,
     },
+}
+
+// --- Phase detection helpers ---
+
+fn is_on_ground(ac: &NearbyAircraft) -> bool {
+    match &ac.alt_baro {
+        Some(AltBaro::Ground) => true,
+        Some(AltBaro::Feet(ft)) => {
+            *ft < GROUND_MAX_ALTITUDE && ac.gs.unwrap_or(0.0) < GROUND_MAX_SPEED
+        }
+        None => false,
+    }
+}
+
+pub(crate) fn altitude_ft(ac: &NearbyAircraft) -> Option<i64> {
+    match &ac.alt_baro {
+        Some(AltBaro::Feet(ft)) => Some(*ft),
+        Some(AltBaro::Ground) => Some(0),
+        None => None,
+    }
+}
+
+pub(crate) fn vertical_rate(ac: &NearbyAircraft) -> Option<i64> {
+    ac.baro_rate.or(ac.geom_rate)
+}
+
+/// Determines the new flight phase based on current ADS-B data and previous state.
+pub(crate) fn detect_phase(flight: &TrackedFlight, ac: &NearbyAircraft) -> FlightPhase {
+    let on_ground = is_on_ground(ac);
+    let alt = altitude_ft(ac);
+    let vrate = vertical_rate(ac);
+    let gs = ac.gs.unwrap_or(0.0);
+    let has_approach_mode = ac
+        .nav_modes
+        .as_ref()
+        .is_some_and(|modes| modes.iter().any(|m| m == "approach"));
+
+    // Landing: was airborne, now on ground
+    if on_ground && !matches!(flight.phase, FlightPhase::Ground | FlightPhase::Unknown) {
+        return FlightPhase::Landing;
+    }
+
+    // Ground: on ground (or was Landing which transitions here)
+    if on_ground {
+        return FlightPhase::Ground;
+    }
+
+    // Takeoff: was on ground, now speed > threshold and climbing
+    if matches!(flight.phase, FlightPhase::Ground | FlightPhase::Unknown)
+        && gs > TAKEOFF_MIN_SPEED
+        && vrate.unwrap_or(0) > 0
+    {
+        return FlightPhase::Takeoff;
+    }
+
+    // Approach: descending below threshold altitude or approach mode active
+    if let Some(alt_val) = alt {
+        if (alt_val < APPROACH_MAX_ALTITUDE || has_approach_mode) && vrate.unwrap_or(0) < 0 {
+            return FlightPhase::Approach;
+        }
+    }
+
+    // Descent: negative vertical rate above approach altitude
+    if let Some(vr) = vrate {
+        if vr < DESCENT_RATE_THRESHOLD {
+            return FlightPhase::Descent;
+        }
+    }
+
+    // Cruise: stable altitude above minimum, low vertical rate for enough polls
+    if let (Some(alt_val), Some(vr)) = (alt, vrate) {
+        if alt_val > CRUISE_MIN_ALTITUDE
+            && vr.abs() < CRUISE_RATE_THRESHOLD
+            && flight.polls_since_change >= CRUISE_STABLE_POLLS
+        {
+            return FlightPhase::Cruise;
+        }
+    }
+
+    // Climb: positive vertical rate
+    if let Some(vr) = vrate {
+        if vr > CLIMB_RATE_THRESHOLD {
+            return FlightPhase::Climb;
+        }
+    }
+
+    // If we were in a phase and conditions don't clearly match something else, stay
+    flight.phase
+}
+
+/// Returns a human-readable meaning if the squawk is an emergency code.
+pub(crate) fn emergency_squawk_meaning(squawk: &str) -> Option<&'static str> {
+    match squawk {
+        SQUAWK_HIJACK => Some("Hijack"),
+        SQUAWK_RADIO_FAILURE => Some("Radio Failure"),
+        SQUAWK_EMERGENCY => Some("Emergency"),
+        _ => None,
+    }
+}
+
+/// Determines the polling interval based on all tracked flights.
+pub(crate) fn compute_poll_interval(flights: &[TrackedFlight]) -> Duration {
+    if flights.is_empty() {
+        return POLL_SLOW;
+    }
+
+    let needs_fast = flights.iter().any(|f| {
+        f.polls_since_change < 5
+            || matches!(
+                f.phase,
+                FlightPhase::Takeoff | FlightPhase::Approach | FlightPhase::Landing
+            )
+    });
+
+    if needs_fast {
+        return POLL_FAST;
+    }
+
+    let needs_normal = flights
+        .iter()
+        .any(|f| matches!(f.phase, FlightPhase::Climb | FlightPhase::Descent));
+
+    if needs_normal {
+        return POLL_NORMAL;
+    }
+
+    POLL_SLOW
 }
