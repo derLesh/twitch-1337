@@ -10,11 +10,9 @@ pub mod ai;
 pub mod feedback;
 pub mod flights_above;
 pub mod leaderboard;
-pub mod list_pings;
 pub mod ping_admin;
 pub mod ping_trigger;
 pub mod random_flight;
-pub mod toggle_ping;
 
 /// Context passed to every command execution.
 pub struct CommandContext<'a> {

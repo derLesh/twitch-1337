@@ -183,8 +183,4 @@ impl PingManager {
         Some(rendered)
     }
 
-    /// Get all registered ping names (for matching in PingTriggerCommand).
-    pub fn ping_names(&self) -> Vec<String> {
-        self.store.pings.keys().cloned().collect()
-    }
 }

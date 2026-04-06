@@ -31,7 +31,6 @@ reqwest = { version = "0.12", default-features = false, features = [
   "rustls-tls-webpki-roots",
 ] }
 eyre = "0.6.12"
-regex = "1.12.2"
 tracing-error = "0.2.1"
 toml = "0.9.11"
 notify-debouncer-mini = "0.5"
