@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::time::Instant;
 
@@ -8,12 +8,15 @@ use tracing::{debug, info};
 
 const PINGS_PATH: &str = "./pings.ron";
 
+/// Command names that cannot be used as ping names (would shadow built-in commands).
+const RESERVED_NAMES: &[&str] = &["ping", "ai", "fl", "lb", "up", "fb"];
+
 /// A single ping definition.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Ping {
     pub name: String,
     pub template: String,
-    pub members: Vec<String>,
+    pub members: HashSet<String>,
     pub cooldown: Option<u64>,
     pub created_by: String,
 }
@@ -69,7 +72,7 @@ impl PingManager {
         Ok(())
     }
 
-    /// Create a new ping. Errors if name already exists.
+    /// Create a new ping. Errors if name is invalid or already exists.
     pub fn create_ping(
         &mut self,
         name: String,
@@ -77,6 +80,15 @@ impl PingManager {
         created_by: String,
         cooldown: Option<u64>,
     ) -> Result<()> {
+        if name.is_empty() {
+            bail!("Ping-Name darf nicht leer sein");
+        }
+        if !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+            bail!("Ping-Name darf nur Buchstaben, Zahlen, - und _ enthalten");
+        }
+        if RESERVED_NAMES.contains(&name.as_str()) {
+            bail!("\"{}\" ist ein reservierter Befehl", name);
+        }
         if self.store.pings.contains_key(&name) {
             bail!("Ping \"{}\" gibt es schon", name);
         }
@@ -85,7 +97,7 @@ impl PingManager {
             Ping {
                 name,
                 template,
-                members: Vec::new(),
+                members: HashSet::new(),
                 cooldown,
                 created_by,
             },
@@ -107,10 +119,9 @@ impl PingManager {
         let ping = self.store.pings.get_mut(ping_name)
             .ok_or_else(|| eyre::eyre!("Ping \"{}\" gibt es nicht", ping_name))?;
         let username_lower = username.to_lowercase();
-        if ping.members.contains(&username_lower) {
+        if !ping.members.insert(username_lower) {
             bail!("{} ist schon in \"{}\"", username, ping_name);
         }
-        ping.members.push(username_lower);
         self.save()
     }
 
@@ -119,9 +130,7 @@ impl PingManager {
         let ping = self.store.pings.get_mut(ping_name)
             .ok_or_else(|| eyre::eyre!("Ping \"{}\" gibt es nicht", ping_name))?;
         let username_lower = username.to_lowercase();
-        let before = ping.members.len();
-        ping.members.retain(|m| m != &username_lower);
-        if ping.members.len() == before {
+        if !ping.members.remove(&username_lower) {
             bail!("{} ist nicht in \"{}\"", username, ping_name);
         }
         self.save()
@@ -134,8 +143,9 @@ impl PingManager {
 
     /// Check if a user is a member of a ping.
     pub fn is_member(&self, ping_name: &str, username: &str) -> bool {
+        let username_lower = username.to_lowercase();
         self.store.pings.get(ping_name)
-            .map(|p| p.members.contains(&username.to_lowercase()))
+            .map(|p| p.members.contains(&username_lower))
             .unwrap_or(false)
     }
 
@@ -143,7 +153,7 @@ impl PingManager {
     pub fn list_pings_for_user(&self, username: &str) -> Vec<&str> {
         let username_lower = username.to_lowercase();
         self.store.pings.values()
-            .filter(|p| p.members.iter().any(|m| m == &username_lower))
+            .filter(|p| p.members.contains(&username_lower))
             .map(|p| p.name.as_str())
             .collect()
     }
