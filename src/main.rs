@@ -1545,10 +1545,6 @@ async fn run_generic_command_handler(
             ping_manager.clone(),
             hidden_admin_ids,
         )),
-        Box::new(commands::ping_trigger::PingTriggerCommand::new(
-            ping_manager,
-            default_cooldown,
-        )),
         Box::new(commands::random_flight::RandomFlightCommand),
         Box::new(commands::flights_above::FlightsAboveCommand::new(aviation_client)),
         Box::new(commands::leaderboard::LeaderboardCommand::new(leaderboard)),
@@ -1562,6 +1558,13 @@ async fn run_generic_command_handler(
             cfg.instruction_template,
         )));
     }
+
+    // PingTriggerCommand must be last: it matches any !<name> that is a registered ping,
+    // so built-in commands earlier in the list take priority and can't be shadowed.
+    commands.push(Box::new(commands::ping_trigger::PingTriggerCommand::new(
+        ping_manager,
+        default_cooldown,
+    )));
 
     run_command_dispatcher(broadcast_rx, client, commands).await;
 }

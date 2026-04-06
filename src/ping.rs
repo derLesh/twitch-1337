@@ -8,9 +8,6 @@ use tracing::{debug, info};
 
 const PINGS_PATH: &str = "./pings.ron";
 
-/// Command names that cannot be used as ping names (would shadow built-in commands).
-const RESERVED_NAMES: &[&str] = &["ping", "ai", "fl", "lb", "up", "fb"];
-
 /// A single ping definition.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Ping {
@@ -85,9 +82,6 @@ impl PingManager {
         }
         if !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
             bail!("Ping-Name darf nur Buchstaben, Zahlen, - und _ enthalten");
-        }
-        if RESERVED_NAMES.contains(&name.as_str()) {
-            bail!("\"{}\" ist ein reservierter Befehl", name);
         }
         if self.store.pings.contains_key(&name) {
             bail!("Ping \"{}\" gibt es schon", name);
