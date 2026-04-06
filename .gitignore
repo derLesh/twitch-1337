@@ -18,6 +18,9 @@
 .vscode/
 .idea/
 
+# Worktrees
+.worktrees/
+
 # OS files
 .DS_Store
 Thumbs.db
