@@ -35,6 +35,12 @@ pub trait Command: Send + Sync {
         true
     }
 
+    /// Whether this command matches the given trigger word.
+    /// Default: exact match on `name()`.
+    fn matches(&self, word: &str) -> bool {
+        self.name() == word
+    }
+
     /// Execute the command with the given context.
     async fn execute(&self, ctx: CommandContext<'_>) -> Result<()>;
 }

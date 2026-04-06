@@ -1572,7 +1572,7 @@ async fn run_command_dispatcher(
                     continue;
                 };
 
-                let Some(cmd) = commands.iter().find(|c| c.enabled() && c.name() == first_word) else {
+                let Some(cmd) = commands.iter().find(|c| c.enabled() && c.matches(first_word)) else {
                     continue;
                 };
 
