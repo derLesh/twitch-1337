@@ -49,6 +49,8 @@ pub(crate) const POLL_NORMAL: Duration = Duration::from_secs(60);
 pub(crate) const POLL_SLOW: Duration = Duration::from_secs(120);
 /// Timeout for a single adsb.lol request.
 pub(crate) const POLL_TIMEOUT: Duration = Duration::from_secs(10);
+/// Timeout for adsbdb route fetch.
+const ROUTE_FETCH_TIMEOUT: Duration = Duration::from_secs(5);
 
 // Divert detection
 const DIVERT_BEARING_THRESHOLD: f64 = 90.0; // degrees
@@ -344,6 +346,29 @@ pub(crate) fn emergency_squawk_meaning(squawk: &str) -> Option<&'static str> {
     }
 }
 
+// --- Helpers ---
+
+/// Finds a tracked flight by searching identifier, callsign, and hex (case-insensitive).
+fn find_flight_index(flights: &[TrackedFlight], query: &str) -> Option<usize> {
+    let upper = query.to_uppercase();
+    flights.iter().position(|f| {
+        f.identifier.as_str().eq_ignore_ascii_case(&upper)
+            || f.callsign.as_ref().is_some_and(|cs| cs.eq_ignore_ascii_case(&upper))
+            || f.hex.as_ref().is_some_and(|h| h.eq_ignore_ascii_case(&upper))
+    })
+}
+
+/// Formats a duration as "Xh Ym" or "Ym".
+fn format_duration_hm(d: chrono::TimeDelta) -> String {
+    let hours = d.num_hours();
+    let mins = d.num_minutes() % 60;
+    if hours > 0 {
+        format!("{hours}h{mins:02}m")
+    } else {
+        format!("{mins}m")
+    }
+}
+
 // --- Chat message formatting ---
 
 /// Formats altitude as FL (flight level) or feet.
@@ -404,16 +429,10 @@ pub(crate) fn msg_approach(flight: &TrackedFlight) -> String {
 
 pub(crate) fn msg_landing(flight: &TrackedFlight) -> String {
     let duration = Utc::now().signed_duration_since(flight.tracked_at);
-    let hours = duration.num_hours();
-    let mins = duration.num_minutes() % 60;
-    let time_str = if hours > 0 {
-        format!(" Flugzeit: {hours}h{mins:02}m")
-    } else {
-        format!(" Flugzeit: {mins}m")
-    };
     format!(
-        "{} ist gelandet!{time_str}",
-        format_flight_prefix(flight)
+        "{} ist gelandet! Flugzeit: {}",
+        format_flight_prefix(flight),
+        format_duration_hm(duration)
     )
 }
 
@@ -452,13 +471,7 @@ pub(crate) fn msg_flight_status(flight: &TrackedFlight) -> String {
         .map(|s| format!(" | Squawk {s}"))
         .unwrap_or_default();
     let elapsed = Utc::now().signed_duration_since(flight.tracked_at);
-    let hours = elapsed.num_hours();
-    let mins = elapsed.num_minutes() % 60;
-    let tracking_time = if hours > 0 {
-        format!("seit {hours}h{mins:02}m getrackt")
-    } else {
-        format!("seit {mins}m getrackt")
-    };
+    let tracking_time = format!("seit {} getrackt", format_duration_hm(elapsed));
     format!(
         "{prefix} | {} {alt}{speed}{squawk} | {tracking_time}",
         flight.phase
@@ -760,7 +773,7 @@ async fn handle_track(
     // Fetch route if we have a callsign
     if let Some(cs) = &callsign {
         match tokio::time::timeout(
-            Duration::from_secs(5),
+            ROUTE_FETCH_TIMEOUT,
             aviation_client.get_flight_route(cs),
         )
         .await
@@ -794,7 +807,6 @@ async fn handle_track(
     save_tracker_state(data_dir, state).await;
 
     info!(identifier = %identifier, requested_by = %requested_by, "Flight tracking started");
-    // Say proactively in channel (not reply) since track confirmation is informational
     if let Err(e) = client.say_in_reply_to(reply_to, response).await {
         error!(error = ?e, "Failed to send track started message");
     }
@@ -809,20 +821,7 @@ async fn handle_untrack(
     client: &Arc<AuthenticatedTwitchClient>,
     data_dir: &Path,
 ) {
-    let upper = identifier.to_uppercase();
-
-    // Find flight by identifier, callsign, or hex match
-    let idx = state.flights.iter().position(|f| {
-        f.identifier.as_str().eq_ignore_ascii_case(&upper)
-            || f.callsign
-                .as_ref()
-                .is_some_and(|cs| cs.eq_ignore_ascii_case(&upper))
-            || f.hex
-                .as_ref()
-                .is_some_and(|h| h.eq_ignore_ascii_case(&upper))
-    });
-
-    let Some(idx) = idx else {
+    let Some(idx) = find_flight_index(&state.flights, identifier) else {
         if let Err(e) = client
             .say_in_reply_to(reply_to, format!("{identifier} nicht gefunden FDM"))
             .await
@@ -873,18 +872,8 @@ async fn handle_status(
     let response = match identifier {
         None => msg_flights_list(&state.flights),
         Some(id) => {
-            let upper = id.to_uppercase();
-            let flight = state.flights.iter().find(|f| {
-                f.identifier.as_str().eq_ignore_ascii_case(&upper)
-                    || f.callsign
-                        .as_ref()
-                        .is_some_and(|cs| cs.eq_ignore_ascii_case(&upper))
-                    || f.hex
-                        .as_ref()
-                        .is_some_and(|h| h.eq_ignore_ascii_case(&upper))
-            });
-            match flight {
-                Some(f) => msg_flight_status(f),
+            match find_flight_index(&state.flights, id) {
+                Some(idx) => msg_flight_status(&state.flights[idx]),
                 None => format!("{id} nicht gefunden FDM"),
             }
         }
@@ -907,26 +896,52 @@ async fn poll_all_flights(
     let mut removals: Vec<usize> = Vec::new();
     let mut messages: Vec<String> = Vec::new();
 
-    for (idx, flight) in state.flights.iter_mut().enumerate() {
-        // Fetch aircraft data
-        let ac_result = match &flight.identifier {
-            FlightIdentifier::Hex(hex) => {
-                tokio::time::timeout(POLL_TIMEOUT, aviation_client.get_aircraft_by_hex(hex)).await
-            }
-            FlightIdentifier::Callsign(cs) => {
-                // If we've resolved a hex, prefer that for lookups
-                if let Some(hex) = &flight.hex {
-                    tokio::time::timeout(POLL_TIMEOUT, aviation_client.get_aircraft_by_hex(hex))
-                        .await
-                } else {
-                    tokio::time::timeout(
-                        POLL_TIMEOUT,
-                        aviation_client.get_aircraft_by_callsign(cs),
-                    )
-                    .await
+    // Phase 1: Fetch all aircraft data in parallel using JoinSet
+    use crate::aviation::NearbyAircraft;
+    type PollResult = Result<Result<Option<NearbyAircraft>, eyre::Report>, tokio::time::error::Elapsed>;
+
+    let mut join_set = tokio::task::JoinSet::new();
+    for (idx, flight) in state.flights.iter().enumerate() {
+        let ac = aviation_client.clone();
+        let id = flight.identifier.clone();
+        let hex = flight.hex.clone();
+        join_set.spawn(async move {
+            let result: PollResult = match &id {
+                FlightIdentifier::Hex(h) => {
+                    tokio::time::timeout(POLL_TIMEOUT, ac.get_aircraft_by_hex(h)).await
                 }
-            }
+                FlightIdentifier::Callsign(cs) => {
+                    if let Some(h) = &hex {
+                        tokio::time::timeout(POLL_TIMEOUT, ac.get_aircraft_by_hex(h)).await
+                    } else {
+                        tokio::time::timeout(POLL_TIMEOUT, ac.get_aircraft_by_callsign(cs)).await
+                    }
+                }
+            };
+            (idx, result)
+        });
+    }
+
+    // Collect results indexed by flight position
+    let mut fetch_results: Vec<Option<PollResult>> = (0..state.flights.len()).map(|_| None).collect();
+    while let Some(res) = join_set.join_next().await {
+        if let Ok((idx, poll_result)) = res {
+            fetch_results[idx] = Some(poll_result);
+        }
+    }
+
+    // Phase 2: Process results sequentially (mutates state)
+    let removal_threshold = chrono::TimeDelta::from_std(TRACKING_LOST_REMOVAL)
+        .unwrap_or(chrono::TimeDelta::zero());
+    let lost_threshold = chrono::TimeDelta::from_std(TRACKING_LOST_THRESHOLD)
+        .unwrap_or(chrono::TimeDelta::zero());
+
+    #[allow(clippy::needless_range_loop)]
+    for idx in 0..state.flights.len() {
+        let Some(ac_result) = fetch_results[idx].take() else {
+            continue;
         };
+        let flight = &mut state.flights[idx];
 
         let ac = match ac_result {
             Ok(Ok(Some(ac))) => ac,
@@ -934,8 +949,6 @@ async fn poll_all_flights(
                 // Aircraft not found -- check tracking lost threshold
                 if let Some(last_seen) = flight.last_seen {
                     let lost_duration = now.signed_duration_since(last_seen);
-                    let removal_threshold =
-                        chrono::TimeDelta::from_std(TRACKING_LOST_REMOVAL).unwrap();
                     if lost_duration >= removal_threshold {
                         info!(
                             identifier = %flight.identifier,
@@ -944,16 +957,12 @@ async fn poll_all_flights(
                         );
                         messages.push(msg_tracking_lost(flight));
                         removals.push(idx);
-                    } else {
-                        let threshold =
-                            chrono::TimeDelta::from_std(TRACKING_LOST_THRESHOLD).unwrap();
-                        if lost_duration >= threshold {
-                            debug!(
-                                identifier = %flight.identifier,
-                                last_seen_secs_ago = lost_duration.num_seconds(),
-                                "Flight not visible on adsb.lol"
-                            );
-                        }
+                    } else if lost_duration >= lost_threshold {
+                        debug!(
+                            identifier = %flight.identifier,
+                            last_seen_secs_ago = lost_duration.num_seconds(),
+                            "Flight not visible on adsb.lol"
+                        );
                     }
                 }
                 continue;
@@ -968,20 +977,20 @@ async fn poll_all_flights(
             }
         };
 
-        // Aircraft found -- update last_seen
+        // Aircraft found -- update last_seen (don't mark changed for just this)
         flight.last_seen = Some(now);
-        changed = true;
 
         // Resolve callsign/hex/type if not yet known
         if flight.callsign.is_none()
             && let Some(cs) = ac.flight.as_ref().map(|s| s.trim().to_string()).filter(|s| !s.is_empty()) {
                 debug!(identifier = %flight.identifier, callsign = %cs, "Resolved callsign");
                 flight.callsign = Some(cs.clone());
+                changed = true;
 
                 // Try to fetch route now that we have a callsign
                 if flight.route.is_none()
                     && let Ok(Ok(Some(route))) = tokio::time::timeout(
-                        Duration::from_secs(5),
+                        ROUTE_FETCH_TIMEOUT,
                         aviation_client.get_flight_route(&cs),
                     )
                     .await
@@ -1034,6 +1043,7 @@ async fn poll_all_flights(
             flight.phase = new_phase;
             flight.last_phase_change = Some(now);
             flight.polls_since_change = 0;
+            changed = true;
 
             // Post phase change messages
             match new_phase {
