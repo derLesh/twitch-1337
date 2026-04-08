@@ -15,8 +15,8 @@
 *.swp
 *.swo
 *~
-.vscode/
-.idea/
+.vscode
+.idea
 
 # Worktrees
 .worktrees/
@@ -24,6 +24,22 @@
 # OS files
 .DS_Store
 Thumbs.db
+
+# Shell config files
+.bash_profile
+.bashrc
+.profile
+.zprofile
+.zshrc
+
+# Tool config files
+.gitconfig
+.gitmodules
+.mcp.json
+.ripgreprc
+
+# Claude Code
+.claude/
 
 token.ron
 schedule_cache.ron
