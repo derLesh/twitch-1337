@@ -31,10 +31,9 @@ mod aviation;
 mod commands;
 mod database;
 mod ping;
-mod openrouter;
+mod llm;
 mod flight_tracker;
 
-use crate::openrouter::{ChatCompletionRequest, Message, OpenRouterClient};
 
 /// Type alias for the authenticated Twitch IRC client
 pub(crate) type AuthenticatedTwitchClient =
@@ -462,47 +461,6 @@ pub(crate) fn parse_flight_duration(s: &str) -> Option<std::time::Duration> {
 
 /// Maximum response length for Twitch chat (to stay within limits).
 pub(crate) const MAX_RESPONSE_LENGTH: usize = 500;
-
-/// Executes the AI command by sending a chat completion request to OpenRouter.
-pub(crate) async fn execute_ai_request(
-    user_message: &str,
-    openrouter_client: &OpenRouterClient,
-    system_prompt: &str,
-) -> Result<String> {
-    let messages = vec![
-        Message {
-            role: "system".to_string(),
-            content: Some(system_prompt.to_string()),
-            tool_calls: None,
-            tool_call_id: None,
-        },
-        Message {
-            role: "user".to_string(),
-            content: Some(user_message.to_string()),
-            tool_calls: None,
-            tool_call_id: None,
-        },
-    ];
-
-    let request = ChatCompletionRequest {
-        model: openrouter_client.model().to_string(),
-        messages,
-        tools: None,
-    };
-
-    let response = openrouter_client.chat_completion(request).await?;
-
-    let choice = response
-        .choices
-        .into_iter()
-        .next()
-        .ok_or_else(|| eyre::eyre!("No choices in OpenRouter response"))?;
-
-    choice
-        .message
-        .content
-        .ok_or_else(|| eyre::eyre!("No text response from OpenRouter"))
-}
 
 /// Truncates a string to the maximum number of characters at a word boundary.
 pub(crate) fn truncate_response(text: &str, max_chars: usize) -> String {
@@ -1121,7 +1079,7 @@ pub async fn main() -> Result<()> {
     let handler_generic_commands = tokio::spawn({
         let broadcast_tx = broadcast_tx.clone();
         let client = client.clone();
-        let openrouter_config = config.openrouter.clone();
+        let ai_config = config.ai.clone();
         let leaderboard = leaderboard.clone();
         let ping_manager = ping_manager.clone();
         let hidden_admin_ids = config.twitch.hidden_admins.clone();
@@ -1131,7 +1089,7 @@ pub async fn main() -> Result<()> {
         let aviation_client = shared_aviation_client;
         async move {
             run_generic_command_handler(
-                broadcast_tx, client, openrouter_config, leaderboard,
+                broadcast_tx, client, ai_config, leaderboard,
                 ping_manager, hidden_admin_ids, default_cooldown, pings_public,
                 tracker_tx, aviation_client,
             ).await
@@ -1572,11 +1530,11 @@ async fn run_latency_handler(
 ///
 /// Runs continuously in a loop, processing all incoming messages.
 #[allow(clippy::too_many_arguments)]
-#[instrument(skip(broadcast_tx, client, openrouter_config, leaderboard, ping_manager, tracker_tx, aviation_client))]
+#[instrument(skip(broadcast_tx, client, ai_config, leaderboard, ping_manager, tracker_tx, aviation_client))]
 async fn run_generic_command_handler(
     broadcast_tx: broadcast::Sender<ServerMessage>,
     client: Arc<AuthenticatedTwitchClient>,
-    openrouter_config: Option<OpenRouterConfig>,
+    ai_config: Option<AiConfig>,
     leaderboard: Arc<tokio::sync::RwLock<HashMap<String, PersonalBest>>>,
     ping_manager: Arc<tokio::sync::RwLock<ping::PingManager>>,
     hidden_admin_ids: Vec<String>,
@@ -1590,26 +1548,42 @@ async fn run_generic_command_handler(
     // Subscribe to the broadcast channel
     let broadcast_rx = broadcast_tx.subscribe();
 
-    // Initialize OpenRouter client (optional)
-    let openrouter_client = if let Some(ref openrouter_cfg) = openrouter_config {
-        match OpenRouterClient::new(
-            openrouter_cfg.api_key.expose_secret(),
-            &openrouter_cfg.model,
-        ) {
-            Ok(client) => {
-                info!(model = %openrouter_cfg.model, "OpenRouter AI command enabled");
-                Some(client)
+    // Initialize LLM client (optional)
+    let llm_client: Option<(Box<dyn llm::LlmClient>, AiConfig)> =
+        if let Some(ai_cfg) = ai_config {
+            let client_result = match ai_cfg.backend {
+                AiBackend::OpenAi => {
+                    let api_key = ai_cfg
+                        .api_key
+                        .as_ref()
+                        .expect("validated: openai backend has api_key");
+                    llm::openai::OpenAiClient::new(
+                        api_key.expose_secret(),
+                        &ai_cfg.model,
+                        ai_cfg.base_url.as_deref(),
+                    )
+                    .map(|c| Box::new(c) as Box<dyn llm::LlmClient>)
+                }
+                AiBackend::Ollama => llm::ollama::OllamaClient::new(
+                    &ai_cfg.model,
+                    ai_cfg.base_url.as_deref(),
+                )
+                .map(|c| Box::new(c) as Box<dyn llm::LlmClient>),
+            };
+            match client_result {
+                Ok(client) => {
+                    info!(backend = ?ai_cfg.backend, model = %ai_cfg.model, "AI command enabled");
+                    Some((client, ai_cfg))
+                }
+                Err(e) => {
+                    error!(error = ?e, "Failed to initialize LLM client, AI command disabled");
+                    None
+                }
             }
-            Err(e) => {
-                error!(error = ?e, "Failed to initialize OpenRouter client");
-                error!("AI command will be disabled");
-                None
-            }
-        }
-    } else {
-        debug!("OpenRouter not configured, AI command disabled");
-        None
-    };
+        } else {
+            debug!("AI not configured, AI command disabled");
+            None
+        };
 
     // Use the shared aviation client for !up command
     let aviation_client = Some(aviation_client);
@@ -1631,9 +1605,10 @@ async fn run_generic_command_handler(
         Box::new(commands::flights::FlightCommand::new(tracker_tx)),
     ];
 
-    if let (Some(client), Some(cfg)) = (openrouter_client, openrouter_config) {
+    if let Some((client, cfg)) = llm_client {
         commands.push(Box::new(commands::ai::AiCommand::new(
             client,
+            cfg.model,
             cfg.system_prompt,
             cfg.instruction_template,
         )));
