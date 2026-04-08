@@ -1074,7 +1074,7 @@ pub async fn main() -> Result<()> {
     });
 
     let ping_manager = Arc::new(tokio::sync::RwLock::new(
-        ping::PingManager::load().wrap_err("Failed to load ping manager")?
+        ping::PingManager::load(&get_data_dir()).wrap_err("Failed to load ping manager")?
     ));
 
     let handler_generic_commands = tokio::spawn({

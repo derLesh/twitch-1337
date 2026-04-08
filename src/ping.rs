@@ -1,12 +1,12 @@
 use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use eyre::{Result, WrapErr, bail};
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info};
 
-const PINGS_PATH: &str = "./pings.ron";
+const PINGS_FILENAME: &str = "pings.ron";
 
 /// A single ping definition. The ping's name is the HashMap key in PingStore.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -32,8 +32,8 @@ pub struct PingManager {
 
 impl PingManager {
     /// Load pings from disk. Creates empty store if file doesn't exist.
-    pub fn load() -> Result<Self> {
-        let path = PathBuf::from(PINGS_PATH);
+    pub fn load(data_dir: &Path) -> Result<Self> {
+        let path = data_dir.join(PINGS_FILENAME);
         let store = if path.exists() {
             let data = std::fs::read_to_string(&path)
                 .wrap_err("Failed to read pings.ron")?;
