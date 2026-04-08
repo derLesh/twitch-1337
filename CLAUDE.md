@@ -98,6 +98,7 @@ The config.toml file has the following sections:
 
 **[pings]** - Ping system configuration
 - `default_cooldown` - Default cooldown between ping triggers in seconds (optional, default: 300)
+- `public` - Allow anyone to trigger pings, not just members (optional, default: false)
 
 **[[schedules]]** (optional, repeatable) - Scheduled messages
 - `name` - Unique identifier for the schedule
@@ -394,7 +395,7 @@ sudo cp target/x86_64-unknown-linux-musl/release/twitch-1337 /usr/local/bin/
 
 ### Handler: Generic Commands
 
-**`run_generic_command_handler(broadcast_tx, client, ping_manager, hidden_admin_ids, default_cooldown)`**
+**`run_generic_command_handler(broadcast_tx, client, openrouter_config, leaderboard, ping_manager, hidden_admin_ids, default_cooldown, pings_public, tracker_tx, aviation_client)`**
 - Creates `CommandDispatcher` with registered commands (`PingAdminCommand`, `PingTriggerCommand`, etc.)
 - Subscribes to broadcast channel
 - Dispatches PRIVMSG messages to matching commands via `CommandDispatcher`
@@ -422,9 +423,9 @@ sudo cp target/x86_64-unknown-linux-musl/release/twitch-1337 /usr/local/bin/
 
 **`PingTriggerCommand`**
 - Overrides `Command::matches()` to dynamically match any `!<name>` where `<name>` is a registered ping
-- Only members of the ping can trigger it
+- Only members can trigger unless `public` mode is enabled in `[pings]` config
 - Checks cooldown (per-ping `cooldown` field, or global `default_cooldown` from config)
-- Renders template with `{mentions}` (space-separated @user list) and `{sender}` (triggering user)
+- Renders template with `{mentions}` (space-separated @user list, sender excluded) and `{sender}` (triggering user)
 - Silent on: non-member, cooldown active, empty mentions list
 
 ### Handler: Scheduled Messages (Config-Based)
@@ -509,7 +510,7 @@ sudo cp target/x86_64-unknown-linux-musl/release/twitch-1337 /usr/local/bin/
   - `list_pings_for_user(username) -> Vec<&str>`: Lists pings user belongs to
   - `check_cooldown(ping_name, default_cooldown) -> bool`: Returns true if cooldown expired
   - `record_trigger(ping_name)`: Records trigger timestamp for cooldown
-  - `render_template(ping_name, sender) -> Option<String>`: Renders template with `{mentions}` and `{sender}`
+  - `render_template(ping_name, sender) -> Option<String>`: Renders template with `{mentions}` (sender excluded) and `{sender}`
 
 ### Token Storage
 
@@ -534,6 +535,7 @@ sudo cp target/x86_64-unknown-linux-musl/release/twitch-1337 /usr/local/bin/
 
 **`PingsConfig`**
 - `default_cooldown` - Default cooldown between ping triggers in seconds (default: 300)
+- `public` - Allow anyone to trigger pings, not just members (default: false)
 
 **`ScheduleConfig`**
 - Configuration for a scheduled message in config.toml
@@ -596,7 +598,7 @@ User commands (!ping join/leave/list):
 
 Ping triggers (!<name>):
            -> Dynamically matches any registered ping name
-           -> Only members can trigger, checks cooldown
+           -> Only members can trigger (unless public mode enabled), checks cooldown
            -> Renders template with {mentions} and {sender}
            -> Silent on non-member, cooldown, or empty mentions
 ```
