@@ -42,7 +42,7 @@ impl Command for PingAdminCommand {
         let subcommand = ctx.args.first().copied().unwrap_or("");
 
         match subcommand {
-            "create" | "delete" | "add" | "remove" => {
+            "create" | "delete" | "edit" | "add" | "remove" => {
                 if !self.is_admin(ctx.privmsg) {
                     ctx.client
                         .say_in_reply_to(ctx.privmsg, "Das darfst du nicht FDM".to_string())
@@ -52,6 +52,7 @@ impl Command for PingAdminCommand {
                 match subcommand {
                     "create" => self.handle_create(&ctx).await,
                     "delete" => self.handle_delete(&ctx).await,
+                    "edit" => self.handle_edit(&ctx).await,
                     "add" => self.handle_member_op(&ctx, "add").await,
                     "remove" => self.handle_member_op(&ctx, "remove").await,
                     _ => unreachable!(),
@@ -64,7 +65,7 @@ impl Command for PingAdminCommand {
                 ctx.client
                     .say_in_reply_to(
                         ctx.privmsg,
-                        "Nutze: join, leave, list (oder create, delete, add, remove als Mod)"
+                        "Nutze: join, leave, list (oder create, delete, edit, add, remove als Mod)"
                             .to_string(),
                     )
                     .await?;
@@ -125,6 +126,34 @@ impl PingAdminCommand {
             Ok(()) => {
                 ctx.client
                     .say_in_reply_to(ctx.privmsg, format!("Ping \"{name}\" gelöscht Okayge"))
+                    .await?;
+            }
+            Err(e) => {
+                ctx.client
+                    .say_in_reply_to(ctx.privmsg, format!("{e} FDM"))
+                    .await?;
+            }
+        }
+        Ok(())
+    }
+
+    /// !p edit <name> <new template...>
+    async fn handle_edit(&self, ctx: &CommandContext<'_>) -> Result<()> {
+        if ctx.args.len() < 3 {
+            ctx.client
+                .say_in_reply_to(ctx.privmsg, "Nutze: !p edit <name> <template>".to_string())
+                .await?;
+            return Ok(());
+        }
+
+        let name = ctx.args[1].to_lowercase();
+        let template = ctx.args[2..].join(" ");
+
+        let mut manager = self.ping_manager.write().await;
+        match manager.edit_template(&name, template) {
+            Ok(()) => {
+                ctx.client
+                    .say_in_reply_to(ctx.privmsg, format!("Ping \"{name}\" updated SeemsGood"))
                     .await?;
             }
             Err(e) => {

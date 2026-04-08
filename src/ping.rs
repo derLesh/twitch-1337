@@ -106,6 +106,14 @@ impl PingManager {
         self.save()
     }
 
+    /// Edit a ping's template. Errors if ping doesn't exist.
+    pub fn edit_template(&mut self, name: &str, template: String) -> Result<()> {
+        let ping = self.store.pings.get_mut(name)
+            .ok_or_else(|| eyre::eyre!("Ping \"{}\" gibt es nicht", name))?;
+        ping.template = template;
+        self.save()
+    }
+
     /// Add a member to a ping. Errors if ping doesn't exist or user already a member.
     pub fn add_member(&mut self, ping_name: &str, username: &str) -> Result<()> {
         let ping = self.store.pings.get_mut(ping_name)
@@ -184,5 +192,72 @@ impl PingManager {
             .replace("{sender}", sender);
         Some(rendered)
     }
+}
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn empty_manager(dir: &Path) -> PingManager {
+        PingManager {
+            store: PingStore { pings: HashMap::new() },
+            last_triggered: HashMap::new(),
+            path: dir.join(PINGS_FILENAME),
+        }
+    }
+
+    fn test_manager(dir: &Path) -> PingManager {
+        let mut mgr = empty_manager(dir);
+        mgr.create_ping("test".into(), "Hey {mentions}!".into(), "admin".into(), None)
+            .unwrap();
+        mgr
+    }
+
+    #[test]
+    fn edit_template_updates_template() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut mgr = test_manager(dir.path());
+
+        mgr.edit_template("test", "New template {mentions}".into()).unwrap();
+
+        let ping = mgr.store.pings.get("test").unwrap();
+        assert_eq!(ping.template, "New template {mentions}");
+    }
+
+    #[test]
+    fn edit_template_preserves_members() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut mgr = test_manager(dir.path());
+        mgr.add_member("test", "alice").unwrap();
+        mgr.add_member("test", "bob").unwrap();
+
+        mgr.edit_template("test", "Updated {mentions}".into()).unwrap();
+
+        let ping = mgr.store.pings.get("test").unwrap();
+        assert!(ping.members.contains("alice"));
+        assert!(ping.members.contains("bob"));
+        assert_eq!(ping.members.len(), 2);
+    }
+
+    #[test]
+    fn edit_template_nonexistent_ping_errors() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut mgr = test_manager(dir.path());
+
+        let result = mgr.edit_template("nope", "whatever".into());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("gibt es nicht"));
+    }
+
+    #[test]
+    fn edit_template_persists_to_disk() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut mgr = test_manager(dir.path());
+        mgr.edit_template("test", "Persisted {mentions}".into()).unwrap();
+
+        // Reload from disk
+        let mgr2 = PingManager::load(dir.path()).unwrap();
+        let ping = mgr2.store.pings.get("test").unwrap();
+        assert_eq!(ping.template, "Persisted {mentions}");
+    }
 }
