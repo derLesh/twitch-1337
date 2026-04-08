@@ -177,16 +177,19 @@ impl PingManager {
     }
 
     /// Render a ping's template with placeholders replaced.
-    /// Returns None if ping doesn't exist or has no members.
+    /// Returns None if ping doesn't exist or has no mentionable members
+    /// (i.e., all members are the sender).
     pub fn render_template(&self, ping_name: &str, sender: &str) -> Option<String> {
         let ping = self.store.pings.get(ping_name)?;
-        if ping.members.is_empty() {
-            return None;
-        }
+        let sender_lower = sender.to_lowercase();
         let mentions = ping.members.iter()
+            .filter(|m| **m != sender_lower)
             .map(|m| format!("@{m}"))
             .collect::<Vec<_>>()
             .join(" ");
+        if mentions.is_empty() {
+            return None;
+        }
         let rendered = ping.template
             .replace("{mentions}", &mentions)
             .replace("{sender}", sender);
@@ -259,5 +262,39 @@ mod tests {
         let mgr2 = PingManager::load(dir.path()).unwrap();
         let ping = mgr2.store.pings.get("test").unwrap();
         assert_eq!(ping.template, "Persisted {mentions}");
+    }
+
+    #[test]
+    fn render_template_excludes_sender() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut mgr = test_manager(dir.path());
+        mgr.add_member("test", "alice").unwrap();
+        mgr.add_member("test", "bob").unwrap();
+
+        let result = mgr.render_template("test", "alice").unwrap();
+        assert!(result.contains("@bob"), "should mention bob");
+        assert!(!result.contains("@alice"), "should not mention sender alice");
+    }
+
+    #[test]
+    fn render_template_returns_none_when_sender_is_only_member() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut mgr = test_manager(dir.path());
+        mgr.add_member("test", "alice").unwrap();
+
+        let result = mgr.render_template("test", "alice");
+        assert!(result.is_none(), "should return None when only member is sender");
+    }
+
+    #[test]
+    fn render_template_excludes_sender_case_insensitive() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut mgr = test_manager(dir.path());
+        mgr.add_member("test", "alice").unwrap();
+        mgr.add_member("test", "bob").unwrap();
+
+        let result = mgr.render_template("test", "Alice").unwrap();
+        assert!(!result.contains("@alice"), "should exclude sender case-insensitively");
+        assert!(result.contains("@bob"));
     }
 }
