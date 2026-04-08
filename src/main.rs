@@ -724,6 +724,12 @@ async fn load_configuration() -> Result<Configuration> {
 
     config.validate()?;
 
+    if config.pings.public {
+        info!("Pings can be triggered by anyone");
+    } else {
+        info!("Pings can only be triggered by members");
+    }
+
     Ok(config)
 }
 
