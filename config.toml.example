@@ -29,15 +29,28 @@ client_secret = "your_client_secret"
 # default_cooldown = 300  # Cooldown in seconds between triggers (default: 300)
 # public = false  # Allow anyone to trigger pings (default: false, members-only)
 
-# Optional: OpenRouter AI configuration for the !ai command
+# Optional: AI configuration for the !ai command
 # If not configured, the !ai command will be disabled.
-# Get an API key from: https://openrouter.ai/keys
 #
-# [openrouter]
-# api_key = "sk-or-your_openrouter_api_key"
-# model = "google/gemini-2.0-flash-exp:free"  # Optional, defaults to free Gemini model
+# Backend "openai" works with any OpenAI-compatible API (OpenRouter, OpenAI, etc.)
+# Backend "ollama" uses Ollama's native API
+#
+# [ai]
+# backend = "openai"
+# api_key = "sk-or-your_api_key"                     # Required for openai backend
+# base_url = "https://openrouter.ai/api/v1"          # Optional, defaults to OpenRouter
+# model = "google/gemini-2.0-flash-exp:free"
 # system_prompt = "You are a helpful Twitch chat bot assistant. Keep responses brief (2-3 sentences max) since they'll appear in chat. Be friendly and casual. Respond in the same language the user writes in (German or English)."
-# instruction_template = "{message}"  # Use {message} as placeholder for the user's message
+# instruction_template = "{message}"                  # Use {message} as placeholder
+#
+# --- OR ---
+#
+# [ai]
+# backend = "ollama"
+# base_url = "http://localhost:11434"                 # Optional, defaults to localhost
+# model = "gemma3:4b"
+# system_prompt = "You are a helpful Twitch chat bot assistant. Keep responses brief (2-3 sentences max) since they'll appear in chat. Be friendly and casual. Respond in the same language the user writes in (German or English)."
+# instruction_template = "{message}"
 
 # Optional: Scheduled messages configuration
 # Add [[schedules]] sections to define scheduled messages.

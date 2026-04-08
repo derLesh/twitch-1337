@@ -100,6 +100,14 @@ The config.toml file has the following sections:
 - `default_cooldown` - Default cooldown between ping triggers in seconds (optional, default: 300)
 - `public` - Allow anyone to trigger pings, not just members (optional, default: false)
 
+**[ai]** (optional) - AI configuration for the `!ai` command
+- `backend` - Required: `"openai"` (any OpenAI-compatible API) or `"ollama"` (Ollama native API)
+- `api_key` - Required for openai backend, not used for ollama
+- `base_url` - Optional: API base URL (defaults to OpenRouter for openai, localhost:11434 for ollama)
+- `model` - Required: Model identifier (e.g., `"google/gemini-2.0-flash-exp:free"` for openai, `"gemma3:4b"` for ollama)
+- `system_prompt` - Optional: System prompt for the AI (has sensible default)
+- `instruction_template` - Optional: Template with `{message}` placeholder (default: `"{message}"`)
+
 **[[schedules]]** (optional, repeatable) - Scheduled messages
 - `name` - Unique identifier for the schedule
 - `message` - Text to post in chat
@@ -186,7 +194,7 @@ The bot maintains a **single persistent IRC connection** and uses a **broadcast 
 
 **IRC & Networking:**
 - `twitch-irc` - Twitch IRC client (features: refreshing-token-rustls-webpki-roots, transport-tcp-rustls-webpki-roots)
-- `reqwest` - HTTP client for OpenRouter and aviation APIs (features: json, rustls-tls-webpki-roots)
+- `reqwest` - HTTP client for LLM backends and aviation APIs (features: json, rustls-tls-webpki-roots)
 
 **File Watching:**
 - `notify-debouncer-mini` - File system watcher with debouncing for config reload
@@ -395,7 +403,7 @@ sudo cp target/x86_64-unknown-linux-musl/release/twitch-1337 /usr/local/bin/
 
 ### Handler: Generic Commands
 
-**`run_generic_command_handler(broadcast_tx, client, openrouter_config, leaderboard, ping_manager, hidden_admin_ids, default_cooldown, pings_public, tracker_tx, aviation_client)`**
+**`run_generic_command_handler(broadcast_tx, client, ai_config, leaderboard, ping_manager, hidden_admin_ids, default_cooldown, pings_public, tracker_tx, aviation_client)`**
 - Creates `CommandDispatcher` with registered commands (`PingAdminCommand`, `PingTriggerCommand`, etc.)
 - Subscribes to broadcast channel
 - Dispatches PRIVMSG messages to matching commands via `CommandDispatcher`
@@ -524,7 +532,7 @@ sudo cp target/x86_64-unknown-linux-musl/release/twitch-1337 /usr/local/bin/
 
 **`Configuration`**
 - Main configuration struct loaded from config.toml
-- Contains: `twitch`, `pings`, `schedules` (Vec<ScheduleConfig>), optionally `openrouter`
+- Contains: `twitch`, `pings`, `schedules` (Vec<ScheduleConfig>), optionally `ai`
 - `validate()` method ensures all required fields are present and valid
 
 **`TwitchConfiguration`**
@@ -536,6 +544,19 @@ sudo cp target/x86_64-unknown-linux-musl/release/twitch-1337 /usr/local/bin/
 **`PingsConfig`**
 - `default_cooldown` - Default cooldown between ping triggers in seconds (default: 300)
 - `public` - Allow anyone to trigger pings, not just members (default: false)
+
+**`AiConfig`**
+- Configuration for AI/LLM integration (`[ai]` section in config.toml)
+- `backend` - `AiBackend` enum: `Openai` or `Ollama`
+- `api_key` - API key (SecretString, required for openai backend)
+- `base_url` - Optional base URL override
+- `model` - Model identifier string
+- `system_prompt` - Optional system prompt (has default)
+- `instruction_template` - Optional template with `{message}` placeholder (has default)
+
+**`AiBackend`**
+- Enum: `Openai`, `Ollama`
+- Deserialized from `"openai"` or `"ollama"` in config.toml
 
 **`ScheduleConfig`**
 - Configuration for a scheduled message in config.toml
