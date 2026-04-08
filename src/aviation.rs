@@ -753,3 +753,67 @@ pub async fn up_command(
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn airline_table_contains_known_mappings() {
+        let table = airline_table();
+        assert_eq!(table.get("TP"), Some(&"TAP"));
+        assert_eq!(table.get("LH"), Some(&"DLH"));
+        assert_eq!(table.get("BA"), Some(&"BAW"));
+    }
+
+    #[test]
+    fn airline_table_is_nonempty() {
+        assert!(airline_table().len() > 100);
+    }
+
+    #[test]
+    fn is_iata_flight_number_valid() {
+        assert!(is_iata_flight_number("TP247"));
+        assert!(is_iata_flight_number("LH5765"));
+        assert!(is_iata_flight_number("BA12"));
+        assert!(is_iata_flight_number("AA1"));
+        assert!(is_iata_flight_number("EI1234"));
+    }
+
+    #[test]
+    fn is_iata_flight_number_rejects_icao() {
+        assert!(!is_iata_flight_number("TAP247"));
+        assert!(!is_iata_flight_number("DLH5765"));
+        assert!(!is_iata_flight_number("BAW12"));
+    }
+
+    #[test]
+    fn is_iata_flight_number_rejects_invalid() {
+        assert!(!is_iata_flight_number(""));
+        assert!(!is_iata_flight_number("T"));
+        assert!(!is_iata_flight_number("TP"));
+        assert!(!is_iata_flight_number("12345"));
+        assert!(!is_iata_flight_number("ABCDEF"));
+        assert!(!is_iata_flight_number("TP12345")); // too many digits
+    }
+
+    #[tokio::test]
+    async fn resolve_callsign_translates_iata() {
+        let client = AviationClient::new().unwrap();
+        assert_eq!(client.resolve_callsign("TP247").await, "TAP247");
+        assert_eq!(client.resolve_callsign("LH5765").await, "DLH5765");
+    }
+
+    #[tokio::test]
+    async fn resolve_callsign_passes_through_icao() {
+        let client = AviationClient::new().unwrap();
+        assert_eq!(client.resolve_callsign("TAP247").await, "TAP247");
+        assert_eq!(client.resolve_callsign("DLH5765").await, "DLH5765");
+    }
+
+    #[tokio::test]
+    async fn resolve_callsign_passes_through_hex() {
+        let client = AviationClient::new().unwrap();
+        assert_eq!(client.resolve_callsign("4CA87D").await, "4CA87D");
+    }
+}
