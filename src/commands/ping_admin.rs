@@ -35,7 +35,7 @@ impl PingAdminCommand {
 #[async_trait]
 impl Command for PingAdminCommand {
     fn name(&self) -> &str {
-        "!ping"
+        "!p"
     }
 
     async fn execute(&self, ctx: CommandContext<'_>) -> Result<()> {
@@ -75,11 +75,11 @@ impl Command for PingAdminCommand {
 }
 
 impl PingAdminCommand {
-    /// !ping create <name> <template...>
+    /// !p create <name> <template...>
     async fn handle_create(&self, ctx: &CommandContext<'_>) -> Result<()> {
         if ctx.args.len() < 3 {
             ctx.client
-                .say_in_reply_to(ctx.privmsg, "Nutze: !ping create <name> <template>".to_string())
+                .say_in_reply_to(ctx.privmsg, "Nutze: !p create <name> <template>".to_string())
                 .await?;
             return Ok(());
         }
@@ -108,13 +108,13 @@ impl PingAdminCommand {
         Ok(())
     }
 
-    /// !ping delete <name>
+    /// !p delete <name>
     async fn handle_delete(&self, ctx: &CommandContext<'_>) -> Result<()> {
         let name = match ctx.args.get(1) {
             Some(n) => n.to_lowercase(),
             None => {
                 ctx.client
-                    .say_in_reply_to(ctx.privmsg, "Nutze: !ping delete <name>".to_string())
+                    .say_in_reply_to(ctx.privmsg, "Nutze: !p delete <name>".to_string())
                     .await?;
                 return Ok(());
             }
@@ -136,13 +136,13 @@ impl PingAdminCommand {
         Ok(())
     }
 
-    /// !ping add/remove <name> <user>
+    /// !p add/remove <name> <user>
     async fn handle_member_op(&self, ctx: &CommandContext<'_>, op: &str) -> Result<()> {
         if ctx.args.len() < 3 {
             ctx.client
                 .say_in_reply_to(
                     ctx.privmsg,
-                    format!("Nutze: !ping {op} <name> <user>"),
+                    format!("Nutze: !p {op} <name> <user>"),
                 )
                 .await?;
             return Ok(());
@@ -176,13 +176,13 @@ impl PingAdminCommand {
         Ok(())
     }
 
-    /// !ping join/leave <name> -- self-service membership
+    /// !p join/leave <name> -- self-service membership
     async fn handle_self_op(&self, ctx: &CommandContext<'_>, op: &str) -> Result<()> {
         let name = match ctx.args.get(1) {
             Some(n) => n.to_lowercase(),
             None => {
                 ctx.client
-                    .say_in_reply_to(ctx.privmsg, format!("Nutze: !ping {op} <name>"))
+                    .say_in_reply_to(ctx.privmsg, format!("Nutze: !p {op} <name>"))
                     .await?;
                 return Ok(());
             }
@@ -220,7 +220,7 @@ impl PingAdminCommand {
         Ok(())
     }
 
-    /// !ping list
+    /// !p list
     async fn handle_list(&self, ctx: &CommandContext<'_>) -> Result<()> {
         let manager = self.ping_manager.read().await;
         let pings = manager.list_pings_for_user(&ctx.privmsg.sender.login);
