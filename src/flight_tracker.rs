@@ -704,7 +704,14 @@ async fn handle_track(
             tokio::time::timeout(POLL_TIMEOUT, aviation_client.get_aircraft_by_hex(hex)).await
         }
         FlightIdentifier::Callsign(cs) => {
-            tokio::time::timeout(POLL_TIMEOUT, aviation_client.get_aircraft_by_callsign(cs)).await
+            // Translate IATA flight numbers (e.g. TP247 → TAP247) before querying.
+            // This runs outside POLL_TIMEOUT: adsbdb fallback has its own 5s timeout.
+            let resolved = aviation_client.resolve_callsign(cs).await;
+            tokio::time::timeout(
+                POLL_TIMEOUT,
+                aviation_client.get_aircraft_by_callsign(&resolved),
+            )
+            .await
         }
     };
 
