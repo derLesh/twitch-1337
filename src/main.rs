@@ -113,6 +113,9 @@ struct AiConfig {
     /// Template for the user message. Use `{message}` as placeholder.
     #[serde(default = "default_instruction_template")]
     instruction_template: String,
+    /// Timeout for AI requests in seconds (default: 30)
+    #[serde(default = "default_ai_timeout")]
+    timeout: u64,
 }
 
 fn default_system_prompt() -> String {
@@ -121,6 +124,10 @@ fn default_system_prompt() -> String {
 
 fn default_instruction_template() -> String {
     "{message}".to_string()
+}
+
+fn default_ai_timeout() -> u64 {
+    30
 }
 
 /// Configuration for a scheduled message loaded from config.toml.
@@ -1629,6 +1636,7 @@ async fn run_generic_command_handler(
             cfg.model,
             cfg.system_prompt,
             cfg.instruction_template,
+            Duration::from_secs(cfg.timeout),
         )));
     }
 

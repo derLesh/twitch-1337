@@ -21,6 +21,7 @@ pub struct AiCommand {
     cooldowns: Arc<Mutex<HashMap<String, std::time::Instant>>>,
     system_prompt: String,
     instruction_template: String,
+    timeout: Duration,
 }
 
 impl AiCommand {
@@ -29,6 +30,7 @@ impl AiCommand {
         model: String,
         system_prompt: String,
         instruction_template: String,
+        timeout: Duration,
     ) -> Self {
         Self {
             llm_client,
@@ -36,6 +38,7 @@ impl AiCommand {
             cooldowns: Arc::new(Mutex::new(HashMap::new())),
             system_prompt,
             instruction_template,
+            timeout,
         }
     }
 }
@@ -117,7 +120,7 @@ impl Command for AiCommand {
 
         // Execute AI with timeout
         let result = tokio::time::timeout(
-            Duration::from_secs(30),
+            self.timeout,
             self.llm_client.chat_completion(request),
         )
         .await;

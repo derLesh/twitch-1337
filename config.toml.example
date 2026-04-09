@@ -45,6 +45,7 @@ client_secret = "your_client_secret"
 # model = "google/gemini-2.0-flash-exp:free"
 # system_prompt = "You are a helpful Twitch chat bot assistant. Keep responses brief (2-3 sentences max) since they'll appear in chat. Be friendly and casual. Respond in the same language the user writes in (German or English)."
 # instruction_template = "{message}"                  # Use {message} as placeholder
+# timeout = 30                                        # Optional, AI request timeout in seconds (default: 30)
 #
 # --- OR ---
 #
@@ -54,6 +55,7 @@ client_secret = "your_client_secret"
 # model = "gemma3:4b"
 # system_prompt = "You are a helpful Twitch chat bot assistant. Keep responses brief (2-3 sentences max) since they'll appear in chat. Be friendly and casual. Respond in the same language the user writes in (German or English)."
 # instruction_template = "{message}"
+# timeout = 30                                        # Optional, AI request timeout in seconds (default: 30)
 
 # Optional: Scheduled messages configuration
 # Add [[schedules]] sections to define scheduled messages.
