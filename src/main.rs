@@ -79,6 +79,8 @@ struct TwitchConfiguration {
     expected_latency: u32,
     #[serde(default)]
     hidden_admins: Vec<String>,
+    #[serde(default)]
+    admin_channel: Option<String>,
 }
 
 /// Which LLM backend to use.
@@ -213,6 +215,15 @@ impl Configuration {
 
         if self.twitch.expected_latency > 1000 {
             bail!("twitch.expected_latency must be <= 1000ms (got {})", self.twitch.expected_latency);
+        }
+
+        if let Some(ref admin_ch) = self.twitch.admin_channel {
+            if admin_ch.trim().is_empty() {
+                bail!("twitch.admin_channel cannot be empty when specified");
+            }
+            if admin_ch == &self.twitch.channel {
+                bail!("twitch.admin_channel must be different from twitch.channel");
+            }
         }
 
         // Validate AI config
