@@ -24,6 +24,9 @@ client_secret = "your_client_secret"
 # Twitch user IDs of hidden admins (can manage pings without being a mod)
 # hidden_admins = ["12345678"]
 
+# Optional: A separate channel for testing bot commands (broadcaster-only access)
+# admin_channel = "my_test_channel"
+
 # Optional: Pings configuration
 # [pings]
 # default_cooldown = 300  # Cooldown in seconds between triggers (default: 300)

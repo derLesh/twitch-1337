@@ -95,6 +95,7 @@ The config.toml file has the following sections:
 - `client_secret` - Twitch application client secret
 - `expected_latency` - Initial seed for IRC latency estimate in milliseconds (optional, default: 100). Auto-measured via PING/PONG.
 - `hidden_admins` - (optional) Vec of Twitch user IDs granted admin access to ping commands
+- `admin_channel` - (optional) A separate channel the bot joins for testing commands. Only the broadcaster can use the bot in this channel. Omit to disable.
 
 **[pings]** - Ping system configuration
 - `default_cooldown` - Default cooldown between ping triggers in seconds (optional, default: 300)
