@@ -1632,7 +1632,7 @@ async fn run_generic_command_handler(
     let broadcast_rx = broadcast_tx.subscribe();
 
     // Initialize LLM client (optional)
-    let llm_client: Option<(Box<dyn llm::LlmClient>, AiConfig)> =
+    let llm_client: Option<(Arc<dyn llm::LlmClient>, AiConfig)> =
         if let Some(ai_cfg) = ai_config {
             let client_result = match ai_cfg.backend {
                 AiBackend::OpenAi => {
@@ -1645,13 +1645,13 @@ async fn run_generic_command_handler(
                         &ai_cfg.model,
                         ai_cfg.base_url.as_deref(),
                     )
-                    .map(|c| Box::new(c) as Box<dyn llm::LlmClient>)
+                    .map(|c| Arc::new(c) as Arc<dyn llm::LlmClient>)
                 }
                 AiBackend::Ollama => llm::ollama::OllamaClient::new(
                     &ai_cfg.model,
                     ai_cfg.base_url.as_deref(),
                 )
-                .map(|c| Box::new(c) as Box<dyn llm::LlmClient>),
+                .map(|c| Arc::new(c) as Arc<dyn llm::LlmClient>),
             };
             match client_result {
                 Ok(client) => {
@@ -1681,7 +1681,7 @@ async fn run_generic_command_handler(
         Box::new(commands::random_flight::RandomFlightCommand),
         Box::new(commands::flights_above::FlightsAboveCommand::new(aviation_client, Duration::from_secs(cooldowns.up))),
         Box::new(commands::leaderboard::LeaderboardCommand::new(leaderboard)),
-        Box::new(commands::feedback::FeedbackCommand::new(data_dir, Duration::from_secs(cooldowns.feedback))),
+        Box::new(commands::feedback::FeedbackCommand::new(data_dir.clone(), Duration::from_secs(cooldowns.feedback))),
         Box::new(commands::track::TrackCommand::new(tracker_tx.clone())),
         Box::new(commands::untrack::UntrackCommand::new(tracker_tx.clone())),
         Box::new(commands::flights::FlightsCommand::new(tracker_tx.clone())),
@@ -1689,6 +1689,22 @@ async fn run_generic_command_handler(
     ];
 
     if let Some((client, cfg)) = llm_client {
+        // Load memory store if enabled
+        let (memory_store, memory_store_path) = if cfg.memory_enabled {
+            match memory::MemoryStore::load(&data_dir) {
+                Ok((store, path)) => (
+                    Some(Arc::new(tokio::sync::RwLock::new(store))),
+                    Some(path),
+                ),
+                Err(e) => {
+                    error!(error = ?e, "Failed to load AI memory store, memory disabled");
+                    (None, None)
+                }
+            }
+        } else {
+            (None, None)
+        };
+
         commands.push(Box::new(commands::ai::AiCommand::new(
             client,
             cfg.model,
@@ -1696,6 +1712,9 @@ async fn run_generic_command_handler(
             cfg.instruction_template,
             Duration::from_secs(cfg.timeout),
             Duration::from_secs(cooldowns.ai),
+            memory_store,
+            memory_store_path,
+            cfg.max_memories,
         )));
     }
 
