@@ -30,6 +30,7 @@ use twitch_irc::{
 mod aviation;
 mod commands;
 mod database;
+mod memory;
 mod ping;
 mod llm;
 mod flight_tracker;
