@@ -33,6 +33,7 @@ mod database;
 mod ping;
 mod llm;
 mod flight_tracker;
+mod cooldown;
 
 
 /// Type alias for the authenticated Twitch IRC client
