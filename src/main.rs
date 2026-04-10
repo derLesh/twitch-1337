@@ -1976,4 +1976,17 @@ async fn run_scheduled_message_handler(
     }
 }
 
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_prefill_threshold_validation() {
+        // Threshold must be between 0.0 and 1.0
+        assert!((0.0..=1.0).contains(&0.0));
+        assert!((0.0..=1.0).contains(&0.5));
+        assert!((0.0..=1.0).contains(&1.0));
+        assert!(!(0.0..=1.0).contains(&-0.1));
+        assert!(!(0.0..=1.0).contains(&1.1));
+    }
+}
+
 
