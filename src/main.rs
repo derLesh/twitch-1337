@@ -116,6 +116,9 @@ struct AiConfig {
     /// Timeout for AI requests in seconds (default: 30)
     #[serde(default = "default_ai_timeout")]
     timeout: u64,
+    /// Number of recent chat messages to include as context (0 = disabled, max 100)
+    #[serde(default)]
+    history_length: u64,
 }
 
 fn default_system_prompt() -> String {
@@ -123,7 +126,7 @@ fn default_system_prompt() -> String {
 }
 
 fn default_instruction_template() -> String {
-    "{message}".to_string()
+    "{chat_history}\n{message}".to_string()
 }
 
 fn default_ai_timeout() -> u64 {
@@ -239,6 +242,12 @@ impl Configuration {
             && ai.api_key.is_none()
         {
             bail!("AI backend 'openai' requires an api_key");
+        }
+
+        if let Some(ref ai) = self.ai
+            && ai.history_length > 100
+        {
+            bail!("ai.history_length must be <= 100 (got {})", ai.history_length);
         }
 
         // Validate each schedule config
