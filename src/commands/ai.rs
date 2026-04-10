@@ -28,6 +28,7 @@ pub struct AiCommand {
 }
 
 impl AiCommand {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         llm_client: Box<dyn LlmClient>,
         model: String,
