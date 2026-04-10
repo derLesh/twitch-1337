@@ -107,8 +107,9 @@ The config.toml file has the following sections:
 - `base_url` - Optional: API base URL (defaults to OpenRouter for openai, localhost:11434 for ollama)
 - `model` - Required: Model identifier (e.g., `"google/gemini-2.0-flash-exp:free"` for openai, `"gemma3:4b"` for ollama)
 - `system_prompt` - Optional: System prompt for the AI (has sensible default)
-- `instruction_template` - Optional: Template with `{message}` placeholder (default: `"{message}"`)
+- `instruction_template` - Optional: Template with `{message}` and `{chat_history}` placeholders (default: `"{chat_history}\n{message}"`)
 - `timeout` - Optional: AI request timeout in seconds (default: 30)
+- `history_length` - Number of recent chat messages to include as context (optional, default: 0 = disabled, max: 100). All main-channel messages are buffered; admin channel messages are excluded. The history is injected via the `{chat_history}` template placeholder.
 
 **[[schedules]]** (optional, repeatable) - Scheduled messages
 - `name` - Unique identifier for the schedule
@@ -554,7 +555,8 @@ sudo cp target/x86_64-unknown-linux-musl/release/twitch-1337 /usr/local/bin/
 - `base_url` - Optional base URL override
 - `model` - Model identifier string
 - `system_prompt` - Optional system prompt (has default)
-- `instruction_template` - Optional template with `{message}` placeholder (has default)
+- `instruction_template` - Optional template with `{message}` and `{chat_history}` placeholders (has default)
+- `history_length` - Number of chat messages to keep as context (default: 0)
 - `timeout` - AI request timeout in seconds (default: 30)
 
 **`AiBackend`**
