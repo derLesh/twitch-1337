@@ -52,6 +52,8 @@ client_secret = "your_client_secret"
 # system_prompt = "You are a helpful Twitch chat bot assistant. Keep responses brief (2-3 sentences max) since they'll appear in chat. Be friendly and casual. Respond in the same language the user writes in (German or English)."
 # instruction_template = "{message}"                  # Use {message} as placeholder
 # timeout = 30                                        # Optional, AI request timeout in seconds (default: 30)
+# memory_enabled = false    # Enable persistent AI memory (default: false)
+# max_memories = 50         # Maximum stored facts (default: 50, max: 200)
 #
 # --- OR ---
 #
@@ -62,6 +64,8 @@ client_secret = "your_client_secret"
 # system_prompt = "You are a helpful Twitch chat bot assistant. Keep responses brief (2-3 sentences max) since they'll appear in chat. Be friendly and casual. Respond in the same language the user writes in (German or English)."
 # instruction_template = "{message}"
 # timeout = 30                                        # Optional, AI request timeout in seconds (default: 30)
+# memory_enabled = false    # Enable persistent AI memory (default: false)
+# max_memories = 50         # Maximum stored facts (default: 50, max: 200)
 
 # Optional: Scheduled messages configuration
 # Add [[schedules]] sections to define scheduled messages.

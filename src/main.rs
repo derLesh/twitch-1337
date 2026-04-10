@@ -118,6 +118,12 @@ struct AiConfig {
     /// Timeout for AI requests in seconds (default: 30)
     #[serde(default = "default_ai_timeout")]
     timeout: u64,
+    /// Enable persistent AI memory (default: false)
+    #[serde(default)]
+    memory_enabled: bool,
+    /// Maximum number of stored memories (default: 50)
+    #[serde(default = "default_max_memories")]
+    max_memories: usize,
 }
 
 fn default_system_prompt() -> String {
@@ -130,6 +136,10 @@ fn default_instruction_template() -> String {
 
 fn default_ai_timeout() -> u64 {
     30
+}
+
+fn default_max_memories() -> usize {
+    50
 }
 
 /// Configuration for a scheduled message loaded from config.toml.
@@ -275,6 +285,16 @@ impl Configuration {
             && ai.api_key.is_none()
         {
             bail!("AI backend 'openai' requires an api_key");
+        }
+
+        if let Some(ref ai) = self.ai
+            && ai.memory_enabled
+            && !(1..=200).contains(&ai.max_memories)
+        {
+            bail!(
+                "ai.max_memories must be between 1 and 200 (got {})",
+                ai.max_memories
+            );
         }
 
         // Validate each schedule config
