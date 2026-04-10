@@ -44,8 +44,9 @@ client_secret = "your_client_secret"
 # base_url = "https://openrouter.ai/api/v1"          # Optional, defaults to OpenRouter
 # model = "google/gemini-2.0-flash-exp:free"
 # system_prompt = "You are a helpful Twitch chat bot assistant. Keep responses brief (2-3 sentences max) since they'll appear in chat. Be friendly and casual. Respond in the same language the user writes in (German or English)."
-# instruction_template = "{message}"                  # Use {message} as placeholder
+# instruction_template = "{chat_history}\n{message}" # Use {message} and {chat_history} as placeholders
 # timeout = 30                                        # Optional, AI request timeout in seconds (default: 30)
+# history_length = 10                                # Optional, number of chat messages to keep as context (0 = disabled, max 100)
 #
 # --- OR ---
 #
@@ -54,8 +55,9 @@ client_secret = "your_client_secret"
 # base_url = "http://localhost:11434"                 # Optional, defaults to localhost
 # model = "gemma3:4b"
 # system_prompt = "You are a helpful Twitch chat bot assistant. Keep responses brief (2-3 sentences max) since they'll appear in chat. Be friendly and casual. Respond in the same language the user writes in (German or English)."
-# instruction_template = "{message}"
+# instruction_template = "{chat_history}\n{message}" # Use {message} and {chat_history} as placeholders
 # timeout = 30                                        # Optional, AI request timeout in seconds (default: 30)
+# history_length = 10                                # Optional, number of chat messages to keep as context (0 = disabled, max 100)
 
 # Optional: Scheduled messages configuration
 # Add [[schedules]] sections to define scheduled messages.
