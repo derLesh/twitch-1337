@@ -30,6 +30,7 @@ use twitch_irc::{
 mod aviation;
 mod commands;
 mod database;
+mod memory;
 mod ping;
 mod llm;
 mod flight_tracker;
@@ -127,6 +128,12 @@ struct AiConfig {
     /// Optional: Prefill chat history from a rustlog-compatible API at startup
     #[serde(default, skip_serializing_if = "Option::is_none")]
     history_prefill: Option<prefill::HistoryPrefillConfig>,
+    /// Enable persistent AI memory (default: false)
+    #[serde(default)]
+    memory_enabled: bool,
+    /// Maximum number of stored memories (default: 50)
+    #[serde(default = "default_max_memories")]
+    max_memories: usize,
 }
 
 fn default_system_prompt() -> String {
@@ -139,6 +146,10 @@ fn default_instruction_template() -> String {
 
 fn default_ai_timeout() -> u64 {
     30
+}
+
+fn default_max_memories() -> usize {
+    50
 }
 
 /// Configuration for a scheduled message loaded from config.toml.
@@ -312,6 +323,17 @@ impl Configuration {
         {
             bail!("ai.history_prefill requires history_length > 0");
         }
+
+        if let Some(ref ai) = self.ai
+            && ai.memory_enabled
+            && !(1..=200).contains(&ai.max_memories)
+        {
+            bail!(
+                "ai.max_memories must be between 1 and 200 (got {})",
+                ai.max_memories
+            );
+        }
+
 
         // Validate each schedule config
         for schedule in &self.schedules {
@@ -1656,7 +1678,7 @@ async fn run_generic_command_handler(
     let prefill_config = ai_config.as_ref().and_then(|cfg| cfg.history_prefill.clone());
 
     // Initialize LLM client (optional)
-    let llm_client: Option<(Box<dyn llm::LlmClient>, AiConfig)> =
+    let llm_client: Option<(Arc<dyn llm::LlmClient>, AiConfig)> =
         if let Some(ai_cfg) = ai_config {
             let client_result = match ai_cfg.backend {
                 AiBackend::OpenAi => {
@@ -1669,13 +1691,13 @@ async fn run_generic_command_handler(
                         &ai_cfg.model,
                         ai_cfg.base_url.as_deref(),
                     )
-                    .map(|c| Box::new(c) as Box<dyn llm::LlmClient>)
+                    .map(|c| Arc::new(c) as Arc<dyn llm::LlmClient>)
                 }
                 AiBackend::Ollama => llm::ollama::OllamaClient::new(
                     &ai_cfg.model,
                     ai_cfg.base_url.as_deref(),
                 )
-                .map(|c| Box::new(c) as Box<dyn llm::LlmClient>),
+                .map(|c| Arc::new(c) as Arc<dyn llm::LlmClient>),
             };
             match client_result {
                 Ok(client) => {
@@ -1717,7 +1739,7 @@ async fn run_generic_command_handler(
         Box::new(commands::random_flight::RandomFlightCommand),
         Box::new(commands::flights_above::FlightsAboveCommand::new(aviation_client, Duration::from_secs(cooldowns.up))),
         Box::new(commands::leaderboard::LeaderboardCommand::new(leaderboard)),
-        Box::new(commands::feedback::FeedbackCommand::new(data_dir, Duration::from_secs(cooldowns.feedback))),
+        Box::new(commands::feedback::FeedbackCommand::new(data_dir.clone(), Duration::from_secs(cooldowns.feedback))),
         Box::new(commands::track::TrackCommand::new(tracker_tx.clone())),
         Box::new(commands::untrack::UntrackCommand::new(tracker_tx.clone())),
         Box::new(commands::flights::FlightsCommand::new(tracker_tx.clone())),
@@ -1725,6 +1747,22 @@ async fn run_generic_command_handler(
     ];
 
     if let Some((client, cfg)) = llm_client {
+        // Load memory store if enabled
+        let (memory_store, memory_store_path) = if cfg.memory_enabled {
+            match memory::MemoryStore::load(&data_dir) {
+                Ok((store, path)) => (
+                    Some(Arc::new(tokio::sync::RwLock::new(store))),
+                    Some(path),
+                ),
+                Err(e) => {
+                    error!(error = ?e, "Failed to load AI memory store, memory disabled");
+                    (None, None)
+                }
+            }
+        } else {
+            (None, None)
+        };
+
         commands.push(Box::new(commands::ai::AiCommand::new(
             client,
             cfg.model,
@@ -1735,6 +1773,9 @@ async fn run_generic_command_handler(
             chat_history.clone(),
             history_length,
             bot_username.clone(),
+            memory_store,
+            memory_store_path,
+            cfg.max_memories,
         )));
     }
 

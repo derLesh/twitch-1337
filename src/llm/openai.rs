@@ -4,7 +4,7 @@ use reqwest::header::{self, HeaderValue};
 use serde::{Deserialize, Serialize};
 use tracing::{debug, instrument};
 
-use super::{ChatCompletionRequest, LlmClient};
+use super::{ChatCompletionRequest, LlmClient, ToolChatCompletionRequest, ToolChatCompletionResponse};
 use crate::APP_USER_AGENT;
 
 // --- Internal serde types for OpenAI-compatible API ---
@@ -34,6 +34,56 @@ struct ApiChoice {
 #[derive(Debug, Deserialize)]
 struct ApiResponse {
     choices: Vec<ApiChoice>,
+}
+
+// --- Tool-calling serde types ---
+
+#[derive(Debug, Serialize)]
+struct ApiTool {
+    r#type: String,
+    function: ApiFunction,
+}
+
+#[derive(Debug, Serialize)]
+struct ApiFunction {
+    name: String,
+    description: String,
+    parameters: serde_json::Value,
+}
+
+#[derive(Debug, Serialize)]
+struct ApiToolRequest {
+    model: String,
+    messages: Vec<serde_json::Value>,
+    tools: Vec<ApiTool>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ApiToolCall {
+    id: String,
+    function: ApiToolCallFunction,
+}
+
+#[derive(Debug, Deserialize)]
+struct ApiToolCallFunction {
+    name: String,
+    arguments: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct ApiToolChoice {
+    message: ApiToolResponseMessage,
+}
+
+#[derive(Debug, Deserialize)]
+struct ApiToolResponseMessage {
+    content: Option<String>,
+    tool_calls: Option<Vec<ApiToolCall>>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ApiToolResponse {
+    choices: Vec<ApiToolChoice>,
 }
 
 // --- Client ---
@@ -139,5 +189,105 @@ impl LlmClient for OpenAiClient {
             .message
             .content
             .ok_or_else(|| eyre::eyre!("No text response from API"))
+    }
+
+    #[instrument(skip(self, request))]
+    async fn chat_completion_with_tools(
+        &self,
+        request: ToolChatCompletionRequest,
+    ) -> Result<ToolChatCompletionResponse> {
+        let url = format!("{}/chat/completions", self.base_url);
+
+        // Build messages array as JSON values to support mixed message types
+        let mut messages: Vec<serde_json::Value> = request
+            .messages
+            .iter()
+            .map(|m| {
+                serde_json::json!({
+                    "role": m.role,
+                    "content": m.content,
+                })
+            })
+            .collect();
+
+        // Append tool result messages
+        for tr in &request.tool_results {
+            messages.push(serde_json::json!({
+                "role": "tool",
+                "tool_call_id": tr.tool_call_id,
+                "content": tr.content,
+            }));
+        }
+
+        let tools: Vec<ApiTool> = request
+            .tools
+            .iter()
+            .map(|t| ApiTool {
+                r#type: "function".to_string(),
+                function: ApiFunction {
+                    name: t.name.clone(),
+                    description: t.description.clone(),
+                    parameters: t.parameters.clone(),
+                },
+            })
+            .collect();
+
+        let api_request = ApiToolRequest {
+            model: request.model,
+            messages,
+            tools,
+        };
+
+        debug!(model = %self.model, "Sending tool request to OpenAI-compatible API");
+
+        let response = self
+            .http
+            .post(&url)
+            .json(&api_request)
+            .send()
+            .await
+            .wrap_err("Failed to send tool request to OpenAI-compatible API")?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_body = response.text().await.unwrap_or_default();
+            return Err(eyre::eyre!(
+                "OpenAI-compatible API error (status {}): {}",
+                status,
+                error_body
+            ));
+        }
+
+        let api_response: ApiToolResponse = response
+            .json()
+            .await
+            .wrap_err("Failed to parse OpenAI-compatible API tool response")?;
+
+        let choice = api_response
+            .choices
+            .into_iter()
+            .next()
+            .ok_or_else(|| eyre::eyre!("No choices in API tool response"))?;
+
+        if let Some(tool_calls) = choice.message.tool_calls
+            && !tool_calls.is_empty()
+        {
+            let calls = tool_calls
+                .into_iter()
+                .map(|tc| {
+                    let arguments: serde_json::Value =
+                        serde_json::from_str(&tc.function.arguments).unwrap_or_default();
+                    super::ToolCall {
+                        id: tc.id,
+                        name: tc.function.name,
+                        arguments,
+                    }
+                })
+                .collect();
+            return Ok(ToolChatCompletionResponse::ToolCalls(calls));
+        }
+
+        let content = choice.message.content.unwrap_or_default();
+        Ok(ToolChatCompletionResponse::Message(content))
     }
 }
