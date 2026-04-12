@@ -33,8 +33,10 @@ impl Command for PingTriggerCommand {
     }
 
     fn matches(&self, word: &str) -> bool {
-        // word includes "!" prefix, e.g. "!dbd"
-        let name = word.strip_prefix('!').unwrap_or(word);
+        // Only match words with "!" prefix, e.g. "!dbd"
+        let Some(name) = word.strip_prefix('!') else {
+            return false;
+        };
         // Use try_read to avoid blocking the dispatcher on a write lock
         let manager = match self.ping_manager.try_read() {
             Ok(m) => m,
@@ -45,7 +47,9 @@ impl Command for PingTriggerCommand {
 
     async fn execute(&self, ctx: CommandContext<'_>) -> Result<()> {
         let trigger = ctx.privmsg.message_text.split_whitespace().next().unwrap_or("");
-        let ping_name = trigger.strip_prefix('!').unwrap_or(trigger);
+        let Some(ping_name) = trigger.strip_prefix('!') else {
+            return Ok(());
+        };
         let sender = &ctx.privmsg.sender.login;
 
         // Check membership and cooldown under read lock, then release before I/O
