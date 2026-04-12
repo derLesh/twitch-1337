@@ -91,15 +91,7 @@ pub(crate) async fn flight_command(
         }
     };
 
-    // Format: "1h12m" or "45m"
-    let total_mins = fp.block_time.as_secs() / 60;
-    let hours = total_mins / 60;
-    let mins = total_mins % 60;
-    let time_str = if hours > 0 {
-        format!("{}h{}m", hours, mins)
-    } else {
-        format!("{}m", mins)
-    };
+    let time_str = crate::cooldown::format_duration_hm(fp.block_time);
 
     let response = format!(
         "{} → {} | {:.0} nm | {} | FL{} | {}",

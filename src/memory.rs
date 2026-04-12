@@ -239,8 +239,6 @@ async fn run_memory_extraction(
         store_guard.format_for_extraction()
     };
 
-    // Note: chat history integration is deferred until #12 (conversation context) lands.
-    // When #12 is merged, pass chat history here and include it in the prompt.
     let user_content = format!(
         "Current memories:\n{}\n\nConversation:\nUser ({}): {}\nAssistant: {}",
         current_memories, username, user_message, ai_response

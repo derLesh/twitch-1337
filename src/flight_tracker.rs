@@ -205,13 +205,16 @@ pub(crate) async fn load_tracker_state(data_dir: &Path) -> FlightTrackerState {
     }
 }
 
-/// Saves tracked flights to the RON file.
+/// Saves tracked flights to the RON file using atomic write+rename.
 pub(crate) async fn save_tracker_state(data_dir: &Path, state: &FlightTrackerState) {
     let path = data_dir.join(FLIGHTS_FILENAME);
+    let tmp_path = path.with_extension("ron.tmp");
     match ron::to_string(state) {
         Ok(serialized) => {
-            if let Err(e) = fs::write(&path, serialized.as_bytes()).await {
-                tracing::error!(error = ?e, "Failed to write flight tracker state");
+            if let Err(e) = fs::write(&tmp_path, serialized.as_bytes()).await {
+                tracing::error!(error = ?e, "Failed to write flight tracker state tmp");
+            } else if let Err(e) = fs::rename(&tmp_path, &path).await {
+                tracing::error!(error = ?e, "Failed to rename flight tracker state");
             } else {
                 tracing::debug!(
                     flights = state.flights.len(),

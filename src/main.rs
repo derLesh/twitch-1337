@@ -489,7 +489,7 @@ fn generate_stats_message(count: usize, user_list: &[String]) -> String {
             ),
         ])
         .to_string(),
-        2..=3 if !user_list.contains(&"gargoyletec".to_string()) => {
+        2..=3 if !user_list.iter().any(|u| u == "gargoyletec") => {
             format!(
                 "{count}{} gnocci {}",
                 one_of(&[" und nichtmal", ", aber wo", " und ohne"]),
@@ -578,7 +578,13 @@ pub(crate) const MAX_RESPONSE_LENGTH: usize = 500;
 /// Truncates a string to the maximum number of characters at a word boundary.
 pub(crate) fn truncate_response(text: &str, max_chars: usize) -> String {
     // Collapse whitespace and newlines
-    let collapsed: String = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    let collapsed: String = text.split_whitespace().fold(String::new(), |mut acc, w| {
+        if !acc.is_empty() {
+            acc.push(' ');
+        }
+        acc.push_str(w);
+        acc
+    });
 
     // Find the byte index corresponding to the max_chars boundary
     let byte_limit = match collapsed.char_indices().nth(max_chars) {
@@ -701,15 +707,18 @@ async fn load_leaderboard() -> HashMap<String, PersonalBest> {
     }
 }
 
-/// Saves the all-time leaderboard to disk.
+/// Saves the all-time leaderboard to disk using atomic write+rename.
 ///
 /// Logs an error and continues if the write fails.
 async fn save_leaderboard(leaderboard: &HashMap<String, PersonalBest>) {
     let path = get_data_dir().join(LEADERBOARD_FILENAME);
+    let tmp_path = path.with_extension("ron.tmp");
     match ron::to_string(leaderboard) {
         Ok(serialized) => {
-            if let Err(e) = fs::write(&path, serialized.as_bytes()).await {
-                error!(error = ?e, "Failed to write leaderboard file");
+            if let Err(e) = fs::write(&tmp_path, serialized.as_bytes()).await {
+                error!(error = ?e, "Failed to write leaderboard tmp file");
+            } else if let Err(e) = fs::rename(&tmp_path, &path).await {
+                error!(error = ?e, "Failed to rename leaderboard file");
             } else {
                 info!(
                     entries = leaderboard.len(),

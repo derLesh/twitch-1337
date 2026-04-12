@@ -1,5 +1,18 @@
 use std::time::Duration;
 
+/// Formats a duration as compact hours+minutes (e.g., "1h12m", "45m").
+/// Ignores seconds. Returns "0m" for durations under one minute.
+pub fn format_duration_hm(d: Duration) -> String {
+    let total_mins = d.as_secs() / 60;
+    let hours = total_mins / 60;
+    let mins = total_mins % 60;
+    if hours > 0 {
+        format!("{}h{}m", hours, mins)
+    } else {
+        format!("{}m", mins)
+    }
+}
+
 pub fn format_cooldown_remaining(remaining: Duration) -> String {
     let total_secs = remaining.as_secs();
 
