@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use async_trait::async_trait;
 use eyre::Result;
@@ -11,12 +12,12 @@ use super::{Command, CommandContext};
 
 pub struct PingTriggerCommand {
     ping_manager: Arc<RwLock<PingManager>>,
-    default_cooldown: u64,
+    default_cooldown: Duration,
     public: bool,
 }
 
 impl PingTriggerCommand {
-    pub fn new(ping_manager: Arc<RwLock<PingManager>>, default_cooldown: u64, public: bool) -> Self {
+    pub fn new(ping_manager: Arc<RwLock<PingManager>>, default_cooldown: Duration, public: bool) -> Self {
         Self {
             ping_manager,
             default_cooldown,

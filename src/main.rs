@@ -1174,7 +1174,7 @@ pub async fn main() -> Result<()> {
         let leaderboard = leaderboard.clone();
         let ping_manager = ping_manager.clone();
         let hidden_admin_ids = config.twitch.hidden_admins.clone();
-        let default_cooldown = config.pings.default_cooldown;
+        let default_cooldown = Duration::from_secs(config.pings.default_cooldown);
         let pings_public = config.pings.public;
         let cooldowns = config.cooldowns.clone();
         let tracker_tx = tracker_tx.clone();
@@ -1637,7 +1637,7 @@ async fn run_generic_command_handler(
     leaderboard: Arc<tokio::sync::RwLock<HashMap<String, PersonalBest>>>,
     ping_manager: Arc<tokio::sync::RwLock<ping::PingManager>>,
     hidden_admin_ids: Vec<String>,
-    default_cooldown: u64,
+    default_cooldown: Duration,
     pings_public: bool,
     cooldowns: CooldownsConfig,
     tracker_tx: tokio::sync::mpsc::Sender<flight_tracker::TrackerCommand>,

@@ -160,10 +160,9 @@ impl PingManager {
 
     /// Check if a ping is on cooldown. Returns `Some(remaining)` if on cooldown,
     /// `None` if it can be triggered (or ping doesn't exist).
-    pub fn remaining_cooldown(&self, ping_name: &str, default_cooldown: u64) -> Option<Duration> {
+    pub fn remaining_cooldown(&self, ping_name: &str, default_cooldown: Duration) -> Option<Duration> {
         let ping = self.store.pings.get(ping_name)?;
-        let cooldown_secs = ping.cooldown.unwrap_or(default_cooldown);
-        let cooldown = Duration::from_secs(cooldown_secs);
+        let cooldown = ping.cooldown.map_or(default_cooldown, Duration::from_secs);
         match self.last_triggered.get(ping_name) {
             Some(last) => {
                 let elapsed = last.elapsed();
@@ -310,7 +309,7 @@ mod tests {
         let mut mgr = test_manager(dir.path());
         mgr.add_member("test", "alice").unwrap();
 
-        assert!(mgr.remaining_cooldown("test", 300).is_none());
+        assert!(mgr.remaining_cooldown("test", Duration::from_secs(300)).is_none());
     }
 
     #[test]
@@ -320,7 +319,7 @@ mod tests {
         mgr.add_member("test", "alice").unwrap();
         mgr.record_trigger("test");
 
-        let remaining = mgr.remaining_cooldown("test", 300);
+        let remaining = mgr.remaining_cooldown("test", Duration::from_secs(300));
         assert!(remaining.is_some());
         let secs = remaining.unwrap().as_secs();
         assert!(secs > 0 && secs <= 300, "expected 1..=300, got {secs}");
@@ -331,6 +330,6 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let mgr = empty_manager(dir.path());
 
-        assert!(mgr.remaining_cooldown("nope", 300).is_none());
+        assert!(mgr.remaining_cooldown("nope", Duration::from_secs(300)).is_none());
     }
 }
