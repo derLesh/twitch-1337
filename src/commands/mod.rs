@@ -23,6 +23,8 @@ pub struct CommandContext<'a> {
     pub privmsg: &'a PrivmsgMessage,
     /// The IRC client for sending responses.
     pub client: &'a Arc<AuthenticatedTwitchClient>,
+    /// The first word of the message that matched the command.
+    pub trigger: &'a str,
     /// Remaining words after the command name.
     pub args: Vec<&'a str>,
 }

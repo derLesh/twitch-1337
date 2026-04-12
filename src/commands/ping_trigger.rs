@@ -32,11 +32,17 @@ impl PingTriggerCommand {
     }
 }
 
-/// Extract the ping name from a trigger word: strip `!` prefix, trailing `?`,
-/// and lowercase. Returns `None` if the word doesn't start with `!`.
+/// Extract the ping name from a trigger word.
+/// Accepts `!name`, `!name?`, or `name?` (case-insensitive).
+/// Bare `name` without `!` or `?` does not match.
 fn parse_ping_trigger(word: &str) -> Option<String> {
-    let name = word.strip_prefix('!')?;
-    let name = name.strip_suffix('?').unwrap_or(name);
+    let name = match word.strip_prefix('!') {
+        Some(rest) => rest.strip_suffix('?').unwrap_or(rest),
+        None => word.strip_suffix('?')?,
+    };
+    if name.is_empty() {
+        return None;
+    }
     Some(name.to_lowercase())
 }
 
@@ -60,8 +66,7 @@ impl Command for PingTriggerCommand {
     }
 
     async fn execute(&self, ctx: CommandContext<'_>) -> Result<()> {
-        let trigger = ctx.privmsg.message_text.split_whitespace().next().unwrap_or("");
-        let Some(ping_name) = parse_ping_trigger(trigger) else {
+        let Some(ping_name) = parse_ping_trigger(ctx.trigger) else {
             return Ok(());
         };
         let sender = &ctx.privmsg.sender.login;

@@ -1843,6 +1843,7 @@ async fn run_command_dispatcher(
                 let ctx = commands::CommandContext {
                     privmsg: &privmsg,
                     client: &client,
+                    trigger: first_word,
                     args: words.collect(),
                 };
 
