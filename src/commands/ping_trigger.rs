@@ -54,15 +54,27 @@ impl Command for PingTriggerCommand {
     }
 
     fn matches(&self, word: &str) -> bool {
-        let Some(name) = parse_ping_trigger(word) else {
+        // Strip `!` prefix; optionally strip trailing `?`.
+        // Without `!`, trailing `?` is required (bare word must not match).
+        let name = if let Some(rest) = word.strip_prefix('!') {
+            rest.strip_suffix('?').unwrap_or(rest)
+        } else if let Some(rest) = word.strip_suffix('?') {
+            rest
+        } else {
             return false;
         };
+
+        if name.is_empty() {
+            return false;
+        }
+
         // Use try_read to avoid blocking the dispatcher on a write lock
         let manager = match self.ping_manager.try_read() {
             Ok(m) => m,
             Err(_) => return false,
         };
-        manager.ping_exists(&name)
+        // Case-insensitive check avoids the heap allocation of to_lowercase()
+        manager.ping_exists_ignore_case(name)
     }
 
     async fn execute(&self, ctx: CommandContext<'_>) -> Result<()> {

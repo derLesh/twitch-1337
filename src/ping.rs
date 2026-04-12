@@ -136,9 +136,10 @@ impl PingManager {
         self.save()
     }
 
-    /// Check if a ping exists.
-    pub fn ping_exists(&self, name: &str) -> bool {
-        self.store.pings.contains_key(name)
+    /// Check if any ping matches the given name case-insensitively.
+    /// Avoids heap allocation compared to `name.to_lowercase()` + `contains_key`.
+    pub fn ping_exists_ignore_case(&self, name: &str) -> bool {
+        self.store.pings.keys().any(|k| k.eq_ignore_ascii_case(name))
     }
 
     /// Check if a user is a member of a ping.
