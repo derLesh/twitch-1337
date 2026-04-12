@@ -25,6 +25,14 @@ impl PingTriggerCommand {
     }
 }
 
+/// Extract the ping name from a trigger word: strip `!` prefix, trailing `?`,
+/// and lowercase. Returns `None` if the word doesn't start with `!`.
+fn parse_ping_trigger(word: &str) -> Option<String> {
+    let name = word.strip_prefix('!')?;
+    let name = name.strip_suffix('?').unwrap_or(name);
+    Some(name.to_lowercase())
+}
+
 #[async_trait]
 impl Command for PingTriggerCommand {
     fn name(&self) -> &str {
@@ -33,8 +41,7 @@ impl Command for PingTriggerCommand {
     }
 
     fn matches(&self, word: &str) -> bool {
-        // Only match words with "!" prefix, e.g. "!dbd"
-        let Some(name) = word.strip_prefix('!') else {
+        let Some(name) = parse_ping_trigger(word) else {
             return false;
         };
         // Use try_read to avoid blocking the dispatcher on a write lock
@@ -42,12 +49,12 @@ impl Command for PingTriggerCommand {
             Ok(m) => m,
             Err(_) => return false,
         };
-        manager.ping_exists(name)
+        manager.ping_exists(&name)
     }
 
     async fn execute(&self, ctx: CommandContext<'_>) -> Result<()> {
         let trigger = ctx.privmsg.message_text.split_whitespace().next().unwrap_or("");
-        let Some(ping_name) = trigger.strip_prefix('!') else {
+        let Some(ping_name) = parse_ping_trigger(trigger) else {
             return Ok(());
         };
         let sender = &ctx.privmsg.sender.login;
@@ -56,15 +63,15 @@ impl Command for PingTriggerCommand {
         let cooldown_remaining = {
             let manager = self.ping_manager.read().await;
 
-            if !self.public && !manager.is_member(ping_name, sender) {
+            if !self.public && !manager.is_member(&ping_name, sender) {
                 return Ok(());
             }
 
-            manager.remaining_cooldown(ping_name, self.default_cooldown)
+            manager.remaining_cooldown(&ping_name, self.default_cooldown)
         };
 
         if let Some(remaining) = cooldown_remaining {
-            debug!(ping = ping_name, "Ping on cooldown");
+            debug!(ping = %ping_name, "Ping on cooldown");
             if let Err(e) = ctx.client
                 .say_in_reply_to(
                     ctx.privmsg,
@@ -80,7 +87,7 @@ impl Command for PingTriggerCommand {
         // Render template under read lock, then release before I/O
         let rendered = {
             let manager = self.ping_manager.read().await;
-            match manager.render_template(ping_name, sender) {
+            match manager.render_template(&ping_name, sender) {
                 Some(r) => r,
                 None => return Ok(()),
             }
@@ -94,7 +101,7 @@ impl Command for PingTriggerCommand {
         // Record trigger under write lock
         {
             let mut manager = self.ping_manager.write().await;
-            manager.record_trigger(ping_name);
+            manager.record_trigger(&ping_name);
         }
 
         Ok(())
