@@ -98,7 +98,7 @@ The config.toml file has the following sections:
 - `admin_channel` - (optional) A separate channel the bot joins for testing commands. Only the broadcaster can use the bot in this channel. Omit to disable.
 
 **[pings]** - Ping system configuration
-- `default_cooldown` - Default cooldown between ping triggers in seconds (optional, default: 300)
+- `cooldown` - Default cooldown between ping triggers in seconds (optional, default: 300)
 - `public` - Allow anyone to trigger pings, not just members (optional, default: false)
 
 **[ai]** (optional) - AI configuration for the `!ai` command
@@ -602,7 +602,7 @@ sudo cp target/x86_64-unknown-linux-musl/release/twitch-1337 /usr/local/bin/
 - `hidden_admins` - Vec of Twitch user IDs with admin access to ping commands
 
 **`PingsConfig`**
-- `default_cooldown` - Default cooldown between ping triggers in seconds (default: 300)
+- `cooldown` - Default cooldown between ping triggers in seconds (default: 300)
 - `public` - Allow anyone to trigger pings, not just members (default: false)
 
 **`AiConfig`**

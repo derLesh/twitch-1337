@@ -219,7 +219,7 @@ impl Default for CooldownsConfig {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 struct PingsConfig {
     #[serde(default = "default_cooldown")]
-    default_cooldown: u64,
+    cooldown: u64,
     #[serde(default)]
     public: bool,
 }
@@ -227,7 +227,7 @@ struct PingsConfig {
 impl Default for PingsConfig {
     fn default() -> Self {
         Self {
-            default_cooldown: default_cooldown(),
+            cooldown: default_cooldown(),
             public: false,
         }
     }
@@ -1202,7 +1202,7 @@ pub async fn main() -> Result<()> {
         let leaderboard = leaderboard.clone();
         let ping_manager = ping_manager.clone();
         let hidden_admin_ids = config.twitch.hidden_admins.clone();
-        let default_cooldown = Duration::from_secs(config.pings.default_cooldown);
+        let default_cooldown = Duration::from_secs(config.pings.cooldown);
         let pings_public = config.pings.public;
         let cooldowns = config.cooldowns.clone();
         let tracker_tx = tracker_tx.clone();

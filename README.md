@@ -27,7 +27,7 @@ Community ping commands with admin management and user self-service.
 - `!p join <name>` / `!p leave <name>` / `!p list` -- user: self-service
 - `!<name>` -- trigger a ping (mentions all members except the sender)
 
-Templates support `{mentions}` (space-separated @-mentions, sender excluded) and `{sender}`. Triggers are rate-limited via `default_cooldown` in `[pings]`; set `public = true` to let non-members trigger. State is persisted to `data/pings.ron`.
+Templates support `{mentions}` (space-separated @-mentions, sender excluded) and `{sender}`. Triggers are rate-limited via `cooldown` in `[pings]`; set `public = true` to let non-members trigger. State is persisted to `data/pings.ron`.
 
 ### !up \<location\>
 

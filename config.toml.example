@@ -29,7 +29,7 @@ client_secret = "your_client_secret"
 
 # Optional: Pings configuration
 # [pings]
-# default_cooldown = 300  # Cooldown in seconds between triggers (default: 300)
+# cooldown = 300  # Cooldown in seconds between triggers (default: 300)
 # public = false  # Allow anyone to trigger pings (default: false, members-only)
 
 # Optional: Command cooldowns in seconds
