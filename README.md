@@ -1,6 +1,15 @@
 # twitch-1337
 
-A Rust-based Twitch IRC bot. Maintains a persistent IRC connection with broadcast-based message routing to multiple independent handlers.
+[![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
+[![Rust Edition 2024](https://img.shields.io/badge/rust-2024-orange.svg)](https://doc.rust-lang.org/edition-guide/rust-2024/)
+
+A Rust-based Twitch IRC bot:
+
+- **1337 tracker** -- logs users who say "1337" or "DANKIES" at exactly 13:37 Berlin time, with a sub-second leaderboard of fastest times
+- **Community pings** -- template-based ping commands with membership, cooldowns, and self-service join/leave
+- **Chat commands** -- AI responses (`!ai`), live overhead aircraft (`!up`), random flight plans (`!fl`), flight tracking (`!track`), user feedback (`!fb`), scheduled messages
+
+Single persistent IRC connection with broadcast-based message routing to independent handler tasks.
 
 ## Features
 
@@ -46,7 +55,8 @@ Shows aircraft currently flying overhead using live ADS-B data from [adsb.lol](h
 ✈ 3 Flieger über Frankfurt am Main Airport: DLH456 (A321) TXL→CDG FL350 3.2nm ↘ | ...
 ```
 
-#### Cone Visibility Filter
+<details>
+<summary><strong>Cone visibility filter</strong> -- how <code>!up</code> decides which aircraft count as "overhead"</summary>
 
 Instead of a fixed search radius, the `!up` command uses a cone-shaped visibility filter. Aircraft at higher altitudes are visible from further away, while low-altitude aircraft must be nearby. Ground-level aircraft are excluded entirely.
 
@@ -82,6 +92,8 @@ max_distance_nm = altitude_ft * 15 / 35,000
 | Ground | excluded |
 
 The initial search fetches all aircraft within 15 NM from adsb.lol, then the cone filter narrows results based on each aircraft's actual altitude and distance.
+
+</details>
 
 ### !fl \<aircraft\> \<duration\>
 
