@@ -1,0 +1,56 @@
+name: Data refresh
+
+on:
+  schedule:
+    - cron: '0 3 * * 0'  # Sundays 03:00 UTC
+  workflow_dispatch:
+
+jobs:
+  refresh:
+    name: regenerate CSVs and open PR
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.DATA_REFRESH_PAT }}
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Regenerate airlines.csv
+        run: bash scripts/generate_airlines_csv.sh
+
+      - name: Regenerate airports.csv
+        run: uv run scripts/update-airports.py
+
+      - name: Regenerate plz.csv
+        run: uv run scripts/update-plz.py
+
+      - name: Count rows for PR body
+        id: counts
+        run: |
+          {
+            echo "airlines=$(wc -l < data/airlines.csv)"
+            echo "airports=$(wc -l < data/airports.csv)"
+            echo "plz=$(wc -l < data/plz.csv)"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.DATA_REFRESH_PAT }}
+          branch: chore/data-refresh
+          title: 'chore(data): refresh CSVs'
+          commit-message: 'chore(data): refresh CSVs'
+          body: |
+            Automated weekly refresh of public-dataset CSVs.
+
+            **Row counts**
+            - `data/airlines.csv`: ${{ steps.counts.outputs.airlines }} rows
+            - `data/airports.csv`: ${{ steps.counts.outputs.airports }} rows
+            - `data/plz.csv`: ${{ steps.counts.outputs.plz }} rows
+
+            Merge if the diff looks reasonable. If CI fails, a parser likely
+            needs to be adjusted for an upstream schema change.
+          delete-branch: true
