@@ -98,8 +98,8 @@ client_secret = "your_client_secret"
 # message = "Don't forget to follow!"
 # interval = "01:00"  # Post every hour
 # # Optional: Only post during specific dates
-# start_date = "2025-01-01T00:00:00"  # ISO 8601 format
-# end_date = "2025-12-31T23:59:59"
+# start_date = "2026-01-01T00:00:00"  # ISO 8601 format
+# end_date = "2026-12-31T23:59:59"
 # # Optional: Only post during specific daily time window (Europe/Berlin)
 # active_time_start = "18:00"  # HH:MM format
 # active_time_end = "23:00"

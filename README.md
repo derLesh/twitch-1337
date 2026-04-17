@@ -18,6 +18,8 @@ Monitors for messages containing "1337" or "DANKIES" sent at exactly 13:37 Berli
 
 Known bots ("supibot", "potatbotat") are filtered out. The leaderboard is persisted to `data/leaderboard.ron`.
 
+- `!lb` -- shows the all-time fastest 1337
+
 ### Ping System
 
 Community ping commands with admin management and user self-service.
@@ -93,9 +95,31 @@ Generates random flight plans using SimBrief.
 EDDF -> EGLL | 280 nm | 1h12m | FL360 | https://dispatch.simbrief.com/...
 ```
 
+### Flight Tracker
+
+Tracks specific aircraft over time and posts status updates (takeoff, cruise, descent, landing, divert, emergency squawks) as the flight progresses. Backed by adsb.lol polling with adaptive poll rates (30s / 60s / 120s depending on phase).
+
+- `!track <callsign|hex>` -- start tracking a flight (6-char hex is treated as ICAO24, anything else as callsign)
+- `!untrack <callsign|hex>` -- stop tracking (own flights, or any flight if mod/broadcaster)
+- `!flights` -- list currently tracked flights
+- `!flight <callsign|hex>` -- show status of one tracked flight
+
+Limits: up to 12 flights total, 3 per user. Tracked flights are persisted to `data/flights.ron`.
+
+### !fb \<message\>
+
+User feedback. Appends the message to `data/feedback.txt` with a timestamp. Per-user cooldown configurable via `[cooldowns].feedback` (default 300s).
+
 ### !ai \<instruction\>
 
-AI-powered responses via OpenRouter API. 30-second cooldown per user. Responses are kept brief (2-3 sentences) and match the language of the instruction. Requires optional OpenRouter configuration in config.toml.
+AI-powered responses via any OpenAI-compatible API (OpenRouter, OpenAI, etc.) or a local Ollama server. Responses are kept brief (2-3 sentences) and match the language of the instruction. Disabled unless `[ai]` is present in `config.toml`.
+
+Optional behaviors:
+- **Chat history context** (`history_length`) -- recent main-channel messages are injected into the prompt via the `{chat_history}` placeholder.
+- **Startup prefill** (`[ai.history_prefill]`) -- seeds the buffer from a rustlog-compatible log API so the bot has context right after restart.
+- **Persistent memory** (`memory_enabled`) -- the model itself decides what to remember across conversations via tool calls; facts stored in `data/ai_memory.ron`.
+
+Per-user cooldown configurable via `[cooldowns].ai` (default 30s).
 
 ### Scheduled Messages
 
@@ -160,7 +184,8 @@ Single persistent IRC connection with a broadcast channel (capacity: 100) distri
 
 - **Message Router** - reads from twitch-irc, broadcasts to all handlers
 - **1337 Handler** - daily 13:36-13:38 monitoring cycle
-- **Generic Command Handler** - dispatches !p, !up, !fl, !ai, and ping triggers
+- **Generic Command Handler** - dispatches `!p`, `!lb`, `!up`, `!fl`, `!ai`, `!fb`, `!track`, `!untrack`, `!flights`, `!flight`, and ping triggers
+- **Flight Tracker** - polls adsb.lol for tracked aircraft and announces phase changes
 - **Latency Monitor** - PING/PONG every 5 minutes
 - **Config Watcher** - watches config.toml for schedule changes
 - **Scheduled Message Handler** - spawns/stops dynamic message tasks
