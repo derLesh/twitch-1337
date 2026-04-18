@@ -16,7 +16,20 @@ pub struct Message {
 #[derive(Debug, Clone)]
 pub struct ToolResultMessage {
     pub tool_call_id: String,
+    /// The name of the tool that was invoked. Required by Ollama (`tool_name`)
+    /// and harmless for OpenAI-compatible providers.
+    pub tool_name: String,
     pub content: String,
+}
+
+/// One round of tool calling: the assistant's `tool_calls` and the matching
+/// `tool` role results. Strict providers require the assistant turn carrying
+/// `tool_calls` to precede the results referencing its `tool_call_id`s, so
+/// multi-round loops must thread both halves back into the next request.
+#[derive(Debug, Clone)]
+pub struct ToolCallRound {
+    pub calls: Vec<ToolCall>,
+    pub results: Vec<ToolResultMessage>,
 }
 
 /// Request for a chat completion.
@@ -32,7 +45,8 @@ pub struct ToolChatCompletionRequest {
     pub model: String,
     pub messages: Vec<Message>,
     pub tools: Vec<ToolDefinition>,
-    pub tool_results: Vec<ToolResultMessage>,
+    /// Prior tool-call rounds, threaded back in order.
+    pub prior_rounds: Vec<ToolCallRound>,
 }
 
 /// Definition of a tool the LLM can call.

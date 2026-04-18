@@ -78,6 +78,57 @@ struct ApiToolResponse {
     message: ApiToolResponseMessage,
 }
 
+// --- Message serialization ---
+
+/// Build the `messages` array for an Ollama tool request.
+///
+/// Per the Ollama native API, `tool_calls[].function.arguments` is an
+/// **object** (not a JSON-encoded string), and tool results carry `tool_name`
+/// instead of `tool_call_id` — Ollama keys by tool name.
+fn build_ollama_messages(request: &ToolChatCompletionRequest) -> Vec<serde_json::Value> {
+    let mut messages: Vec<serde_json::Value> = request
+        .messages
+        .iter()
+        .map(|m| {
+            serde_json::json!({
+                "role": m.role,
+                "content": m.content,
+            })
+        })
+        .collect();
+
+    for round in &request.prior_rounds {
+        let tool_calls: Vec<serde_json::Value> = round
+            .calls
+            .iter()
+            .map(|tc| {
+                serde_json::json!({
+                    "function": {
+                        "name": tc.name,
+                        "arguments": tc.arguments,
+                    },
+                })
+            })
+            .collect();
+
+        messages.push(serde_json::json!({
+            "role": "assistant",
+            "content": "",
+            "tool_calls": tool_calls,
+        }));
+
+        for tr in &round.results {
+            messages.push(serde_json::json!({
+                "role": "tool",
+                "tool_name": tr.tool_name,
+                "content": tr.content,
+            }));
+        }
+    }
+
+    messages
+}
+
 // --- Client ---
 
 /// HTTP client for Ollama's native API.
@@ -163,25 +214,7 @@ impl LlmClient for OllamaClient {
     ) -> Result<ToolChatCompletionResponse> {
         let url = format!("{}/api/chat", self.base_url);
 
-        // Build messages array as JSON values to support mixed message types
-        let mut messages: Vec<serde_json::Value> = request
-            .messages
-            .iter()
-            .map(|m| {
-                serde_json::json!({
-                    "role": m.role,
-                    "content": m.content,
-                })
-            })
-            .collect();
-
-        // Append tool result messages
-        for tr in &request.tool_results {
-            messages.push(serde_json::json!({
-                "role": "tool",
-                "content": tr.content,
-            }));
-        }
+        let messages = build_ollama_messages(&request);
 
         let tools: Vec<ApiTool> = request
             .tools
@@ -245,5 +278,84 @@ impl LlmClient for OllamaClient {
 
         let content = api_response.message.content.unwrap_or_default();
         Ok(ToolChatCompletionResponse::Message(content))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::llm::{
+        Message, ToolCall, ToolCallRound, ToolChatCompletionRequest, ToolResultMessage,
+    };
+
+    #[test]
+    fn build_messages_two_rounds_emits_correct_sequence() {
+        let request = ToolChatCompletionRequest {
+            model: "test-model".to_string(),
+            messages: vec![
+                Message {
+                    role: "system".to_string(),
+                    content: "sys".to_string(),
+                },
+                Message {
+                    role: "user".to_string(),
+                    content: "hi".to_string(),
+                },
+            ],
+            tools: vec![],
+            prior_rounds: vec![
+                ToolCallRound {
+                    calls: vec![ToolCall {
+                        id: "call_0".to_string(),
+                        name: "save_memory".to_string(),
+                        arguments: serde_json::json!({"key": "k1", "fact": "f1"}),
+                    }],
+                    results: vec![ToolResultMessage {
+                        tool_call_id: "call_0".to_string(),
+                        tool_name: "save_memory".to_string(),
+                        content: "Saved memory 'k1'".to_string(),
+                    }],
+                },
+                ToolCallRound {
+                    calls: vec![ToolCall {
+                        id: "call_0".to_string(),
+                        name: "delete_memory".to_string(),
+                        arguments: serde_json::json!({"key": "k2"}),
+                    }],
+                    results: vec![ToolResultMessage {
+                        tool_call_id: "call_0".to_string(),
+                        tool_name: "delete_memory".to_string(),
+                        content: "Deleted memory 'k2'".to_string(),
+                    }],
+                },
+            ],
+        };
+
+        let msgs = build_ollama_messages(&request);
+
+        assert_eq!(msgs.len(), 6);
+        assert_eq!(msgs[0]["role"], "system");
+        assert_eq!(msgs[1]["role"], "user");
+
+        assert_eq!(msgs[2]["role"], "assistant");
+        let calls1 = msgs[2]["tool_calls"].as_array().expect("tool_calls array");
+        assert_eq!(calls1.len(), 1);
+        assert_eq!(calls1[0]["function"]["name"], "save_memory");
+        // Ollama: arguments is an object, not a JSON-encoded string.
+        assert_eq!(
+            calls1[0]["function"]["arguments"],
+            serde_json::json!({"key": "k1", "fact": "f1"})
+        );
+
+        assert_eq!(msgs[3]["role"], "tool");
+        assert_eq!(msgs[3]["tool_name"], "save_memory");
+        assert_eq!(msgs[3]["content"], "Saved memory 'k1'");
+
+        assert_eq!(msgs[4]["role"], "assistant");
+        assert_eq!(msgs[4]["tool_calls"][0]["function"]["name"], "delete_memory");
+
+        assert_eq!(msgs[5]["role"], "tool");
+        assert_eq!(msgs[5]["tool_name"], "delete_memory");
+        assert_eq!(msgs[5]["content"], "Deleted memory 'k2'");
     }
 }

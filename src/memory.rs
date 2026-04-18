@@ -8,8 +8,8 @@ use tokio::sync::RwLock;
 use tracing::{debug, info};
 
 use crate::llm::{
-    self, Message, ToolCall, ToolChatCompletionRequest, ToolChatCompletionResponse, ToolDefinition,
-    ToolResultMessage,
+    self, Message, ToolCall, ToolCallRound, ToolChatCompletionRequest, ToolChatCompletionResponse,
+    ToolDefinition, ToolResultMessage,
 };
 
 const MEMORY_FILENAME: &str = "ai_memory.ron";
@@ -258,14 +258,14 @@ async fn run_memory_extraction(
             content: user_content,
         },
     ];
-    let mut tool_results: Vec<ToolResultMessage> = Vec::new();
+    let mut prior_rounds: Vec<ToolCallRound> = Vec::new();
 
     for round in 0..MAX_EXTRACTION_ROUNDS {
         let request = ToolChatCompletionRequest {
             model: model.to_string(),
             messages: messages.clone(),
             tools: tools.clone(),
-            tool_results: tool_results.clone(),
+            prior_rounds: prior_rounds.clone(),
         };
 
         let response =
@@ -286,17 +286,19 @@ async fn run_memory_extraction(
                     "Memory extraction: processing tool calls"
                 );
                 let mut store_guard = store.write().await;
-                tool_results.clear();
+                let mut results: Vec<ToolResultMessage> = Vec::with_capacity(calls.len());
                 for call in &calls {
                     let result = store_guard.execute_tool_call(call, max_memories);
                     info!(tool = %call.name, key = %call.arguments.get("key").and_then(|v| v.as_str()).unwrap_or("?"), result = %result, "Memory tool executed");
-                    tool_results.push(ToolResultMessage {
+                    results.push(ToolResultMessage {
                         tool_call_id: call.id.clone(),
+                        tool_name: call.name.clone(),
                         content: result,
                     });
                 }
                 // Persist after each round of tool calls
                 store_guard.save(store_path)?;
+                prior_rounds.push(ToolCallRound { calls, results });
             }
         }
     }

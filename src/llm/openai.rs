@@ -88,6 +88,59 @@ struct ApiToolResponse {
     choices: Vec<ApiToolChoice>,
 }
 
+// --- Message serialization ---
+
+/// Build the `messages` array for an OpenAI-compatible tool request.
+///
+/// Per the OpenAI spec, `tool_calls[].function.arguments` is a JSON-encoded
+/// **string** (not an object), so we re-stringify the parsed `Value` from the
+/// response.
+fn build_openai_messages(request: &ToolChatCompletionRequest) -> Vec<serde_json::Value> {
+    let mut messages: Vec<serde_json::Value> = request
+        .messages
+        .iter()
+        .map(|m| {
+            serde_json::json!({
+                "role": m.role,
+                "content": m.content,
+            })
+        })
+        .collect();
+
+    for round in &request.prior_rounds {
+        let tool_calls: Vec<serde_json::Value> = round
+            .calls
+            .iter()
+            .map(|tc| {
+                serde_json::json!({
+                    "id": tc.id,
+                    "type": "function",
+                    "function": {
+                        "name": tc.name,
+                        "arguments": tc.arguments.to_string(),
+                    },
+                })
+            })
+            .collect();
+
+        messages.push(serde_json::json!({
+            "role": "assistant",
+            "content": null,
+            "tool_calls": tool_calls,
+        }));
+
+        for tr in &round.results {
+            messages.push(serde_json::json!({
+                "role": "tool",
+                "tool_call_id": tr.tool_call_id,
+                "content": tr.content,
+            }));
+        }
+    }
+
+    messages
+}
+
 // --- Client ---
 
 /// HTTP client for any OpenAI-compatible API (OpenRouter, OpenAI, etc.).
@@ -200,26 +253,7 @@ impl LlmClient for OpenAiClient {
     ) -> Result<ToolChatCompletionResponse> {
         let url = format!("{}/chat/completions", self.base_url);
 
-        // Build messages array as JSON values to support mixed message types
-        let mut messages: Vec<serde_json::Value> = request
-            .messages
-            .iter()
-            .map(|m| {
-                serde_json::json!({
-                    "role": m.role,
-                    "content": m.content,
-                })
-            })
-            .collect();
-
-        // Append tool result messages
-        for tr in &request.tool_results {
-            messages.push(serde_json::json!({
-                "role": "tool",
-                "tool_call_id": tr.tool_call_id,
-                "content": tr.content,
-            }));
-        }
+        let messages = build_openai_messages(&request);
 
         let tools: Vec<ApiTool> = request
             .tools
@@ -291,5 +325,103 @@ impl LlmClient for OpenAiClient {
 
         let content = choice.message.content.unwrap_or_default();
         Ok(ToolChatCompletionResponse::Message(content))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::llm::{
+        Message, ToolCall, ToolCallRound, ToolChatCompletionRequest, ToolResultMessage,
+    };
+
+    fn req_with_rounds(rounds: Vec<ToolCallRound>) -> ToolChatCompletionRequest {
+        ToolChatCompletionRequest {
+            model: "test-model".to_string(),
+            messages: vec![
+                Message {
+                    role: "system".to_string(),
+                    content: "sys".to_string(),
+                },
+                Message {
+                    role: "user".to_string(),
+                    content: "hi".to_string(),
+                },
+            ],
+            tools: vec![],
+            prior_rounds: rounds,
+        }
+    }
+
+    #[test]
+    fn build_messages_empty_rounds_passes_through_base_messages() {
+        let msgs = build_openai_messages(&req_with_rounds(vec![]));
+        assert_eq!(msgs.len(), 2);
+        assert_eq!(msgs[0]["role"], "system");
+        assert_eq!(msgs[1]["role"], "user");
+    }
+
+    #[test]
+    fn build_messages_two_rounds_emits_correct_sequence() {
+        let round1 = ToolCallRound {
+            calls: vec![ToolCall {
+                id: "X".to_string(),
+                name: "save_memory".to_string(),
+                arguments: serde_json::json!({"key": "k1", "fact": "f1"}),
+            }],
+            results: vec![ToolResultMessage {
+                tool_call_id: "X".to_string(),
+                tool_name: "save_memory".to_string(),
+                content: "Saved memory 'k1'".to_string(),
+            }],
+        };
+        let round2 = ToolCallRound {
+            calls: vec![ToolCall {
+                id: "Y".to_string(),
+                name: "delete_memory".to_string(),
+                arguments: serde_json::json!({"key": "k2"}),
+            }],
+            results: vec![ToolResultMessage {
+                tool_call_id: "Y".to_string(),
+                tool_name: "delete_memory".to_string(),
+                content: "Deleted memory 'k2'".to_string(),
+            }],
+        };
+
+        let msgs = build_openai_messages(&req_with_rounds(vec![round1, round2]));
+
+        // Expected layout:
+        // [0] system, [1] user,
+        // [2] assistant(tool_calls=[X]), [3] tool(tool_call_id=X),
+        // [4] assistant(tool_calls=[Y]), [5] tool(tool_call_id=Y)
+        assert_eq!(msgs.len(), 6);
+        assert_eq!(msgs[0]["role"], "system");
+        assert_eq!(msgs[1]["role"], "user");
+
+        assert_eq!(msgs[2]["role"], "assistant");
+        assert!(msgs[2]["content"].is_null());
+        let calls1 = msgs[2]["tool_calls"].as_array().expect("tool_calls array");
+        assert_eq!(calls1.len(), 1);
+        assert_eq!(calls1[0]["id"], "X");
+        assert_eq!(calls1[0]["type"], "function");
+        assert_eq!(calls1[0]["function"]["name"], "save_memory");
+        // Arguments must be a JSON-encoded *string* per OpenAI spec.
+        let args1_str = calls1[0]["function"]["arguments"]
+            .as_str()
+            .expect("arguments must be a string");
+        let args1_parsed: serde_json::Value = serde_json::from_str(args1_str).unwrap();
+        assert_eq!(args1_parsed, serde_json::json!({"key": "k1", "fact": "f1"}));
+
+        assert_eq!(msgs[3]["role"], "tool");
+        assert_eq!(msgs[3]["tool_call_id"], "X");
+        assert_eq!(msgs[3]["content"], "Saved memory 'k1'");
+
+        assert_eq!(msgs[4]["role"], "assistant");
+        let calls2 = msgs[4]["tool_calls"].as_array().expect("tool_calls array");
+        assert_eq!(calls2[0]["id"], "Y");
+
+        assert_eq!(msgs[5]["role"], "tool");
+        assert_eq!(msgs[5]["tool_call_id"], "Y");
+        assert_eq!(msgs[5]["content"], "Deleted memory 'k2'");
     }
 }
