@@ -8,14 +8,7 @@ use tracing::{debug, error};
 
 use super::{Command, CommandContext};
 use crate::cooldown::format_cooldown_remaining;
-use crate::ping::PingManager;
-
-enum PingResult {
-    NotMember,
-    OnCooldown(std::time::Duration),
-    Send(String),
-    NothingToSend,
-}
+use crate::ping::{PingManager, TriggerDecision};
 
 pub struct PingTriggerCommand {
     ping_manager: Arc<RwLock<PingManager>>,
@@ -78,28 +71,14 @@ impl Command for PingTriggerCommand {
         };
         let sender = &ctx.privmsg.sender.login;
 
-        // Check membership, cooldown, and render under a single read lock
-        let result = {
-            let manager = self.ping_manager.read().await;
-
-            if !self.public && !manager.is_member(&ping_name, sender) {
-                PingResult::NotMember
-            } else if let Some(remaining) =
-                manager.remaining_cooldown(&ping_name, self.default_cooldown)
-            {
-                PingResult::OnCooldown(remaining)
-            } else {
-                match manager.render_template(&ping_name, sender) {
-                    Some(rendered) => PingResult::Send(rendered),
-                    None => PingResult::NothingToSend,
-                }
-            }
+        let decision = {
+            let mut manager = self.ping_manager.write().await;
+            manager.try_record_trigger(&ping_name, sender, self.default_cooldown, self.public)
         };
 
-        // Act on result outside the lock
-        let rendered = match result {
-            PingResult::NotMember | PingResult::NothingToSend => return Ok(()),
-            PingResult::OnCooldown(remaining) => {
+        let rendered = match decision {
+            TriggerDecision::Skip => return Ok(()),
+            TriggerDecision::OnCooldown(remaining) => {
                 debug!(ping = %ping_name, "Ping on cooldown");
                 if let Err(e) = ctx
                     .client
@@ -116,18 +95,12 @@ impl Command for PingTriggerCommand {
                 }
                 return Ok(());
             }
-            PingResult::Send(rendered) => rendered,
+            TriggerDecision::Fire(rendered) => rendered,
         };
 
         ctx.client
             .say(ctx.privmsg.channel_login.clone(), rendered)
             .await?;
-
-        // Record trigger under write lock
-        {
-            let mut manager = self.ping_manager.write().await;
-            manager.record_trigger(&ping_name);
-        }
 
         Ok(())
     }

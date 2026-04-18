@@ -23,6 +23,19 @@ pub struct PingStore {
     pub pings: HashMap<String, Ping>,
 }
 
+/// Outcome of an atomic "check + record" trigger attempt.
+#[derive(Debug)]
+pub enum TriggerDecision {
+    /// Caller should silently do nothing: non-member, unknown ping, or no
+    /// mentionable members after excluding the sender.
+    Skip,
+    /// Ping is still on cooldown; the remaining time is provided.
+    OnCooldown(Duration),
+    /// Ping should be sent with the rendered template. The trigger timestamp
+    /// has already been recorded, so the caller just performs the send.
+    Fire(String),
+}
+
 /// Manages ping state and persistence.
 pub struct PingManager {
     store: PingStore,
@@ -201,6 +214,31 @@ impl PingManager {
             .insert(ping_name.to_string(), Instant::now());
     }
 
+    /// Atomically check membership + cooldown, render the template, and
+    /// record the trigger timestamp — closing the window where two concurrent
+    /// triggers both pass the cooldown check.
+    ///
+    /// `public = true` mirrors `[pings].public` and lets non-members fire.
+    pub fn try_record_trigger(
+        &mut self,
+        ping_name: &str,
+        sender: &str,
+        default_cooldown: Duration,
+        public: bool,
+    ) -> TriggerDecision {
+        if !public && !self.is_member(ping_name, sender) {
+            return TriggerDecision::Skip;
+        }
+        if let Some(remaining) = self.remaining_cooldown(ping_name, default_cooldown) {
+            return TriggerDecision::OnCooldown(remaining);
+        }
+        let Some(rendered) = self.render_template(ping_name, sender) else {
+            return TriggerDecision::Skip;
+        };
+        self.record_trigger(ping_name);
+        TriggerDecision::Fire(rendered)
+    }
+
     /// Render a ping's template with placeholders replaced.
     /// Returns None if ping doesn't exist or has no mentionable members
     /// (i.e., all members are the sender).
@@ -375,6 +413,66 @@ mod tests {
         assert!(
             mgr.remaining_cooldown("nope", Duration::from_secs(300))
                 .is_none()
+        );
+    }
+
+    #[test]
+    fn try_record_trigger_is_atomic_across_consecutive_calls() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut mgr = test_manager(dir.path());
+        mgr.add_member("test", "alice").unwrap();
+        mgr.add_member("test", "bob").unwrap();
+
+        // First call: should fire and record the trigger.
+        let first = mgr.try_record_trigger("test", "bob", Duration::from_secs(300), false);
+        match first {
+            TriggerDecision::Fire(rendered) => {
+                assert!(rendered.contains("@alice"));
+                assert!(!rendered.contains("@bob"));
+            }
+            other => panic!("expected Fire on first call, got {other:?}"),
+        }
+
+        // Second immediate call: cooldown must already be in effect because
+        // record_trigger ran under the same `&mut self` as the check.
+        let second = mgr.try_record_trigger("test", "bob", Duration::from_secs(300), false);
+        match second {
+            TriggerDecision::OnCooldown(remaining) => {
+                assert!(remaining.as_secs() <= 300);
+            }
+            other => panic!("expected OnCooldown on second call, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn try_record_trigger_respects_membership() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut mgr = test_manager(dir.path());
+        mgr.add_member("test", "alice").unwrap();
+
+        // Non-member with public=false is rejected and must not consume the cooldown.
+        let decision =
+            mgr.try_record_trigger("test", "stranger", Duration::from_secs(300), false);
+        assert!(matches!(decision, TriggerDecision::Skip));
+
+        // Alice is the sole member, so render_template produces no mentions → Skip.
+        // The important invariant: the previous rejection did not record a trigger,
+        // so we don't get OnCooldown here.
+        let decision = mgr.try_record_trigger("test", "alice", Duration::from_secs(300), false);
+        assert!(matches!(decision, TriggerDecision::Skip));
+    }
+
+    #[test]
+    fn try_record_trigger_public_allows_non_members() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut mgr = test_manager(dir.path());
+        mgr.add_member("test", "alice").unwrap();
+
+        let decision =
+            mgr.try_record_trigger("test", "stranger", Duration::from_secs(300), true);
+        assert!(
+            matches!(decision, TriggerDecision::Fire(_)),
+            "public=true should allow non-members to fire, got {decision:?}"
         );
     }
 }
