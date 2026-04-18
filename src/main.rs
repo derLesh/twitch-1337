@@ -1111,35 +1111,33 @@ pub async fn main() -> Result<()> {
     // Wrap client in Arc for sharing across handlers
     let client = Arc::new(client);
 
-    // Create flight tracker command channel
-    let (tracker_tx, tracker_rx) = tokio::sync::mpsc::channel::<flight_tracker::TrackerCommand>(32);
-
-    // Initialize shared aviation client (used by flight tracker and command handler)
     let shared_aviation_client = match aviation::AviationClient::new() {
-        Ok(client) => client,
+        Ok(client) => Some(client),
         Err(e) => {
-            error!(error = ?e, "Failed to initialize aviation client");
-            bail!("Cannot start without aviation client");
+            error!(
+                error = ?e,
+                "Failed to initialize aviation client; aviation commands and flight tracker disabled"
+            );
+            None
         }
     };
 
-    // Spawn flight tracker handler
-    let handler_flight_tracker = tokio::spawn({
-        let client = client.clone();
-        let channel = config.twitch.channel.clone();
-        let data_dir = get_data_dir();
-        let aviation_client = shared_aviation_client.clone();
-        async move {
-            flight_tracker::run_flight_tracker(
-                tracker_rx,
-                client,
-                channel,
-                aviation_client,
-                data_dir,
-            )
-            .await;
+    // Placeholder pending task keeps the tokio::select! arm shape uniform; see shutdown below.
+    let (tracker_tx, handler_flight_tracker) = match shared_aviation_client.clone() {
+        Some(av) => {
+            let (tx, rx) = tokio::sync::mpsc::channel::<flight_tracker::TrackerCommand>(32);
+            let handle = tokio::spawn({
+                let client = client.clone();
+                let channel = config.twitch.channel.clone();
+                let data_dir = get_data_dir();
+                async move {
+                    flight_tracker::run_flight_tracker(rx, client, channel, av, data_dir).await;
+                }
+            });
+            (Some(tx), handle)
         }
-    });
+        None => (None, tokio::spawn(std::future::pending::<()>())),
+    };
 
     // Create broadcast channel for message distribution (capacity: 100 messages)
     let (broadcast_tx, _) = broadcast::channel::<ServerMessage>(100);
@@ -1695,8 +1693,8 @@ struct CommandHandlerConfig {
     default_cooldown: Duration,
     pings_public: bool,
     cooldowns: CooldownsConfig,
-    tracker_tx: tokio::sync::mpsc::Sender<flight_tracker::TrackerCommand>,
-    aviation_client: aviation::AviationClient,
+    tracker_tx: Option<tokio::sync::mpsc::Sender<flight_tracker::TrackerCommand>>,
+    aviation_client: Option<aviation::AviationClient>,
     admin_channel: Option<String>,
     bot_username: String,
     channel: String,
@@ -1778,9 +1776,6 @@ async fn run_generic_command_handler(cfg: CommandHandlerConfig) {
         None
     };
 
-    // Use the shared aviation client for !up command
-    let aviation_client = Some(aviation_client);
-
     let data_dir = get_data_dir();
 
     let mut commands: Vec<Box<dyn commands::Command>> = vec![
@@ -1798,11 +1793,14 @@ async fn run_generic_command_handler(cfg: CommandHandlerConfig) {
             data_dir.clone(),
             Duration::from_secs(cooldowns.feedback),
         )),
-        Box::new(commands::track::TrackCommand::new(tracker_tx.clone())),
-        Box::new(commands::untrack::UntrackCommand::new(tracker_tx.clone())),
-        Box::new(commands::flights::FlightsCommand::new(tracker_tx.clone())),
-        Box::new(commands::flights::FlightCommand::new(tracker_tx)),
     ];
+
+    if let Some(tx) = tracker_tx {
+        commands.push(Box::new(commands::track::TrackCommand::new(tx.clone())));
+        commands.push(Box::new(commands::untrack::UntrackCommand::new(tx.clone())));
+        commands.push(Box::new(commands::flights::FlightsCommand::new(tx.clone())));
+        commands.push(Box::new(commands::flights::FlightCommand::new(tx)));
+    }
 
     if let Some((client, cfg)) = llm_client {
         // Load memory store if enabled
