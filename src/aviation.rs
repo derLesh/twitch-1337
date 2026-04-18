@@ -111,7 +111,7 @@ fn icao_to_coords(code: &str) -> Option<(f64, f64, &'static str)> {
         .map(|(lat, lon, name)| (*lat, *lon, name.as_str()))
 }
 
-pub fn iata_to_coords(code: &str) -> Option<(f64, f64, &'static str)> {
+pub(crate) fn iata_to_coords(code: &str) -> Option<(f64, f64, &'static str)> {
     airport_data()
         .by_iata
         .get(code)
@@ -177,9 +177,9 @@ enum ResolveResult {
 // --- adsb.lol types ---
 
 #[derive(Debug, Deserialize)]
-pub struct AdsbLolResponse {
+pub(crate) struct AdsbLolResponse {
     #[serde(default)]
-    pub ac: Vec<NearbyAircraft>,
+    pub(crate) ac: Vec<NearbyAircraft>,
 }
 
 #[derive(Debug, Deserialize)]

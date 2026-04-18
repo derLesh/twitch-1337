@@ -3,11 +3,22 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use eyre::Result;
+use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 use tracing::error;
 
 use super::{Command, CommandContext};
-use crate::util::PersonalBest;
+
+/// A user's personal best time for the 1337 challenge.
+///
+/// Tracks the fastest sub-1-second message time and the date it was achieved.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PersonalBest {
+    /// Milliseconds after 13:37:00.000 (0-999)
+    pub ms: u64,
+    /// The date (Europe/Berlin) when this record was set
+    pub date: chrono::NaiveDate,
+}
 
 pub struct LeaderboardCommand {
     leaderboard: Arc<RwLock<HashMap<String, PersonalBest>>>,

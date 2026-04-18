@@ -177,7 +177,7 @@ pub struct FlightTrackerState {
 /// Loads tracked flights from the RON file.
 ///
 /// Returns an empty state if the file doesn't exist or is corrupted.
-pub async fn load_tracker_state(data_dir: &Path) -> FlightTrackerState {
+pub(crate) async fn load_tracker_state(data_dir: &Path) -> FlightTrackerState {
     let path = data_dir.join(FLIGHTS_FILENAME);
     match fs::read_to_string(&path).await {
         Ok(contents) => match ron::from_str::<FlightTrackerState>(&contents) {
@@ -206,7 +206,7 @@ pub async fn load_tracker_state(data_dir: &Path) -> FlightTrackerState {
 }
 
 /// Saves tracked flights to the RON file using atomic write+rename.
-pub async fn save_tracker_state(data_dir: &Path, state: &FlightTrackerState) {
+pub(crate) async fn save_tracker_state(data_dir: &Path, state: &FlightTrackerState) {
     let path = data_dir.join(FLIGHTS_FILENAME);
     let tmp_path = path.with_extension("ron.tmp");
     match ron::to_string(state) {
@@ -260,7 +260,7 @@ fn is_on_ground(ac: &NearbyAircraft) -> bool {
     }
 }
 
-pub fn altitude_ft(ac: &NearbyAircraft) -> Option<i64> {
+pub(crate) fn altitude_ft(ac: &NearbyAircraft) -> Option<i64> {
     match &ac.alt_baro {
         Some(AltBaro::Feet(ft)) => Some(*ft),
         Some(AltBaro::Ground) => Some(0),
@@ -268,12 +268,12 @@ pub fn altitude_ft(ac: &NearbyAircraft) -> Option<i64> {
     }
 }
 
-pub fn vertical_rate(ac: &NearbyAircraft) -> Option<i64> {
+pub(crate) fn vertical_rate(ac: &NearbyAircraft) -> Option<i64> {
     ac.baro_rate.or(ac.geom_rate)
 }
 
 /// Determines the new flight phase based on current ADS-B data and previous state.
-pub fn detect_phase(flight: &TrackedFlight, ac: &NearbyAircraft) -> FlightPhase {
+pub(crate) fn detect_phase(flight: &TrackedFlight, ac: &NearbyAircraft) -> FlightPhase {
     let on_ground = is_on_ground(ac);
     let alt = altitude_ft(ac);
     let vrate = vertical_rate(ac);
@@ -342,7 +342,7 @@ pub fn detect_phase(flight: &TrackedFlight, ac: &NearbyAircraft) -> FlightPhase 
 }
 
 /// Returns a human-readable meaning if the squawk is an emergency code.
-pub fn emergency_squawk_meaning(squawk: &str) -> Option<&'static str> {
+pub(crate) fn emergency_squawk_meaning(squawk: &str) -> Option<&'static str> {
     match squawk {
         SQUAWK_HIJACK => Some("Hijack"),
         SQUAWK_RADIO_FAILURE => Some("Radio Failure"),
@@ -412,15 +412,15 @@ fn format_flight_prefix(flight: &TrackedFlight) -> String {
     format!("{name}{typ}{route}")
 }
 
-pub fn msg_track_started(flight: &TrackedFlight) -> String {
+pub(crate) fn msg_track_started(flight: &TrackedFlight) -> String {
     format!("Tracke {} Okayge", format_flight_prefix(flight))
 }
 
-pub fn msg_takeoff(flight: &TrackedFlight) -> String {
+pub(crate) fn msg_takeoff(flight: &TrackedFlight) -> String {
     format!("{} ist gestartet! \u{2708}", format_flight_prefix(flight))
 }
 
-pub fn msg_cruise(flight: &TrackedFlight) -> String {
+pub(crate) fn msg_cruise(flight: &TrackedFlight) -> String {
     format!(
         "{} cruist auf {}",
         format_flight_prefix(flight),
@@ -428,15 +428,15 @@ pub fn msg_cruise(flight: &TrackedFlight) -> String {
     )
 }
 
-pub fn msg_descent(flight: &TrackedFlight) -> String {
+pub(crate) fn msg_descent(flight: &TrackedFlight) -> String {
     format!("{} hat Descent eingeleitet", format_flight_prefix(flight))
 }
 
-pub fn msg_approach(flight: &TrackedFlight) -> String {
+pub(crate) fn msg_approach(flight: &TrackedFlight) -> String {
     format!("{} ist im Approach", format_flight_prefix(flight))
 }
 
-pub fn msg_landing(flight: &TrackedFlight) -> String {
+pub(crate) fn msg_landing(flight: &TrackedFlight) -> String {
     let duration = Utc::now().signed_duration_since(flight.tracked_at);
     format!(
         "{} ist gelandet! Flugzeit: {}",
@@ -445,21 +445,21 @@ pub fn msg_landing(flight: &TrackedFlight) -> String {
     )
 }
 
-pub fn msg_squawk_emergency(flight: &TrackedFlight, code: &str, meaning: &str) -> String {
+pub(crate) fn msg_squawk_emergency(flight: &TrackedFlight, code: &str, meaning: &str) -> String {
     format!(
         "\u{26a0} {} squawkt {code}! ({meaning})",
         format_flight_prefix(flight)
     )
 }
 
-pub fn msg_possible_divert(flight: &TrackedFlight) -> String {
+pub(crate) fn msg_possible_divert(flight: &TrackedFlight) -> String {
     format!(
         "\u{26a0} {} scheint zu diverten!",
         format_flight_prefix(flight)
     )
 }
 
-pub fn msg_tracking_lost(flight: &TrackedFlight) -> String {
+pub(crate) fn msg_tracking_lost(flight: &TrackedFlight) -> String {
     let name = flight
         .callsign
         .as_deref()
@@ -467,7 +467,7 @@ pub fn msg_tracking_lost(flight: &TrackedFlight) -> String {
     format!("{name} Signal verloren, wird nicht mehr getrackt")
 }
 
-pub fn msg_flight_status(flight: &TrackedFlight) -> String {
+pub(crate) fn msg_flight_status(flight: &TrackedFlight) -> String {
     let prefix = format_flight_prefix(flight);
     let alt = format_alt(flight.altitude_ft);
     let speed = flight
@@ -487,7 +487,7 @@ pub fn msg_flight_status(flight: &TrackedFlight) -> String {
     )
 }
 
-pub fn msg_flights_list(flights: &[TrackedFlight]) -> String {
+pub(crate) fn msg_flights_list(flights: &[TrackedFlight]) -> String {
     if flights.is_empty() {
         return "Keine Fl\u{00fc}ge getrackt".to_string();
     }
@@ -503,7 +503,7 @@ pub fn msg_flights_list(flights: &[TrackedFlight]) -> String {
 }
 
 /// Determines the polling interval based on all tracked flights.
-pub fn compute_poll_interval(flights: &[TrackedFlight]) -> Duration {
+pub(crate) fn compute_poll_interval(flights: &[TrackedFlight]) -> Duration {
     if flights.is_empty() {
         return POLL_SLOW;
     }

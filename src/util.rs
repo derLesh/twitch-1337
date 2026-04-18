@@ -1,7 +1,6 @@
 use std::{collections::VecDeque, path::PathBuf, sync::Arc};
 
 use chrono::MappedLocalTime;
-use serde::{Deserialize, Serialize};
 
 /// Application user-agent string used in HTTP requests.
 pub static APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
@@ -11,17 +10,6 @@ pub const MAX_RESPONSE_LENGTH: usize = 500;
 
 /// Type alias for the shared chat history buffer (username, message text).
 pub type ChatHistory = Arc<tokio::sync::Mutex<VecDeque<(String, String)>>>;
-
-/// A user's personal best time for the 1337 challenge.
-///
-/// Tracks the fastest sub-1-second message time and the date it was achieved.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PersonalBest {
-    /// Milliseconds after 13:37:00.000 (0-999)
-    pub ms: u64,
-    /// The date (Europe/Berlin) when this record was set
-    pub date: chrono::NaiveDate,
-}
 
 /// Returns the data directory path, resolved from `$DATA_DIR` env var.
 ///

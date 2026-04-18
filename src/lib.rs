@@ -26,8 +26,9 @@ pub type AuthenticatedTwitchClient<
     L = RefreshingLoginCredentials<crate::token_storage::FileBasedTokenStorage>,
 > = TwitchIRCClient<T, L>;
 
+pub use commands::leaderboard::PersonalBest;
 pub use token_storage::FileBasedTokenStorage;
 pub use util::{
-    APP_USER_AGENT, ChatHistory, MAX_RESPONSE_LENGTH, PersonalBest, get_data_dir,
-    parse_flight_duration, resolve_berlin_time, truncate_response,
+    APP_USER_AGENT, ChatHistory, MAX_RESPONSE_LENGTH, get_data_dir, parse_flight_duration,
+    resolve_berlin_time, truncate_response,
 };
