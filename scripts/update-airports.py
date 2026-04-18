@@ -39,7 +39,7 @@ def main():
     # Write output (no header row, matching plz.csv convention)
     OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     with open(OUTPUT_PATH, "w", newline="") as f:
-        writer = csv.writer(f)
+        writer = csv.writer(f, lineterminator="\n")
         for entry in entries:
             writer.writerow(entry)
 

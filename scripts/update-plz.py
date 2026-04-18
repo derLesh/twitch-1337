@@ -41,7 +41,7 @@ def main():
     # Write output
     OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     with open(OUTPUT_PATH, "w", newline="") as f:
-        writer = csv.writer(f)
+        writer = csv.writer(f, lineterminator="\n")
         for plz, lat, lon in averaged:
             writer.writerow([plz, f"{lat:.4f}", f"{lon:.4f}"])
 
