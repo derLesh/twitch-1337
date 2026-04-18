@@ -48,3 +48,6 @@ config.toml
 leaderboard.ron
 pings.ron
 ai_memory.ron
+
+# Caveman compression backups
+*.original.md
