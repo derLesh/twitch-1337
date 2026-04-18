@@ -5,6 +5,7 @@
 //! fake transport, fake clock, and fake LLM against the same handlers.
 
 pub mod aviation;
+pub mod clock;
 pub mod commands;
 pub mod config;
 pub mod cooldown;
