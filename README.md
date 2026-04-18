@@ -1,5 +1,7 @@
 # twitch-1337
 
+[![CI](https://github.com/Chronophylos/twitch-1337/actions/workflows/ci.yml/badge.svg)](https://github.com/Chronophylos/twitch-1337/actions/workflows/ci.yml)
+[![Docker](https://github.com/Chronophylos/twitch-1337/actions/workflows/docker.yml/badge.svg)](https://github.com/Chronophylos/twitch-1337/actions/workflows/docker.yml)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
 [![Rust Edition 2024](https://img.shields.io/badge/rust-2024-orange.svg)](https://doc.rust-lang.org/edition-guide/rust-2024/)
 
