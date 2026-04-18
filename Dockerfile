@@ -41,6 +41,7 @@ RUN cargo build --release --target x86_64-unknown-linux-musl
 
 # 4. Runtime stage - minimal FROM scratch image
 FROM scratch
+LABEL org.opencontainers.image.description="Rust Twitch IRC bot: 1337 tracker, community pings, AI/flight commands, and scheduled messages — single persistent IRC connection with broadcast-based handler routing."
 ENV DATA_DIR=/data
 
 # Copy the static binary
