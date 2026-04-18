@@ -32,17 +32,17 @@ fn plz_table() -> &'static HashMap<&'static str, (f64, f64)> {
         let mut map = HashMap::new();
         for line in PLZ_DATA.lines() {
             let mut parts = line.splitn(3, ',');
-            let plz = parts.next().expect("malformed plz.csv: missing plz");
-            let lat: f64 = parts
-                .next()
-                .expect("malformed plz.csv: missing lat")
-                .parse()
-                .expect("malformed plz.csv: invalid lat");
-            let lon: f64 = parts
-                .next()
-                .expect("malformed plz.csv: missing lon")
-                .parse()
-                .expect("malformed plz.csv: invalid lon");
+            let (Some(plz), Some(lat_str), Some(lon_str)) =
+                (parts.next(), parts.next(), parts.next())
+            else {
+                continue;
+            };
+            let Ok(lat) = lat_str.parse::<f64>() else {
+                continue;
+            };
+            let Ok(lon) = lon_str.parse::<f64>() else {
+                continue;
+            };
             map.insert(plz, (lat, lon));
         }
         map
