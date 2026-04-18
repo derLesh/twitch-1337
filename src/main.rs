@@ -607,28 +607,19 @@ async fn monitor_1337_messages(
 
                 if is_valid_1337_message(&privmsg) {
                     let mut users = total_users.lock().await;
-                    // Double-check minute to prevent race condition
-                    let current_minute = local.minute();
-                    if current_minute == TARGET_MINUTE {
-                        if users.len() < MAX_USERS {
-                            // Only insert if user not already present (first message wins)
-                            if !users.contains_key(privmsg.sender.login.as_str()) {
-                                let username = privmsg.sender.login.clone();
-                                let ms_since_minute = u64::from(local.second()) * 1000
-                                    + u64::from(local.timestamp_subsec_millis());
-                                if ms_since_minute < 1000 {
-                                    debug!(user = %username, ms = ms_since_minute, "User said 1337 at 13:37 (sub-second)");
-                                    users.insert(username, Some(ms_since_minute));
-                                } else {
-                                    debug!(user = %username, "User said 1337 at 13:37");
-                                    users.insert(username, None);
-                                }
-                            }
+                    if users.len() >= MAX_USERS {
+                        error!(max = MAX_USERS, "User limit reached");
+                    } else if !users.contains_key(privmsg.sender.login.as_str()) {
+                        let username = privmsg.sender.login.clone();
+                        let ms_since_minute = u64::from(local.second()) * 1000
+                            + u64::from(local.timestamp_subsec_millis());
+                        if ms_since_minute < 1000 {
+                            debug!(user = %username, ms = ms_since_minute, "User said 1337 at 13:37 (sub-second)");
+                            users.insert(username, Some(ms_since_minute));
                         } else {
-                            error!(max = MAX_USERS, "User limit reached");
+                            debug!(user = %username, "User said 1337 at 13:37");
+                            users.insert(username, None);
                         }
-                    } else {
-                        debug!("Skipping insert, minute changed to {current_minute}");
                     }
                 }
             }
