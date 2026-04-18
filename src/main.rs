@@ -1108,6 +1108,9 @@ pub async fn main() -> Result<()> {
     // Spawn message router task
     let router_handle = tokio::spawn(run_message_router(incoming_messages, broadcast_tx.clone()));
 
+    // Graceful shutdown signal for handlers that need to drain children (#31).
+    let shutdown = Arc::new(tokio::sync::Notify::new());
+
     // Optionally spawn config watcher service and scheduled message handler
     let (watcher_service, handler_scheduled_messages) = if schedules_enabled {
         info!(
@@ -1140,7 +1143,8 @@ pub async fn main() -> Result<()> {
             let client = client.clone();
             let cache = schedule_cache.clone();
             let channel = config.twitch.channel.clone();
-            async move { run_scheduled_message_handler(client, cache, channel).await }
+            let shutdown = shutdown.clone();
+            async move { run_scheduled_message_handler(client, cache, channel, shutdown).await }
         });
 
         (Some(watcher), Some(handler))
@@ -1235,10 +1239,14 @@ pub async fn main() -> Result<()> {
 
     // Handle optional scheduled message handlers
     match (watcher_service, handler_scheduled_messages) {
-        (Some(watcher), Some(handler)) => {
+        (Some(watcher), Some(mut handler)) => {
             tokio::select! {
                 _ = tokio::signal::ctrl_c() => {
                     info!("Shutdown signal received, exiting gracefully");
+                    shutdown.notify_waiters();
+                    if let Err(e) = tokio::time::timeout(Duration::from_secs(5), &mut handler).await {
+                        warn!(?e, "Scheduled message handler did not shut down within 5s");
+                    }
                 }
                 result = router_handle => {
                     error!("Message router exited unexpectedly: {result:?}");
@@ -1252,7 +1260,7 @@ pub async fn main() -> Result<()> {
                 result = handler_generic_commands => {
                     error!("Generic Command Handler exited unexpectedly: {result:?}");
                 }
-                result = handler => {
+                result = &mut handler => {
                     error!("Scheduled message handler exited unexpectedly: {result:?}");
                 }
                 result = handler_latency => {
@@ -1910,6 +1918,7 @@ async fn run_schedule_task(
     client: Arc<AuthenticatedTwitchClient>,
     cache: Arc<tokio::sync::RwLock<database::ScheduleCache>>,
     channel: String,
+    shutdown: Arc<tokio::sync::Notify>,
 ) {
     use chrono::Utc;
     use tokio::time::{Duration, sleep};
@@ -1921,9 +1930,16 @@ async fn run_schedule_task(
     );
 
     loop {
-        // Wait for the configured interval
+        // Wait for the configured interval, but bail on shutdown so in-flight
+        // sends below aren't torn apart when the runtime stops.
         let interval_duration = Duration::from_secs(schedule.interval.num_seconds() as u64);
-        sleep(interval_duration).await;
+        tokio::select! {
+            () = sleep(interval_duration) => {}
+            () = shutdown.notified() => {
+                info!(schedule = %schedule.name, "Shutdown received, stopping task");
+                break;
+            }
+        }
 
         // Check if schedule still exists in cache
         let still_exists = {
@@ -1981,6 +1997,7 @@ async fn run_scheduled_message_handler(
     client: Arc<AuthenticatedTwitchClient>,
     cache: Arc<tokio::sync::RwLock<database::ScheduleCache>>,
     channel: String,
+    shutdown: Arc<tokio::sync::Notify>,
 ) {
     use std::collections::HashMap;
     use tokio::task::JoinHandle;
@@ -1996,7 +2013,20 @@ async fn run_scheduled_message_handler(
     let mut check_interval = interval(Duration::from_secs(30));
 
     loop {
-        check_interval.tick().await;
+        tokio::select! {
+            _ = check_interval.tick() => {}
+            () = shutdown.notified() => {
+                info!("Scheduled message handler: shutdown received, awaiting children");
+                for (name, handle) in running_tasks.drain() {
+                    if let Err(e) = handle.await
+                        && !e.is_cancelled()
+                    {
+                        warn!(schedule = %name, error = ?e, "Schedule task join error");
+                    }
+                }
+                return;
+            }
+        }
 
         let (schedules, version) = {
             let cache_guard = cache.read().await;
@@ -2032,6 +2062,7 @@ async fn run_scheduled_message_handler(
             // Start tasks for new schedules
             for (name, schedule) in desired_schedules {
                 let channel = channel.clone();
+                let shutdown = shutdown.clone();
                 running_tasks.entry(name.clone()).or_insert_with(|| {
                     info!(schedule = %name, "Starting task for new schedule");
 
@@ -2040,6 +2071,7 @@ async fn run_scheduled_message_handler(
                         client.clone(),
                         cache.clone(),
                         channel,
+                        shutdown,
                     ))
                 });
             }
