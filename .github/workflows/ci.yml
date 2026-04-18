@@ -18,8 +18,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Read Rust toolchain channel
+        id: rust-toolchain
+        run: |
+          channel=$(grep '^channel' rust-toolchain.toml | sed -E 's/.*"([^"]+)".*/\1/')
+          echo "channel=$channel" >> "$GITHUB_OUTPUT"
+
       - uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: ${{ steps.rust-toolchain.outputs.channel }}
           components: rustfmt, clippy
 
       - uses: Swatinem/rust-cache@v2
