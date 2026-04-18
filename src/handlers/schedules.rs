@@ -11,7 +11,7 @@ use twitch_irc::{
 use crate::{config::Configuration, database, get_config_path};
 
 /// Parse a datetime string in ISO 8601 format (YYYY-MM-DDTHH:MM:SS).
-pub fn parse_datetime(s: &str) -> Result<chrono::NaiveDateTime> {
+pub(crate) fn parse_datetime(s: &str) -> Result<chrono::NaiveDateTime> {
     chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S").wrap_err_with(|| {
         format!(
             "Invalid datetime format '{}' (expected YYYY-MM-DDTHH:MM:SS)",
@@ -21,13 +21,13 @@ pub fn parse_datetime(s: &str) -> Result<chrono::NaiveDateTime> {
 }
 
 /// Parse a time string in HH:MM format.
-pub fn parse_time(s: &str) -> Result<chrono::NaiveTime> {
+pub(crate) fn parse_time(s: &str) -> Result<chrono::NaiveTime> {
     chrono::NaiveTime::parse_from_str(s, "%H:%M")
         .wrap_err_with(|| format!("Invalid time format '{}' (expected HH:MM)", s))
 }
 
 /// Convert a ScheduleConfig from config.toml into a database::Schedule.
-pub fn schedule_config_to_schedule(
+pub(crate) fn schedule_config_to_schedule(
     config: &crate::config::ScheduleConfig,
 ) -> Result<database::Schedule> {
     let interval = database::Schedule::parse_interval(&config.interval)?;
@@ -99,7 +99,7 @@ pub fn load_schedules_from_config(config: &Configuration) -> Vec<database::Sched
 
 /// Reload configuration from config.toml and extract schedules.
 /// Returns None if config cannot be loaded or parsed.
-pub fn reload_schedules_from_config() -> Option<Vec<database::Schedule>> {
+pub(crate) fn reload_schedules_from_config() -> Option<Vec<database::Schedule>> {
     let config_path = get_config_path();
     let data = match std::fs::read_to_string(&config_path) {
         Ok(data) => data,
@@ -232,7 +232,7 @@ pub async fn run_config_watcher_service(
 /// This task will run the schedule at its configured interval,
 /// checking if it's still active before each post.
 #[instrument(skip(client, cache, channel), fields(schedule = %schedule.name))]
-pub async fn run_schedule_task<T, L>(
+pub(crate) async fn run_schedule_task<T, L>(
     schedule: database::Schedule,
     client: Arc<TwitchIRCClient<T, L>>,
     cache: Arc<tokio::sync::RwLock<database::ScheduleCache>>,
@@ -245,6 +245,8 @@ pub async fn run_schedule_task<T, L>(
     use chrono::Utc;
     use tokio::time::{Duration, sleep};
 
+    let interval_duration = Duration::from_secs(schedule.interval.num_seconds() as u64);
+
     info!(
         schedule = %schedule.name,
         interval_seconds = schedule.interval.num_seconds(),
@@ -252,9 +254,7 @@ pub async fn run_schedule_task<T, L>(
     );
 
     loop {
-        // Wait for the configured interval, but bail on shutdown so in-flight
-        // sends below aren't torn apart when the runtime stops.
-        let interval_duration = Duration::from_secs(schedule.interval.num_seconds() as u64);
+        // Bail on shutdown so in-flight sends below aren't torn apart when the runtime stops.
         tokio::select! {
             () = sleep(interval_duration) => {}
             () = shutdown.notified() => {

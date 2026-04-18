@@ -1,3 +1,7 @@
+//! Daily 13:36–13:38 Berlin window monitor. Counts unique users who say
+//! "1337" or "DANKIES" during the 13:37 minute, posts contextual stats at 13:38,
+//! and persists the fastest sub-second times to the all-time leaderboard.
+
 use std::{
     collections::HashMap,
     sync::{
@@ -28,9 +32,9 @@ pub const TARGET_HOUR: u32 = 13;
 pub const TARGET_MINUTE: u32 = 37;
 
 /// Maximum number of unique users to track (prevents unbounded memory growth)
-pub const MAX_USERS: usize = 10_000;
+pub(crate) const MAX_USERS: usize = 10_000;
 
-pub const LEADERBOARD_FILENAME: &str = "leaderboard.ron";
+pub(crate) const LEADERBOARD_FILENAME: &str = "leaderboard.ron";
 
 /// A user's personal best time for the 1337 challenge.
 ///
@@ -46,7 +50,7 @@ pub struct PersonalBest {
 /// Calculates the next occurrence of a daily time in Europe/Berlin timezone.
 ///
 /// If the specified time has already passed today, returns tomorrow's occurrence.
-pub fn calculate_next_occurrence(hour: u32, minute: u32) -> chrono::DateTime<Utc> {
+pub(crate) fn calculate_next_occurrence(hour: u32, minute: u32) -> chrono::DateTime<Utc> {
     let berlin_now = Utc::now().with_timezone(&chrono_tz::Europe::Berlin);
 
     // Create target time today in Berlin timezone
@@ -72,7 +76,7 @@ pub fn calculate_next_occurrence(hour: u32, minute: u32) -> chrono::DateTime<Utc
 
 /// Sleeps until the next occurrence of a daily time in Europe/Berlin timezone.
 #[instrument]
-pub async fn wait_until_schedule(hour: u32, minute: u32) {
+pub(crate) async fn wait_until_schedule(hour: u32, minute: u32) {
     let next_run = calculate_next_occurrence(hour, minute);
     let now = Utc::now();
 
@@ -96,7 +100,7 @@ pub async fn wait_until_schedule(hour: u32, minute: u32) {
 ///
 /// If the target time has already passed, returns immediately.
 #[instrument]
-pub async fn sleep_until_hms(hour: u32, minute: u32, second: u32, expected_latency: u32) {
+pub(crate) async fn sleep_until_hms(hour: u32, minute: u32, second: u32, expected_latency: u32) {
     let now = Utc::now().with_timezone(&chrono_tz::Europe::Berlin);
     let time = resolve_berlin_time(
         now.date_naive()
@@ -122,7 +126,7 @@ pub async fn sleep_until_hms(hour: u32, minute: u32, second: u32, expected_laten
 /// Checks if a given user is a clanker
 ///
 /// Returns true if the login name matches any bot in the ignore list.
-pub fn is_clanker(login: &str) -> bool {
+pub(crate) fn is_clanker(login: &str) -> bool {
     [
         "supibot",
         "potatbotat",
@@ -136,7 +140,7 @@ pub fn is_clanker(login: &str) -> bool {
 /// Determines if a message should be counted as a valid 1337 message.
 ///
 /// Filters out clanker messages and checks for keywords "1337" or "DANKIES".
-pub fn is_valid_1337_message(message: &PrivmsgMessage) -> bool {
+pub(crate) fn is_valid_1337_message(message: &PrivmsgMessage) -> bool {
     if is_clanker(&message.sender.login) {
         return false;
     }
@@ -146,7 +150,7 @@ pub fn is_valid_1337_message(message: &PrivmsgMessage) -> bool {
 /// Generates a stats message based on the number of users who said 1337.
 ///
 /// Returns a contextual message with emotes based on participation level.
-pub fn generate_stats_message(count: usize, user_list: &[String]) -> String {
+pub(crate) fn generate_stats_message(count: usize, user_list: &[String]) -> String {
     match count {
         0 => one_of(&["Erm", "fuh"]).to_string(),
         1 => one_of(&[
@@ -205,7 +209,7 @@ pub fn generate_stats_message(count: usize, user_list: &[String]) -> String {
 /// Returns a random element from an array.
 ///
 /// Used for adding variety to bot responses by randomly selecting from predefined options.
-pub fn one_of<const L: usize, T>(array: &[T; L]) -> &T {
+pub(crate) fn one_of<const L: usize, T>(array: &[T; L]) -> &T {
     array.choose(&mut rand::rng()).unwrap()
 }
 
@@ -243,7 +247,7 @@ pub async fn load_leaderboard() -> HashMap<String, PersonalBest> {
 /// Saves the all-time leaderboard to disk using atomic write+rename.
 ///
 /// Logs an error and continues if the write fails.
-pub async fn save_leaderboard(leaderboard: &HashMap<String, PersonalBest>) {
+pub(crate) async fn save_leaderboard(leaderboard: &HashMap<String, PersonalBest>) {
     let path = get_data_dir().join(LEADERBOARD_FILENAME);
     let tmp_path = path.with_extension("ron.tmp");
     match ron::to_string(leaderboard) {
@@ -271,7 +275,7 @@ pub async fn save_leaderboard(leaderboard: &HashMap<String, PersonalBest>) {
 /// Runs in a loop until the broadcast channel closes or an error occurs.
 /// Only tracks messages sent during the configured TARGET_HOUR:TARGET_MINUTE.
 #[instrument(skip(broadcast_rx, total_users))]
-pub async fn monitor_1337_messages(
+pub(crate) async fn monitor_1337_messages(
     mut broadcast_rx: broadcast::Receiver<ServerMessage>,
     total_users: Arc<Mutex<HashMap<String, Option<u64>>>>,
 ) {
@@ -282,7 +286,6 @@ pub async fn monitor_1337_messages(
                     continue;
                 };
 
-                // Check time and message content
                 let local = privmsg
                     .server_timestamp
                     .with_timezone(&chrono_tz::Europe::Berlin);

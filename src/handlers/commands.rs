@@ -1,3 +1,7 @@
+//! Wires the `CommandDispatcher` and registers all `!`-prefixed commands.
+//! Owns the long-running task that filters PRIVMSGs from the broadcast channel
+//! and routes them to the matching `Command` implementation.
+
 use std::{
     collections::{HashMap, VecDeque},
     sync::Arc,
@@ -62,7 +66,6 @@ pub async fn run_generic_command_handler(cfg: CommandHandlerConfig) {
         channel,
     } = cfg;
 
-    // Subscribe to the broadcast channel
     let broadcast_rx = broadcast_tx.subscribe();
 
     // Extract history_length before ai_config is consumed
@@ -203,7 +206,7 @@ pub async fn run_generic_command_handler(cfg: CommandHandlerConfig) {
 }
 
 /// Main dispatch loop for trait-based commands.
-pub async fn run_command_dispatcher(
+pub(crate) async fn run_command_dispatcher(
     mut broadcast_rx: broadcast::Receiver<ServerMessage>,
     client: Arc<AuthenticatedTwitchClient>,
     commands: Vec<Box<dyn crate::commands::Command>>,

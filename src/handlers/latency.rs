@@ -18,16 +18,16 @@ use twitch_irc::{
 };
 
 /// Interval between PING measurements
-pub const LATENCY_PING_INTERVAL: Duration = Duration::from_secs(300);
+pub(crate) const LATENCY_PING_INTERVAL: Duration = Duration::from_secs(300);
 
 /// Timeout waiting for PONG response
-pub const LATENCY_PING_TIMEOUT: Duration = Duration::from_secs(10);
+pub(crate) const LATENCY_PING_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// EMA smoothing factor (0.2 = moderate responsiveness)
-pub const LATENCY_EMA_ALPHA: f64 = 0.2;
+pub(crate) const LATENCY_EMA_ALPHA: f64 = 0.2;
 
 /// Only log EMA changes at info level when delta exceeds this threshold
-pub const LATENCY_LOG_THRESHOLD: u32 = 10;
+pub(crate) const LATENCY_LOG_THRESHOLD: u32 = 10;
 
 /// Periodically measures IRC latency via PING/PONG and updates a shared EMA estimate.
 ///
@@ -56,12 +56,11 @@ pub async fn run_latency_handler<T, L>(
     loop {
         sleep(LATENCY_PING_INTERVAL).await;
 
-        let nonce = format!("{}", Utc::now().timestamp_nanos_opt().unwrap_or(0));
+        let nonce = Utc::now().timestamp_nanos_opt().unwrap_or(0).to_string();
 
         // Subscribe before sending so we don't miss the PONG on fast connections
         let mut broadcast_rx = broadcast_tx.subscribe();
 
-        // Send PING with unique nonce
         let send_time = tokio::time::Instant::now();
         if let Err(e) = client.send_message(irc!["PING", nonce.clone()]).await {
             warn!(error = ?e, "Failed to send PING");
