@@ -36,6 +36,15 @@ pub enum TriggerDecision {
     Fire(String),
 }
 
+/// Reject control characters (CR/LF, NUL, etc.) that could split an IRC PRIVMSG
+/// into two commands or break framing when the template is interpolated.
+fn validate_template(template: &str) -> Result<()> {
+    if template.chars().any(char::is_control) {
+        bail!("Template darf keine Steuerzeichen (z.B. Zeilenumbrüche) enthalten");
+    }
+    Ok(())
+}
+
 /// Manages ping state and persistence.
 pub struct PingManager {
     store: PingStore,
@@ -95,6 +104,7 @@ impl PingManager {
         {
             bail!("Ping-Name darf nur Buchstaben, Zahlen, - und _ enthalten");
         }
+        validate_template(&template)?;
         if self.store.pings.contains_key(&name) {
             bail!("Ping \"{}\" gibt es schon", name);
         }
@@ -121,6 +131,7 @@ impl PingManager {
 
     /// Edit a ping's template. Errors if ping doesn't exist.
     pub fn edit_template(&mut self, name: &str, template: String) -> Result<()> {
+        validate_template(&template)?;
         let ping = self
             .store
             .pings
@@ -324,6 +335,32 @@ mod tests {
         let result = mgr.edit_template("nope", "whatever".into());
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("gibt es nicht"));
+    }
+
+    #[test]
+    fn create_ping_rejects_newline_in_template() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut mgr = empty_manager(dir.path());
+
+        let result = mgr.create_ping(
+            "bad".into(),
+            "Hey {mentions}\r\nPRIVMSG #other :pwned".into(),
+            "admin".into(),
+            None,
+        );
+        assert!(result.is_err());
+        assert!(!mgr.store.pings.contains_key("bad"));
+    }
+
+    #[test]
+    fn edit_template_rejects_control_chars() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut mgr = test_manager(dir.path());
+
+        let result = mgr.edit_template("test", "Hey\x00injection".into());
+        assert!(result.is_err());
+        let ping = mgr.store.pings.get("test").unwrap();
+        assert_eq!(ping.template, "Hey {mentions}!");
     }
 
     #[test]
