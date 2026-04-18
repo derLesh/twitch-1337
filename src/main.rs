@@ -948,7 +948,6 @@ async fn run_config_watcher_service(cache: Arc<tokio::sync::RwLock<database::Sch
 
     // Spawn blocking task for the file watcher (notify is sync)
     let watcher_config_path = config_path.clone();
-    let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
     let mut watcher_handle = tokio::task::spawn_blocking(move || {
         let tx = tx;
         let config_path = watcher_config_path;
@@ -996,8 +995,11 @@ async fn run_config_watcher_service(cache: Arc<tokio::sync::RwLock<database::Sch
 
         info!(path = ?watch_path, "Watching for config changes");
 
-        // Keep the watcher alive until shutdown is signaled
-        let _ = shutdown_rx.blocking_recv();
+        // Park the thread so the debouncer stays alive; the thread terminates
+        // with the process or when this handle's future is dropped on shutdown.
+        loop {
+            std::thread::park();
+        }
     });
 
     // Main loop: handle file change events
@@ -1027,9 +1029,6 @@ async fn run_config_watcher_service(cache: Arc<tokio::sync::RwLock<database::Sch
             }
         }
     }
-
-    // Signal the watcher thread to exit cleanly
-    drop(shutdown_tx);
 }
 
 /// Main entry point for the twitch-1337 bot.
