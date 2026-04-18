@@ -12,7 +12,7 @@ use chrono::{MappedLocalTime, TimeDelta, Timelike, Utc};
 use color_eyre::eyre::{self, Result, WrapErr, bail};
 use rand::seq::IndexedRandom as _;
 use secrecy::{ExposeSecret, SecretString};
-use serde::{Deserialize, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 use tokio::{
     fs::{self, File},
     io::AsyncWriteExt,
@@ -71,15 +71,12 @@ fn default_expected_latency() -> u32 {
     100
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize)]
 struct TwitchConfiguration {
     channel: String,
     username: String,
-    #[serde(serialize_with = "serialize_secret_string")]
     refresh_token: SecretString,
-    #[serde(serialize_with = "serialize_secret_string")]
     client_id: SecretString,
-    #[serde(serialize_with = "serialize_secret_string")]
     client_secret: SecretString,
     #[serde(default = "default_expected_latency")]
     expected_latency: u32,
@@ -90,26 +87,22 @@ struct TwitchConfiguration {
 }
 
 /// Which LLM backend to use.
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "lowercase")]
 enum AiBackend {
     OpenAi,
     Ollama,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize)]
 struct AiConfig {
     /// Backend type: "openai" or "ollama"
     backend: AiBackend,
     /// API key (required for openai, not used for ollama)
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        serialize_with = "serialize_optional_secret_string"
-    )]
+    #[serde(default)]
     api_key: Option<SecretString>,
     /// Base URL for the API (optional, has per-backend defaults)
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     base_url: Option<String>,
     /// Model name to use
     model: String,
@@ -126,7 +119,7 @@ struct AiConfig {
     #[serde(default)]
     history_length: u64,
     /// Optional: Prefill chat history from a rustlog-compatible API at startup
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     history_prefill: Option<prefill::HistoryPrefillConfig>,
     /// Enable persistent AI memory (default: false)
     #[serde(default)]
@@ -153,7 +146,7 @@ fn default_max_memories() -> usize {
 }
 
 /// Configuration for a scheduled message loaded from config.toml.
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize)]
 struct ScheduleConfig {
     name: String,
     message: String,
@@ -196,7 +189,7 @@ fn default_feedback_cooldown() -> u64 {
     300
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize)]
 struct CooldownsConfig {
     #[serde(default = "default_ai_cooldown")]
     ai: u64,
@@ -216,7 +209,7 @@ impl Default for CooldownsConfig {
     }
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize)]
 struct PingsConfig {
     #[serde(default = "default_cooldown")]
     cooldown: u64,
@@ -233,7 +226,7 @@ impl Default for PingsConfig {
     }
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize)]
 struct Configuration {
     twitch: TwitchConfiguration,
     #[serde(default)]
@@ -244,26 +237,6 @@ struct Configuration {
     ai: Option<AiConfig>,
     #[serde(default)]
     schedules: Vec<ScheduleConfig>,
-}
-
-fn serialize_secret_string<S>(secret: &SecretString, serializer: S) -> Result<S::Ok, S::Error>
-where
-    S: Serializer,
-{
-    serializer.serialize_str(secret.expose_secret())
-}
-
-fn serialize_optional_secret_string<S>(
-    value: &Option<SecretString>,
-    serializer: S,
-) -> std::result::Result<S::Ok, S::Error>
-where
-    S: Serializer,
-{
-    match value {
-        Some(secret) => serializer.serialize_str(secret.expose_secret()),
-        None => serializer.serialize_none(),
-    }
 }
 
 impl Configuration {
