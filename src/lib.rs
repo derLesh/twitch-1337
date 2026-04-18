@@ -6,9 +6,11 @@
 
 pub mod aviation;
 pub mod commands;
+pub mod config;
 pub mod cooldown;
 pub mod database;
 pub mod flight_tracker;
+pub mod handlers;
 pub mod llm;
 pub mod memory;
 pub mod ping;
@@ -26,9 +28,9 @@ pub type AuthenticatedTwitchClient<
     L = RefreshingLoginCredentials<crate::token_storage::FileBasedTokenStorage>,
 > = TwitchIRCClient<T, L>;
 
-pub use commands::leaderboard::PersonalBest;
+pub use handlers::tracker_1337::PersonalBest;
 pub use token_storage::FileBasedTokenStorage;
 pub use util::{
-    APP_USER_AGENT, ChatHistory, MAX_RESPONSE_LENGTH, get_data_dir, parse_flight_duration,
-    resolve_berlin_time, truncate_response,
+    APP_USER_AGENT, ChatHistory, MAX_RESPONSE_LENGTH, get_config_path, get_data_dir,
+    parse_flight_duration, resolve_berlin_time, truncate_response,
 };

@@ -20,6 +20,11 @@ pub fn get_data_dir() -> PathBuf {
         .into()
 }
 
+/// Returns the path to the config file within the data directory.
+pub fn get_config_path() -> PathBuf {
+    get_data_dir().join("config.toml")
+}
+
 /// Resolves a naive datetime to Berlin local time, handling DST transitions.
 ///
 /// During spring-forward (gap), interprets as UTC to land just after the gap.

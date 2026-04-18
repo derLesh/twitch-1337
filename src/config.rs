@@ -1,0 +1,181 @@
+//! Configuration types loaded from config.toml.
+//!
+//! These are kept in the library so that handler modules (and integration
+//! tests) can reference them without going through the binary entry point.
+
+use secrecy::SecretString;
+use serde::Deserialize;
+
+use crate::prefill;
+
+fn default_expected_latency() -> u32 {
+    100
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct TwitchConfiguration {
+    pub channel: String,
+    pub username: String,
+    pub refresh_token: SecretString,
+    pub client_id: SecretString,
+    pub client_secret: SecretString,
+    #[serde(default = "default_expected_latency")]
+    pub expected_latency: u32,
+    #[serde(default)]
+    pub hidden_admins: Vec<String>,
+    #[serde(default)]
+    pub admin_channel: Option<String>,
+}
+
+/// Which LLM backend to use.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum AiBackend {
+    OpenAi,
+    Ollama,
+}
+
+fn default_system_prompt() -> String {
+    "You are a helpful Twitch chat bot assistant. Keep responses brief (2-3 sentences max) since they'll appear in chat. Be friendly and casual. Respond in the same language the user writes in (German or English).".to_string()
+}
+
+fn default_instruction_template() -> String {
+    "{chat_history}\n{message}".to_string()
+}
+
+fn default_ai_timeout() -> u64 {
+    30
+}
+
+fn default_max_memories() -> usize {
+    50
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct AiConfig {
+    /// Backend type: "openai" or "ollama"
+    pub backend: AiBackend,
+    /// API key (required for openai, not used for ollama)
+    #[serde(default)]
+    pub api_key: Option<SecretString>,
+    /// Base URL for the API (optional, has per-backend defaults)
+    #[serde(default)]
+    pub base_url: Option<String>,
+    /// Model name to use
+    pub model: String,
+    /// System prompt sent to the model
+    #[serde(default = "default_system_prompt")]
+    pub system_prompt: String,
+    /// Template for the user message. Use `{message}` and `{chat_history}` as placeholders.
+    #[serde(default = "default_instruction_template")]
+    pub instruction_template: String,
+    /// Timeout for AI requests in seconds (default: 30)
+    #[serde(default = "default_ai_timeout")]
+    pub timeout: u64,
+    /// Number of recent chat messages to include as context (0 = disabled, max 100)
+    #[serde(default)]
+    pub history_length: u64,
+    /// Optional: Prefill chat history from a rustlog-compatible API at startup
+    #[serde(default)]
+    pub history_prefill: Option<prefill::HistoryPrefillConfig>,
+    /// Enable persistent AI memory (default: false)
+    #[serde(default)]
+    pub memory_enabled: bool,
+    /// Maximum number of stored memories (default: 50)
+    #[serde(default = "default_max_memories")]
+    pub max_memories: usize,
+}
+
+fn default_cooldown() -> u64 {
+    300
+}
+
+fn default_ai_cooldown() -> u64 {
+    30
+}
+
+fn default_up_cooldown() -> u64 {
+    30
+}
+
+fn default_feedback_cooldown() -> u64 {
+    300
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct CooldownsConfig {
+    #[serde(default = "default_ai_cooldown")]
+    pub ai: u64,
+    #[serde(default = "default_up_cooldown")]
+    pub up: u64,
+    #[serde(default = "default_feedback_cooldown")]
+    pub feedback: u64,
+}
+
+impl Default for CooldownsConfig {
+    fn default() -> Self {
+        Self {
+            ai: default_ai_cooldown(),
+            up: default_up_cooldown(),
+            feedback: default_feedback_cooldown(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct PingsConfig {
+    #[serde(default = "default_cooldown")]
+    pub cooldown: u64,
+    #[serde(default)]
+    pub public: bool,
+}
+
+impl Default for PingsConfig {
+    fn default() -> Self {
+        Self {
+            cooldown: default_cooldown(),
+            public: false,
+        }
+    }
+}
+
+fn default_enabled() -> bool {
+    true
+}
+
+/// Configuration for a scheduled message loaded from config.toml.
+#[derive(Debug, Clone, Deserialize)]
+pub struct ScheduleConfig {
+    pub name: String,
+    pub message: String,
+    /// Interval in "hh:mm" format (e.g., "01:30" for 1 hour 30 minutes)
+    pub interval: String,
+    /// Start date in ISO 8601 format (YYYY-MM-DDTHH:MM:SS)
+    #[serde(default)]
+    pub start_date: Option<String>,
+    /// End date in ISO 8601 format (YYYY-MM-DDTHH:MM:SS)
+    #[serde(default)]
+    pub end_date: Option<String>,
+    /// Daily active time start in HH:MM format
+    #[serde(default)]
+    pub active_time_start: Option<String>,
+    /// Daily active time end in HH:MM format
+    #[serde(default)]
+    pub active_time_end: Option<String>,
+    /// Whether the schedule is enabled (default: true)
+    #[serde(default = "default_enabled")]
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct Configuration {
+    pub twitch: TwitchConfiguration,
+    #[serde(default)]
+    pub pings: PingsConfig,
+    #[serde(default)]
+    pub cooldowns: CooldownsConfig,
+    #[serde(default)]
+    pub ai: Option<AiConfig>,
+    #[serde(default)]
+    pub schedules: Vec<ScheduleConfig>,
+}
