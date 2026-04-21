@@ -65,15 +65,26 @@ Atomic persistence pattern: write tmp + rename. See `ping.rs`, `memory.rs`, `fli
 
 ## Adding handler
 
+Handlers live in `src/handlers/` and are spawned from `src/lib.rs::run_bot`. Each handler is generic over `<T: Transport, L: LoginCredentials>` so integration tests can swap in a fake transport. Shared deps (clock, data_dir, llm, aviation) come from `Services` in `src/lib.rs`.
+
 ```rust
-async fn run_my_handler(broadcast_tx, client) { /* subscribe, filter, act */ }
-// main(): tokio::spawn(run_my_handler(broadcast_tx.clone(), client.clone()))
-// Add to tokio::select! for coordinated shutdown
+// src/handlers/my_handler.rs
+pub async fn run_my_handler<T, L>(
+    broadcast_tx: broadcast::Sender<ServerMessage>,
+    client: Arc<TwitchIRCClient<T, L>>,
+    /* other deps from Services as needed */
+) where T: Transport, L: LoginCredentials { /* subscribe, filter, act */ }
+
+// src/lib.rs::run_bot: spawn + add to the final tokio::select! exit arm
 ```
+
+Integration-testable via `TestBotBuilder` in `tests/common/`.
 
 ## Key constants
 
-`src/main.rs`: `TARGET_HOUR=13`, `TARGET_MINUTE=37`, `MAX_USERS=10_000`, `LATENCY_PING_INTERVAL=300s`, `LATENCY_EMA_ALPHA=0.2`.
+`src/handlers/tracker_1337.rs`: `TARGET_HOUR=13`, `TARGET_MINUTE=37`, `MAX_USERS=10_000`.
+
+`src/handlers/latency.rs`: `LATENCY_PING_INTERVAL=300s`, `LATENCY_EMA_ALPHA=0.2`.
 
 `src/flight_tracker.rs`: `MAX_TRACKED_FLIGHTS=12`, `MAX_FLIGHTS_PER_USER=3`, `TRACKING_LOST_THRESHOLD=300s`, `TRACKING_LOST_REMOVAL=1800s`, `POLL_FAST/NORMAL/SLOW=30/60/120s`.
 
