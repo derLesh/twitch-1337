@@ -137,6 +137,10 @@ pub async fn run_config_watcher_service(cache: Arc<tokio::sync::RwLock<database:
         }
     };
 
+    // Held until this function returns; drop wakes the blocking thread.
+    // `spawn_blocking` drop does NOT unpark threads — explicit signal required.
+    let (_shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
+
     // Spawn blocking task for the file watcher (notify is sync)
     let watcher_config_path = config_path.clone();
     let mut watcher_handle = tokio::task::spawn_blocking(move || {
@@ -186,11 +190,7 @@ pub async fn run_config_watcher_service(cache: Arc<tokio::sync::RwLock<database:
 
         info!(path = ?watch_path, "Watching for config changes");
 
-        // Park the thread so the debouncer stays alive; the thread terminates
-        // with the process or when this handle's future is dropped on shutdown.
-        loop {
-            std::thread::park();
-        }
+        let _ = shutdown_rx.blocking_recv();
     });
 
     // Main loop: handle file change events
@@ -338,6 +338,7 @@ pub async fn run_scheduled_message_handler<T, L>(
             () = shutdown.notified() => {
                 info!("Scheduled message handler: shutdown received, awaiting children");
                 for (name, handle) in running_tasks.drain() {
+                    handle.abort();
                     if let Err(e) = handle.await
                         && !e.is_cancelled()
                     {
