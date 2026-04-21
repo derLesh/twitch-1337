@@ -7,14 +7,13 @@ use std::{
     sync::Arc,
 };
 
-use secrecy::ExposeSecret as _;
 use tokio::{sync::broadcast, time::Duration};
 use tracing::{debug, error, info, instrument};
 use twitch_irc::message::ServerMessage;
 
 use crate::{
     AuthenticatedTwitchClient, ChatHistory, PersonalBest, aviation, commands,
-    config::{AiBackend, AiConfig, CooldownsConfig},
+    config::{AiConfig, CooldownsConfig},
     flight_tracker, get_data_dir, llm, memory, ping, prefill,
 };
 
@@ -27,7 +26,11 @@ use crate::{
 pub struct CommandHandlerConfig {
     pub broadcast_tx: broadcast::Sender<ServerMessage>,
     pub client: Arc<AuthenticatedTwitchClient>,
+    /// Full AI config (system prompt, history, memory settings). `None` disables `!ai`.
     pub ai_config: Option<AiConfig>,
+    /// Pre-built LLM client. When `None`, `!ai` is disabled regardless of `ai_config`.
+    /// Injected so tests can supply a fake and production can call [`llm::build_llm_client`].
+    pub llm: Option<Arc<dyn llm::LlmClient>>,
     pub leaderboard: Arc<tokio::sync::RwLock<HashMap<String, PersonalBest>>>,
     pub ping_manager: Arc<tokio::sync::RwLock<ping::PingManager>>,
     pub hidden_admin_ids: Vec<String>,
@@ -50,6 +53,7 @@ pub async fn run_generic_command_handler(cfg: CommandHandlerConfig) {
         broadcast_tx,
         client,
         ai_config,
+        llm,
         leaderboard,
         ping_manager,
         hidden_admin_ids,
@@ -69,39 +73,16 @@ pub async fn run_generic_command_handler(cfg: CommandHandlerConfig) {
     let history_length = ai_config.as_ref().map_or(0, |c| c.history_length) as usize;
     let prefill_config = ai_config.as_ref().and_then(|c| c.history_prefill.clone());
 
-    // Initialize LLM client (optional)
-    let llm_client: Option<(Arc<dyn llm::LlmClient>, AiConfig)> = if let Some(ai_cfg) = ai_config {
-        let client_result = match ai_cfg.backend {
-            AiBackend::OpenAi => {
-                let api_key = ai_cfg
-                    .api_key
-                    .as_ref()
-                    .expect("validated: openai backend has api_key");
-                llm::openai::OpenAiClient::new(
-                    api_key.expose_secret(),
-                    &ai_cfg.model,
-                    ai_cfg.base_url.as_deref(),
-                )
-                .map(|c| Arc::new(c) as Arc<dyn llm::LlmClient>)
-            }
-            AiBackend::Ollama => {
-                llm::ollama::OllamaClient::new(&ai_cfg.model, ai_cfg.base_url.as_deref())
-                    .map(|c| Arc::new(c) as Arc<dyn llm::LlmClient>)
-            }
-        };
-        match client_result {
-            Ok(client) => {
-                info!(backend = ?ai_cfg.backend, model = %ai_cfg.model, "AI command enabled");
-                Some((client, ai_cfg))
-            }
-            Err(e) => {
-                error!(error = ?e, "Failed to initialize LLM client, AI command disabled");
-                None
-            }
+    // Combine pre-built LLM client with AI config; both must be present to enable !ai.
+    let llm_client: Option<(Arc<dyn llm::LlmClient>, AiConfig)> = match (llm, ai_config) {
+        (Some(llm_arc), Some(ai_cfg)) => {
+            info!(backend = ?ai_cfg.backend, model = %ai_cfg.model, "AI command enabled");
+            Some((llm_arc, ai_cfg))
         }
-    } else {
-        debug!("AI not configured, AI command disabled");
-        None
+        _ => {
+            debug!("AI not configured or LLM client unavailable, AI command disabled");
+            None
+        }
     };
 
     // Create chat history buffer for AI context (if history_length > 0)

@@ -3,10 +3,12 @@
 //! These are kept in the library so that handler modules (and integration
 //! tests) can reference them without going through the binary entry point.
 
+use eyre::{Result, WrapErr, bail};
 use secrecy::SecretString;
 use serde::Deserialize;
+use tracing::info;
 
-use crate::prefill;
+use crate::{database, prefill};
 
 fn default_expected_latency() -> u32 {
     100
@@ -178,4 +180,123 @@ pub struct Configuration {
     pub ai: Option<AiConfig>,
     #[serde(default)]
     pub schedules: Vec<ScheduleConfig>,
+}
+
+/// Load and validate configuration from the standard config path.
+pub async fn load_configuration() -> Result<Configuration> {
+    let config_path = crate::get_config_path();
+    let data = tokio::fs::read_to_string(&config_path)
+        .await
+        .wrap_err_with(|| {
+            format!(
+                "Failed to read config file: {}\nPlease create config.toml from config.toml.example",
+                config_path.display()
+            )
+        })?;
+
+    info!("Loading configuration from {}", config_path.display());
+
+    let config: Configuration =
+        toml::from_str(&data).wrap_err("Failed to parse config.toml - check for syntax errors")?;
+
+    validate_config(&config)?;
+
+    if config.pings.public {
+        info!("Pings can be triggered by anyone");
+    } else {
+        info!("Pings can only be triggered by members");
+    }
+
+    Ok(config)
+}
+
+/// Validate config fields beyond what serde can express.
+pub fn validate_config(config: &Configuration) -> Result<()> {
+    if config.twitch.channel.trim().is_empty() {
+        bail!("twitch.channel cannot be empty");
+    }
+
+    if config.twitch.username.trim().is_empty() {
+        bail!("twitch.username cannot be empty");
+    }
+
+    if config.twitch.expected_latency > 1000 {
+        bail!(
+            "twitch.expected_latency must be <= 1000ms (got {})",
+            config.twitch.expected_latency
+        );
+    }
+
+    if let Some(ref admin_ch) = config.twitch.admin_channel {
+        if admin_ch.trim().is_empty() {
+            bail!("twitch.admin_channel cannot be empty when specified");
+        }
+        if admin_ch == &config.twitch.channel {
+            bail!("twitch.admin_channel must be different from twitch.channel");
+        }
+    }
+
+    if let Some(ref ai) = config.ai
+        && matches!(ai.backend, AiBackend::OpenAi)
+        && ai.api_key.is_none()
+    {
+        bail!("AI backend 'openai' requires an api_key");
+    }
+
+    if let Some(ref ai) = config.ai
+        && ai.history_length > 100
+    {
+        bail!(
+            "ai.history_length must be <= 100 (got {})",
+            ai.history_length
+        );
+    }
+
+    if let Some(ref ai) = config.ai
+        && let Some(ref prefill) = ai.history_prefill
+    {
+        if prefill.base_url.trim().is_empty() {
+            bail!("ai.history_prefill.base_url cannot be empty");
+        }
+        if !(0.0..=1.0).contains(&prefill.threshold) {
+            bail!(
+                "ai.history_prefill.threshold must be between 0.0 and 1.0 (got {})",
+                prefill.threshold
+            );
+        }
+    }
+
+    if let Some(ref ai) = config.ai
+        && ai.history_prefill.is_some()
+        && ai.history_length == 0
+    {
+        bail!("ai.history_prefill requires history_length > 0");
+    }
+
+    if let Some(ref ai) = config.ai
+        && ai.memory_enabled
+        && !(1..=200).contains(&ai.max_memories)
+    {
+        bail!(
+            "ai.max_memories must be between 1 and 200 (got {})",
+            ai.max_memories
+        );
+    }
+
+    for schedule in &config.schedules {
+        if schedule.name.trim().is_empty() {
+            bail!("Schedule name cannot be empty");
+        }
+        if schedule.message.trim().is_empty() {
+            bail!("Schedule '{}' message cannot be empty", schedule.name);
+        }
+        if schedule.interval.trim().is_empty() {
+            bail!("Schedule '{}' interval cannot be empty", schedule.name);
+        }
+        database::Schedule::parse_interval(&schedule.interval).wrap_err_with(|| {
+            format!("Schedule '{}' has invalid interval format", schedule.name)
+        })?;
+    }
+
+    Ok(())
 }

@@ -1,6 +1,7 @@
 use std::{collections::VecDeque, path::PathBuf, sync::Arc};
 
 use chrono::MappedLocalTime;
+use eyre::Result;
 
 /// Application user-agent string used in HTTP requests.
 pub static APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
@@ -23,6 +24,12 @@ pub fn get_data_dir() -> PathBuf {
 /// Returns the path to the config file within the data directory.
 pub fn get_config_path() -> PathBuf {
     get_data_dir().join("config.toml")
+}
+
+/// Create the data directory if it does not exist.
+pub async fn ensure_data_dir() -> Result<()> {
+    tokio::fs::create_dir_all(get_data_dir()).await?;
+    Ok(())
 }
 
 /// Resolves a naive datetime to Berlin local time, handling DST transitions.
