@@ -17,7 +17,7 @@ use bytes::Bytes;
 use either::Either;
 use futures_util::sink::Sink;
 use futures_util::stream::FusedStream;
-use futures_util::{future, SinkExt, StreamExt, TryStreamExt};
+use futures_util::{SinkExt, StreamExt, TryStreamExt, future};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, DuplexStream};
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::LinesStream;

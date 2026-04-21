@@ -8,12 +8,7 @@ pub fn privmsg(channel: &str, user: &str, text: &str) -> String {
 
 /// Build a PRIVMSG line with extra tags. Entries in `extra_tags` whose key
 /// matches a default override the default value; new keys are appended.
-pub fn privmsg_with(
-    channel: &str,
-    user: &str,
-    text: &str,
-    extra_tags: &[(&str, &str)],
-) -> String {
+pub fn privmsg_with(channel: &str, user: &str, text: &str, extra_tags: &[(&str, &str)]) -> String {
     let mut tags: Vec<(&str, String)> = vec![
         ("badge-info", String::new()),
         ("badges", String::new()),

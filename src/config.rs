@@ -182,6 +182,30 @@ pub struct Configuration {
     pub schedules: Vec<ScheduleConfig>,
 }
 
+impl Configuration {
+    /// Minimal configuration suitable for integration tests. Channel =
+    /// "test_chan", username = "bot", no AI, no schedules, default ping
+    /// cooldown. Tests override fields via `TestBotBuilder::with_config`.
+    pub fn test_default() -> Self {
+        Self {
+            twitch: TwitchConfiguration {
+                channel: "test_chan".to_owned(),
+                username: "bot".to_owned(),
+                refresh_token: SecretString::new("test".into()),
+                client_id: SecretString::new("test".into()),
+                client_secret: SecretString::new("test".into()),
+                expected_latency: 100,
+                hidden_admins: Vec::new(),
+                admin_channel: None,
+            },
+            pings: PingsConfig::default(),
+            cooldowns: CooldownsConfig::default(),
+            ai: None,
+            schedules: Vec::new(),
+        }
+    }
+}
+
 /// Load and validate configuration from the standard config path.
 pub async fn load_configuration() -> Result<Configuration> {
     let config_path = crate::get_config_path();

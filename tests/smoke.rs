@@ -9,6 +9,13 @@ use twitch_irc::{ClientConfig, TwitchIRCClient};
 
 #[tokio::test]
 #[serial]
+async fn test_bot_spawns_and_shuts_down_cleanly() {
+    let bot = common::TestBotBuilder::new().spawn().await;
+    bot.shutdown().await;
+}
+
+#[tokio::test]
+#[serial]
 async fn fake_transport_handshake_succeeds() {
     let mut handle = fake_transport::install().await;
 
