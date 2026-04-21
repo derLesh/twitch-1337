@@ -2,13 +2,9 @@ use std::{path::Path, sync::Arc};
 
 use color_eyre::eyre::{Result, WrapErr};
 use tracing::{debug, error, info, instrument, warn};
-use twitch_irc::{
-    TwitchIRCClient,
-    login::LoginCredentials,
-    transport::Transport,
-};
+use twitch_irc::{TwitchIRCClient, login::LoginCredentials, transport::Transport};
 
-use crate::{config::Configuration, database, get_config_path};
+use crate::{clock::Clock, config::Configuration, database, get_config_path};
 
 /// Parse a datetime string in ISO 8601 format (YYYY-MM-DDTHH:MM:SS).
 pub(crate) fn parse_datetime(s: &str) -> Result<chrono::NaiveDateTime> {
@@ -123,9 +119,7 @@ pub(crate) fn reload_schedules_from_config() -> Option<Vec<database::Schedule>> 
 /// Config file watcher service that monitors config.toml for changes.
 /// Uses notify-debouncer-mini with 2 second debounce to avoid rapid reloads.
 #[instrument(skip(cache))]
-pub async fn run_config_watcher_service(
-    cache: Arc<tokio::sync::RwLock<database::ScheduleCache>>,
-) {
+pub async fn run_config_watcher_service(cache: Arc<tokio::sync::RwLock<database::ScheduleCache>>) {
     use notify_debouncer_mini::{new_debouncer, notify::RecursiveMode};
     use std::time::Duration as StdDuration;
 
@@ -231,18 +225,18 @@ pub async fn run_config_watcher_service(
 /// Run a single schedule task.
 /// This task will run the schedule at its configured interval,
 /// checking if it's still active before each post.
-#[instrument(skip(client, cache, channel), fields(schedule = %schedule.name))]
+#[instrument(skip(client, cache, channel, clock), fields(schedule = %schedule.name))]
 pub(crate) async fn run_schedule_task<T, L>(
     schedule: database::Schedule,
     client: Arc<TwitchIRCClient<T, L>>,
     cache: Arc<tokio::sync::RwLock<database::ScheduleCache>>,
     channel: String,
     shutdown: Arc<tokio::sync::Notify>,
+    clock: Arc<dyn Clock>,
 ) where
     T: Transport,
     L: LoginCredentials,
 {
-    use chrono::Utc;
     use tokio::time::{Duration, sleep};
 
     let interval_duration = Duration::from_secs(schedule.interval.num_seconds() as u64);
@@ -281,7 +275,7 @@ pub(crate) async fn run_schedule_task<T, L>(
         }
 
         // Check if schedule is currently active (respects date range and time window)
-        let now = Utc::now().with_timezone(&chrono_tz::Europe::Berlin);
+        let now = clock.now_utc().with_timezone(&chrono_tz::Europe::Berlin);
 
         if !schedule.is_active(now) {
             debug!(
@@ -314,12 +308,13 @@ pub(crate) async fn run_schedule_task<T, L>(
 
 /// Dynamic scheduled message handler that monitors cache for changes.
 /// Spawns and stops tasks dynamically based on cache updates.
-#[instrument(skip(client, cache, channel))]
+#[instrument(skip(client, cache, channel, clock))]
 pub async fn run_scheduled_message_handler<T, L>(
     client: Arc<TwitchIRCClient<T, L>>,
     cache: Arc<tokio::sync::RwLock<database::ScheduleCache>>,
     channel: String,
     shutdown: Arc<tokio::sync::Notify>,
+    clock: Arc<dyn Clock>,
 ) where
     T: Transport,
     L: LoginCredentials,
@@ -388,15 +383,17 @@ pub async fn run_scheduled_message_handler<T, L>(
             for (name, schedule) in desired_schedules {
                 let channel = channel.clone();
                 let shutdown = shutdown.clone();
+                let clock = clock.clone();
                 running_tasks.entry(name.clone()).or_insert_with(|| {
                     info!(schedule = %name, "Starting task for new schedule");
 
                     tokio::spawn(run_schedule_task(
-                        schedule.clone(),
+                        schedule,
                         client.clone(),
                         cache.clone(),
                         channel,
                         shutdown,
+                        clock,
                     ))
                 });
             }

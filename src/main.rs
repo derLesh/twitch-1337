@@ -250,6 +250,8 @@ pub async fn main() -> Result<()> {
     // Graceful shutdown signal for handlers that need to drain children (#31).
     let shutdown = Arc::new(tokio::sync::Notify::new());
 
+    let clock: Arc<dyn Clock> = Arc::new(SystemClock);
+
     // Optionally spawn config watcher service and scheduled message handler
     let (watcher_service, handler_scheduled_messages) = if schedules_enabled {
         info!(
@@ -283,7 +285,10 @@ pub async fn main() -> Result<()> {
             let cache = schedule_cache.clone();
             let channel = config.twitch.channel.clone();
             let shutdown = shutdown.clone();
-            async move { run_scheduled_message_handler(client, cache, channel, shutdown).await }
+            let clock = clock.clone();
+            async move {
+                run_scheduled_message_handler(client, cache, channel, shutdown, clock).await;
+            }
         });
 
         (Some(watcher), Some(handler))
@@ -312,7 +317,7 @@ pub async fn main() -> Result<()> {
         let channel = config.twitch.channel.clone();
         let latency = latency.clone();
         let leaderboard = leaderboard.clone();
-        let clock: Arc<dyn Clock> = Arc::new(SystemClock);
+        let clock = clock.clone();
         async move {
             run_1337_handler(broadcast_tx, client, channel, latency, leaderboard, clock).await;
         }
