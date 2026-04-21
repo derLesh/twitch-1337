@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use eyre::Result;
+use twitch_irc::{login::LoginCredentials, transport::Transport};
 
 use super::{Command, CommandContext};
 use crate::aviation::AviationClient;
@@ -20,7 +21,11 @@ impl FlightsAboveCommand {
 }
 
 #[async_trait]
-impl Command for FlightsAboveCommand {
+impl<T, L> Command<T, L> for FlightsAboveCommand
+where
+    T: Transport,
+    L: LoginCredentials,
+{
     fn name(&self) -> &str {
         "!up"
     }
@@ -29,7 +34,7 @@ impl Command for FlightsAboveCommand {
         self.aviation_client.is_some()
     }
 
-    async fn execute(&self, ctx: CommandContext<'_>) -> Result<()> {
+    async fn execute(&self, ctx: CommandContext<'_, T, L>) -> Result<()> {
         let client = self
             .aviation_client
             .as_ref()

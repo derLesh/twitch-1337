@@ -2,6 +2,7 @@ use async_trait::async_trait;
 use eyre::Result;
 use tokio::sync::mpsc;
 use tracing::error;
+use twitch_irc::{login::LoginCredentials, transport::Transport};
 
 use super::{Command, CommandContext};
 use crate::flight_tracker::TrackerCommand;
@@ -17,12 +18,16 @@ impl UntrackCommand {
 }
 
 #[async_trait]
-impl Command for UntrackCommand {
+impl<T, L> Command<T, L> for UntrackCommand
+where
+    T: Transport,
+    L: LoginCredentials,
+{
     fn name(&self) -> &str {
         "!untrack"
     }
 
-    async fn execute(&self, ctx: CommandContext<'_>) -> Result<()> {
+    async fn execute(&self, ctx: CommandContext<'_, T, L>) -> Result<()> {
         let input = ctx.args.join(" ");
         if input.trim().is_empty() {
             if let Err(e) = ctx

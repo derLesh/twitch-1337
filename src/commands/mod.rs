@@ -2,9 +2,9 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use eyre::Result;
-use twitch_irc::message::PrivmsgMessage;
-
-use crate::AuthenticatedTwitchClient;
+use twitch_irc::{
+    TwitchIRCClient, login::LoginCredentials, message::PrivmsgMessage, transport::Transport,
+};
 
 pub mod ai;
 pub mod feedback;
@@ -18,11 +18,11 @@ pub mod track;
 pub mod untrack;
 
 /// Context passed to every command execution.
-pub struct CommandContext<'a> {
+pub struct CommandContext<'a, T: Transport, L: LoginCredentials> {
     /// The chat message that triggered the command.
     pub privmsg: &'a PrivmsgMessage,
     /// The IRC client for sending responses.
-    pub client: &'a Arc<AuthenticatedTwitchClient>,
+    pub client: &'a Arc<TwitchIRCClient<T, L>>,
     /// The first word of the message that matched the command.
     pub trigger: &'a str,
     /// Remaining words after the command name.
@@ -31,7 +31,11 @@ pub struct CommandContext<'a> {
 
 /// Trait implemented by all bot commands.
 #[async_trait]
-pub trait Command: Send + Sync {
+pub trait Command<T, L>: Send + Sync
+where
+    T: Transport,
+    L: LoginCredentials,
+{
     /// The command trigger including "!" prefix (e.g., "!lb").
     fn name(&self) -> &str;
 
@@ -47,5 +51,5 @@ pub trait Command: Send + Sync {
     }
 
     /// Execute the command with the given context.
-    async fn execute(&self, ctx: CommandContext<'_>) -> Result<()>;
+    async fn execute(&self, ctx: CommandContext<'_, T, L>) -> Result<()>;
 }

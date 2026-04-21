@@ -5,6 +5,7 @@ use async_trait::async_trait;
 use eyre::Result;
 use tokio::sync::RwLock;
 use tracing::{debug, error};
+use twitch_irc::{login::LoginCredentials, transport::Transport};
 
 use super::{Command, CommandContext};
 use crate::cooldown::format_cooldown_remaining;
@@ -41,7 +42,11 @@ fn parse_ping_trigger(word: &str) -> Option<String> {
 }
 
 #[async_trait]
-impl Command for PingTriggerCommand {
+impl<T, L> Command<T, L> for PingTriggerCommand
+where
+    T: Transport,
+    L: LoginCredentials,
+{
     fn name(&self) -> &str {
         // Not used for matching -- matches() is overridden
         "!<ping>"
@@ -65,7 +70,7 @@ impl Command for PingTriggerCommand {
         manager.ping_exists_ignore_case(name)
     }
 
-    async fn execute(&self, ctx: CommandContext<'_>) -> Result<()> {
+    async fn execute(&self, ctx: CommandContext<'_, T, L>) -> Result<()> {
         let Some(ping_name) = parse_ping_trigger(ctx.trigger) else {
             return Ok(());
         };

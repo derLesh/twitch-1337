@@ -7,9 +7,10 @@ use tokio::fs;
 use tokio::sync::mpsc;
 use tokio::time::Duration;
 use tracing::{debug, error, info, warn};
-use twitch_irc::message::PrivmsgMessage;
+use twitch_irc::{
+    TwitchIRCClient, login::LoginCredentials, message::PrivmsgMessage, transport::Transport,
+};
 
-use crate::AuthenticatedTwitchClient;
 use crate::aviation::{AltBaro, AviationClient, NearbyAircraft, iata_to_coords};
 use crate::clock::Clock;
 
@@ -536,14 +537,17 @@ pub(crate) fn compute_poll_interval(flights: &[TrackedFlight]) -> Duration {
 
 /// Main flight tracker handler. Processes commands, polls adsb.lol, detects
 /// state changes, and posts chat messages.
-pub async fn run_flight_tracker(
+pub async fn run_flight_tracker<T, L>(
     mut cmd_rx: mpsc::Receiver<TrackerCommand>,
-    client: Arc<AuthenticatedTwitchClient>,
+    client: Arc<TwitchIRCClient<T, L>>,
     channel: String,
     aviation_client: AviationClient,
     data_dir: PathBuf,
     clock: Arc<dyn Clock>,
-) {
+) where
+    T: Transport,
+    L: LoginCredentials,
+{
     let mut state = load_tracker_state(&data_dir).await;
     info!(flights = state.flights.len(), "Flight tracker started");
 
@@ -622,14 +626,17 @@ pub async fn run_flight_tracker(
     }
 }
 
-async fn process_command(
+async fn process_command<T, L>(
     cmd: TrackerCommand,
     state: &mut FlightTrackerState,
-    client: &Arc<AuthenticatedTwitchClient>,
+    client: &Arc<TwitchIRCClient<T, L>>,
     aviation_client: &AviationClient,
     data_dir: &Path,
     clock: &dyn Clock,
-) {
+) where
+    T: Transport,
+    L: LoginCredentials,
+{
     match cmd {
         TrackerCommand::Track {
             identifier,
@@ -675,16 +682,19 @@ async fn process_command(
 }
 
 #[allow(clippy::too_many_arguments)] // internal handler: all args are distinct resources
-async fn handle_track(
+async fn handle_track<T, L>(
     identifier: FlightIdentifier,
     requested_by: &str,
     reply_to: &PrivmsgMessage,
     state: &mut FlightTrackerState,
-    client: &Arc<AuthenticatedTwitchClient>,
+    client: &Arc<TwitchIRCClient<T, L>>,
     aviation_client: &AviationClient,
     data_dir: &Path,
     clock: &dyn Clock,
-) {
+) where
+    T: Transport,
+    L: LoginCredentials,
+{
     // Check global limit
     if state.flights.len() >= MAX_TRACKED_FLIGHTS {
         let msg = format!("Maximal {MAX_TRACKED_FLIGHTS} Flüge gleichzeitig FDM");
@@ -841,15 +851,18 @@ async fn handle_track(
     }
 }
 
-async fn handle_untrack(
+async fn handle_untrack<T, L>(
     identifier: &str,
     requested_by: &str,
     is_mod: bool,
     reply_to: &PrivmsgMessage,
     state: &mut FlightTrackerState,
-    client: &Arc<AuthenticatedTwitchClient>,
+    client: &Arc<TwitchIRCClient<T, L>>,
     data_dir: &Path,
-) {
+) where
+    T: Transport,
+    L: LoginCredentials,
+{
     let Some(idx) = find_flight_index(&state.flights, identifier) else {
         if let Err(e) = client
             .say_in_reply_to(reply_to, format!("{identifier} nicht gefunden FDM"))
@@ -892,13 +905,16 @@ async fn handle_untrack(
     }
 }
 
-async fn handle_status(
+async fn handle_status<T, L>(
     identifier: Option<&str>,
     reply_to: &PrivmsgMessage,
     state: &FlightTrackerState,
-    client: &Arc<AuthenticatedTwitchClient>,
+    client: &Arc<TwitchIRCClient<T, L>>,
     clock: &dyn Clock,
-) {
+) where
+    T: Transport,
+    L: LoginCredentials,
+{
     let response = match identifier {
         None => msg_flights_list(&state.flights),
         Some(id) => match find_flight_index(&state.flights, id) {
@@ -912,14 +928,17 @@ async fn handle_status(
     }
 }
 
-async fn poll_all_flights(
+async fn poll_all_flights<T, L>(
     state: &mut FlightTrackerState,
-    client: &Arc<AuthenticatedTwitchClient>,
+    client: &Arc<TwitchIRCClient<T, L>>,
     channel: &str,
     aviation_client: &AviationClient,
     data_dir: &Path,
     clock: &dyn Clock,
-) {
+) where
+    T: Transport,
+    L: LoginCredentials,
+{
     let now = clock.now_utc();
     let mut changed = false;
     let mut removals: Vec<usize> = Vec::new();

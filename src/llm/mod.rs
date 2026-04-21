@@ -96,9 +96,11 @@ pub trait LlmClient: Send + Sync {
 /// Returns `Ok(None)` when no AI config is provided or AI is disabled.
 /// Returns `Ok(Some(client))` when the client is successfully built.
 /// Returns `Err` only when the configuration is invalid (not when the backend is unreachable).
-pub fn build_llm_client(ai_config: Option<&crate::config::AiConfig>) -> Result<Option<Arc<dyn LlmClient>>> {
-    use secrecy::ExposeSecret as _;
+pub fn build_llm_client(
+    ai_config: Option<&crate::config::AiConfig>,
+) -> Result<Option<Arc<dyn LlmClient>>> {
     use crate::config::AiBackend;
+    use secrecy::ExposeSecret as _;
 
     let Some(ai_cfg) = ai_config else {
         debug!("AI not configured, AI command disabled");
@@ -118,10 +120,8 @@ pub fn build_llm_client(ai_config: Option<&crate::config::AiConfig>) -> Result<O
             )
             .map(|c| Arc::new(c) as Arc<dyn LlmClient>)
         }
-        AiBackend::Ollama => {
-            ollama::OllamaClient::new(&ai_cfg.model, ai_cfg.base_url.as_deref())
-                .map(|c| Arc::new(c) as Arc<dyn LlmClient>)
-        }
+        AiBackend::Ollama => ollama::OllamaClient::new(&ai_cfg.model, ai_cfg.base_url.as_deref())
+            .map(|c| Arc::new(c) as Arc<dyn LlmClient>),
     };
 
     match result {

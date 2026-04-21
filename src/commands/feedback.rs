@@ -6,6 +6,7 @@ use tokio::fs::OpenOptions;
 use tokio::io::AsyncWriteExt;
 use tokio::time::Duration;
 use tracing::{error, info};
+use twitch_irc::{login::LoginCredentials, transport::Transport};
 
 use super::{Command, CommandContext};
 use crate::cooldown::{PerUserCooldown, format_cooldown_remaining};
@@ -27,12 +28,16 @@ impl FeedbackCommand {
 }
 
 #[async_trait]
-impl Command for FeedbackCommand {
+impl<T, L> Command<T, L> for FeedbackCommand
+where
+    T: Transport,
+    L: LoginCredentials,
+{
     fn name(&self) -> &str {
         "!fb"
     }
 
-    async fn execute(&self, ctx: CommandContext<'_>) -> Result<()> {
+    async fn execute(&self, ctx: CommandContext<'_, T, L>) -> Result<()> {
         let user = &ctx.privmsg.sender.login;
         let message: String = ctx.args.join(" ");
 

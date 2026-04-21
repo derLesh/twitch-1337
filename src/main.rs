@@ -4,26 +4,10 @@ use chrono::Utc;
 use color_eyre::eyre::Result;
 use tokio::sync::oneshot;
 use tracing::info;
-use tracing_error::ErrorLayer;
-use tracing_subscriber::prelude::*;
-use tracing_subscriber::{EnvFilter, fmt};
 use twitch_1337::{
-    Services, aviation, clock::SystemClock, ensure_data_dir, get_data_dir, llm,
+    Services, aviation, clock::SystemClock, ensure_data_dir, get_data_dir, install_tracing, llm,
     load_configuration, run_bot, setup_and_verify_twitch_client,
 };
-
-fn install_tracing() {
-    let fmt_layer = fmt::layer().with_target(false);
-    let filter_layer = EnvFilter::try_from_default_env()
-        .or_else(|_| EnvFilter::try_new("info"))
-        .unwrap();
-
-    tracing_subscriber::registry()
-        .with(filter_layer)
-        .with(fmt_layer)
-        .with(ErrorLayer::default())
-        .init();
-}
 
 #[tokio::main]
 pub async fn main() -> Result<()> {

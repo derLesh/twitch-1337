@@ -9,23 +9,20 @@ use std::{
 
 use tokio::{sync::broadcast, time::Duration};
 use tracing::{debug, error, info, instrument};
-use twitch_irc::message::ServerMessage;
+use twitch_irc::{
+    TwitchIRCClient, login::LoginCredentials, message::ServerMessage, transport::Transport,
+};
 
 use crate::{
-    AuthenticatedTwitchClient, ChatHistory, PersonalBest, aviation, commands,
+    ChatHistory, PersonalBest, aviation, commands,
     config::{AiConfig, CooldownsConfig},
     flight_tracker, get_data_dir, llm, memory, ping, prefill,
 };
 
 /// Configuration for the generic command handler.
-///
-/// Uses the production concrete client type because `Box<dyn Command>` (the command
-/// registry) requires a fixed `CommandContext` type — making this generic over
-/// `Transport + LoginCredentials` would prevent `dyn Command` dispatch.
-/// Handlers that don't use `dyn Command` (1337, latency, schedules) are generic.
-pub struct CommandHandlerConfig {
+pub struct CommandHandlerConfig<T: Transport, L: LoginCredentials> {
     pub broadcast_tx: broadcast::Sender<ServerMessage>,
-    pub client: Arc<AuthenticatedTwitchClient>,
+    pub client: Arc<TwitchIRCClient<T, L>>,
     /// Full AI config (system prompt, history, memory settings). `None` disables `!ai`.
     pub ai_config: Option<AiConfig>,
     /// Pre-built LLM client. When `None`, `!ai` is disabled regardless of `ai_config`.
@@ -46,7 +43,11 @@ pub struct CommandHandlerConfig {
 
 /// Handler for generic text commands that start with `!`.
 #[instrument(skip(cfg))]
-pub async fn run_generic_command_handler(cfg: CommandHandlerConfig) {
+pub async fn run_generic_command_handler<T, L>(cfg: CommandHandlerConfig<T, L>)
+where
+    T: Transport + Send + Sync + 'static,
+    L: LoginCredentials + Send + Sync + 'static,
+{
     info!("Generic Command Handler started");
 
     let CommandHandlerConfig {
@@ -99,7 +100,7 @@ pub async fn run_generic_command_handler(cfg: CommandHandlerConfig) {
 
     let data_dir = get_data_dir();
 
-    let mut cmd_list: Vec<Box<dyn commands::Command>> = vec![
+    let mut cmd_list: Vec<Box<dyn commands::Command<T, L>>> = vec![
         Box::new(commands::ping_admin::PingAdminCommand::new(
             ping_manager.clone(),
             hidden_admin_ids,
@@ -183,14 +184,17 @@ pub async fn run_generic_command_handler(cfg: CommandHandlerConfig) {
 }
 
 /// Main dispatch loop for trait-based commands.
-pub(crate) async fn run_command_dispatcher(
+pub(crate) async fn run_command_dispatcher<T, L>(
     mut broadcast_rx: broadcast::Receiver<ServerMessage>,
-    client: Arc<AuthenticatedTwitchClient>,
-    commands: Vec<Box<dyn crate::commands::Command>>,
+    client: Arc<TwitchIRCClient<T, L>>,
+    commands: Vec<Box<dyn crate::commands::Command<T, L>>>,
     admin_channel: Option<String>,
     chat_history: Option<ChatHistory>,
     history_length: usize,
-) {
+) where
+    T: Transport,
+    L: LoginCredentials,
+{
     loop {
         match broadcast_rx.recv().await {
             Ok(message) => {

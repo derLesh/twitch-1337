@@ -5,6 +5,7 @@ use async_trait::async_trait;
 use eyre::Result;
 use tokio::sync::RwLock;
 use tracing::error;
+use twitch_irc::{login::LoginCredentials, transport::Transport};
 
 use super::{Command, CommandContext};
 pub use crate::handlers::tracker_1337::PersonalBest;
@@ -20,12 +21,16 @@ impl LeaderboardCommand {
 }
 
 #[async_trait]
-impl Command for LeaderboardCommand {
+impl<T, L> Command<T, L> for LeaderboardCommand
+where
+    T: Transport,
+    L: LoginCredentials,
+{
     fn name(&self) -> &str {
         "!lb"
     }
 
-    async fn execute(&self, ctx: CommandContext<'_>) -> Result<()> {
+    async fn execute(&self, ctx: CommandContext<'_, T, L>) -> Result<()> {
         let leaderboard = self.leaderboard.read().await;
 
         let response = if let Some((username, pb)) = leaderboard.iter().min_by_key(|(_, pb)| pb.ms)

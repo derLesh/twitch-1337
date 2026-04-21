@@ -5,9 +5,10 @@ use std::sync::Arc;
 use std::sync::OnceLock;
 use std::time::Duration;
 use tracing::{debug, error, warn};
-use twitch_irc::message::PrivmsgMessage;
+use twitch_irc::{
+    TwitchIRCClient, login::LoginCredentials, message::PrivmsgMessage, transport::Transport,
+};
 
-use crate::AuthenticatedTwitchClient;
 use crate::cooldown::format_cooldown_remaining;
 use crate::util::{APP_USER_AGENT, MAX_RESPONSE_LENGTH, truncate_response};
 
@@ -566,13 +567,17 @@ fn format_altitude(alt: &Option<AltBaro>) -> String {
     }
 }
 
-pub async fn up_command(
+pub async fn up_command<T, L>(
     privmsg: &PrivmsgMessage,
-    client: &Arc<AuthenticatedTwitchClient>,
+    client: &Arc<TwitchIRCClient<T, L>>,
     aviation_client: &AviationClient,
     input: &str,
     cooldown: &crate::cooldown::PerUserCooldown,
-) -> Result<()> {
+) -> Result<()>
+where
+    T: Transport,
+    L: LoginCredentials,
+{
     let user = &privmsg.sender.login;
     let input = input.trim();
 

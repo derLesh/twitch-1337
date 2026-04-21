@@ -4,6 +4,7 @@ use std::time::Duration;
 use async_trait::async_trait;
 use eyre::Result;
 use tracing::{debug, error, instrument};
+use twitch_irc::{login::LoginCredentials, transport::Transport};
 
 use crate::cooldown::{PerUserCooldown, format_cooldown_remaining};
 use crate::llm::{ChatCompletionRequest, LlmClient, Message};
@@ -58,13 +59,17 @@ impl AiCommand {
 }
 
 #[async_trait]
-impl Command for AiCommand {
+impl<T, L> Command<T, L> for AiCommand
+where
+    T: Transport,
+    L: LoginCredentials,
+{
     fn name(&self) -> &str {
         "!ai"
     }
 
     #[instrument(skip(self, ctx))]
-    async fn execute(&self, ctx: CommandContext<'_>) -> Result<()> {
+    async fn execute(&self, ctx: CommandContext<'_, T, L>) -> Result<()> {
         let user = &ctx.privmsg.sender.login;
 
         // Check cooldown

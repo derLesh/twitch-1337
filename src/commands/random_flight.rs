@@ -3,9 +3,10 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use eyre::{Result, WrapErr};
 use tracing::{error, instrument, warn};
-use twitch_irc::message::PrivmsgMessage;
+use twitch_irc::{
+    TwitchIRCClient, login::LoginCredentials, message::PrivmsgMessage, transport::Transport,
+};
 
-use crate::AuthenticatedTwitchClient;
 use crate::util::parse_flight_duration;
 
 use super::{Command, CommandContext};
@@ -13,12 +14,16 @@ use super::{Command, CommandContext};
 pub struct RandomFlightCommand;
 
 #[async_trait]
-impl Command for RandomFlightCommand {
+impl<T, L> Command<T, L> for RandomFlightCommand
+where
+    T: Transport,
+    L: LoginCredentials,
+{
     fn name(&self) -> &str {
         "!fl"
     }
 
-    async fn execute(&self, ctx: CommandContext<'_>) -> Result<()> {
+    async fn execute(&self, ctx: CommandContext<'_, T, L>) -> Result<()> {
         flight_command(
             ctx.privmsg,
             ctx.client,
@@ -30,12 +35,16 @@ impl Command for RandomFlightCommand {
 }
 
 #[instrument(skip(privmsg, client), fields(user = %privmsg.sender.login))]
-pub(crate) async fn flight_command(
+pub(crate) async fn flight_command<T, L>(
     privmsg: &PrivmsgMessage,
-    client: &Arc<AuthenticatedTwitchClient>,
+    client: &Arc<TwitchIRCClient<T, L>>,
     aircraft_code: Option<&str>,
     duration_str: Option<&str>,
-) -> Result<()> {
+) -> Result<()>
+where
+    T: Transport,
+    L: LoginCredentials,
+{
     const USAGE_MSG: &str = "Gib mir nen Flugzeug und ne Zeit, z.B. !fl A20N 1h FDM";
 
     let (Some(aircraft_code), Some(duration_str)) = (aircraft_code, duration_str) else {

@@ -16,6 +16,7 @@ pub mod llm;
 pub mod memory;
 pub mod ping;
 pub mod prefill;
+pub mod telemetry;
 pub mod token_storage;
 pub mod twitch_setup;
 pub mod util;
@@ -29,8 +30,9 @@ use tokio::time::Duration;
 use tracing::{error, info, warn};
 use twitch_irc::{
     TwitchIRCClient,
-    login::RefreshingLoginCredentials,
+    login::{LoginCredentials, RefreshingLoginCredentials},
     message::ServerMessage,
+    transport::Transport,
 };
 
 use crate::{
@@ -58,6 +60,7 @@ pub type AuthenticatedTwitchClient<
 
 pub use config::{load_configuration, validate_config};
 pub use handlers::tracker_1337::PersonalBest;
+pub use telemetry::install_tracing;
 pub use token_storage::FileBasedTokenStorage;
 pub use twitch_setup::{setup_and_verify_twitch_client, setup_twitch_client};
 pub use util::{
@@ -78,15 +81,18 @@ pub struct Services {
 /// Run the bot until `shutdown` fires or a handler exits.
 ///
 /// Shared entry point for `main.rs` (production) and integration tests.
-/// Takes the concrete `AuthenticatedTwitchClient` because command and flight-tracker
-/// handlers rely on concrete dispatch (`Box<dyn Command>` and `run_flight_tracker`).
-pub async fn run_bot(
-    client: Arc<AuthenticatedTwitchClient>,
+/// Generic over `Transport` and `LoginCredentials` so tests can substitute a
+/// `FakeTransport` without touching production code paths.
+pub async fn run_bot<T, L>(
+    client: Arc<TwitchIRCClient<T, L>>,
     incoming: UnboundedReceiver<ServerMessage>,
     config: Configuration,
     services: Services,
     shutdown: oneshot::Receiver<()>,
 ) -> Result<()>
+where
+    T: Transport + Send + Sync + 'static,
+    L: LoginCredentials + Send + Sync + 'static,
 {
     let Services {
         clock,
@@ -136,7 +142,10 @@ pub async fn run_bot(
             "Schedules configured, starting scheduled message system"
         );
         let initial_schedules = load_schedules_from_config(&config);
-        info!(loaded = initial_schedules.len(), "Loaded initial schedules from config");
+        info!(
+            loaded = initial_schedules.len(),
+            "Loaded initial schedules from config"
+        );
 
         let mut cache = database::ScheduleCache::new();
         cache.update(initial_schedules);
@@ -215,10 +224,14 @@ pub async fn run_bot(
     });
 
     if schedules_enabled {
-        info!("Bot running with continuous connection. Handlers: Config watcher, 1337 tracker, Generic commands, Scheduled messages, Latency monitor, Flight tracker");
+        info!(
+            "Bot running with continuous connection. Handlers: Config watcher, 1337 tracker, Generic commands, Scheduled messages, Latency monitor, Flight tracker"
+        );
         info!("Scheduled messages: Loaded from config.toml, reloads on file change");
     } else {
-        info!("Bot running with continuous connection. Handlers: 1337 tracker, Generic commands, Latency monitor, Flight tracker");
+        info!(
+            "Bot running with continuous connection. Handlers: 1337 tracker, Generic commands, Latency monitor, Flight tracker"
+        );
     }
     info!(
         "1337 tracker scheduled to run daily at {}:{:02} (Europe/Berlin)",

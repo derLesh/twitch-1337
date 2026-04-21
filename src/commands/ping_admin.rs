@@ -3,7 +3,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use eyre::Result;
 use tokio::sync::RwLock;
-use twitch_irc::message::PrivmsgMessage;
+use twitch_irc::{login::LoginCredentials, message::PrivmsgMessage, transport::Transport};
 
 use crate::ping::PingManager;
 
@@ -38,12 +38,16 @@ impl PingAdminCommand {
 }
 
 #[async_trait]
-impl Command for PingAdminCommand {
+impl<T, L> Command<T, L> for PingAdminCommand
+where
+    T: Transport,
+    L: LoginCredentials,
+{
     fn name(&self) -> &str {
         "!p"
     }
 
-    async fn execute(&self, ctx: CommandContext<'_>) -> Result<()> {
+    async fn execute(&self, ctx: CommandContext<'_, T, L>) -> Result<()> {
         let subcommand = ctx.args.first().copied().unwrap_or("");
 
         match subcommand {
@@ -82,7 +86,11 @@ impl Command for PingAdminCommand {
 
 impl PingAdminCommand {
     /// !p create <name> <template...>
-    async fn handle_create(&self, ctx: &CommandContext<'_>) -> Result<()> {
+    async fn handle_create<T, L>(&self, ctx: &CommandContext<'_, T, L>) -> Result<()>
+    where
+        T: Transport,
+        L: LoginCredentials,
+    {
         if ctx.args.len() < 3 {
             ctx.client
                 .say_in_reply_to(
@@ -118,7 +126,11 @@ impl PingAdminCommand {
     }
 
     /// !p delete <name>
-    async fn handle_delete(&self, ctx: &CommandContext<'_>) -> Result<()> {
+    async fn handle_delete<T, L>(&self, ctx: &CommandContext<'_, T, L>) -> Result<()>
+    where
+        T: Transport,
+        L: LoginCredentials,
+    {
         let name = match ctx.args.get(1) {
             Some(n) => normalize_ping_name(n),
             None => {
@@ -146,7 +158,11 @@ impl PingAdminCommand {
     }
 
     /// !p edit <name> <new template...>
-    async fn handle_edit(&self, ctx: &CommandContext<'_>) -> Result<()> {
+    async fn handle_edit<T, L>(&self, ctx: &CommandContext<'_, T, L>) -> Result<()>
+    where
+        T: Transport,
+        L: LoginCredentials,
+    {
         if ctx.args.len() < 3 {
             ctx.client
                 .say_in_reply_to(ctx.privmsg, "Nutze: !p edit <name> <template>".to_string())
@@ -174,7 +190,11 @@ impl PingAdminCommand {
     }
 
     /// !p add/remove <name> <user>
-    async fn handle_member_op(&self, ctx: &CommandContext<'_>, op: &str) -> Result<()> {
+    async fn handle_member_op<T, L>(&self, ctx: &CommandContext<'_, T, L>, op: &str) -> Result<()>
+    where
+        T: Transport,
+        L: LoginCredentials,
+    {
         if ctx.args.len() < 3 {
             ctx.client
                 .say_in_reply_to(ctx.privmsg, format!("Nutze: !p {op} <name> <user>"))
@@ -211,7 +231,11 @@ impl PingAdminCommand {
     }
 
     /// !p join/leave <name> -- self-service membership
-    async fn handle_self_op(&self, ctx: &CommandContext<'_>, op: &str) -> Result<()> {
+    async fn handle_self_op<T, L>(&self, ctx: &CommandContext<'_, T, L>, op: &str) -> Result<()>
+    where
+        T: Transport,
+        L: LoginCredentials,
+    {
         let name = match ctx.args.get(1) {
             Some(n) => normalize_ping_name(n),
             None => {
@@ -253,7 +277,11 @@ impl PingAdminCommand {
     }
 
     /// !p list
-    async fn handle_list(&self, ctx: &CommandContext<'_>) -> Result<()> {
+    async fn handle_list<T, L>(&self, ctx: &CommandContext<'_, T, L>) -> Result<()>
+    where
+        T: Transport,
+        L: LoginCredentials,
+    {
         let manager = self.ping_manager.read().await;
         let pings = manager.list_pings_for_user(&ctx.privmsg.sender.login);
 
