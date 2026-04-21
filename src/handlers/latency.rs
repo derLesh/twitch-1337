@@ -10,11 +10,10 @@ use tokio::{
 };
 use tracing::{debug, info, instrument, warn};
 use twitch_irc::{
-    irc,
+    TwitchIRCClient, irc,
     login::LoginCredentials,
     message::{PongMessage, ServerMessage},
     transport::Transport,
-    TwitchIRCClient,
 };
 
 /// Interval between PING measurements
