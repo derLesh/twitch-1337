@@ -31,8 +31,14 @@ async fn ping_trigger_renders_template_with_mentions() {
     // Alice triggers !hi. Bob should be mentioned; alice (sender) excluded.
     bot.send("alice", "!hi").await;
     let out = bot.expect_say(Duration::from_secs(2)).await;
-    assert!(out.contains("@bob"), "expected @bob in trigger output: {out}");
-    assert!(!out.contains("@alice"), "sender alice should be excluded: {out}");
+    assert!(
+        out.contains("@bob"),
+        "expected @bob in trigger output: {out}"
+    );
+    assert!(
+        !out.contains("@alice"),
+        "sender alice should be excluded: {out}"
+    );
 
     bot.shutdown().await;
 }
@@ -54,7 +60,10 @@ async fn ping_cooldown_blocks_second_trigger() {
     // First trigger fires successfully.
     bot.send("alice", "!hi").await;
     let first = bot.expect_say(Duration::from_secs(2)).await;
-    assert!(first.contains("@bob"), "first trigger should mention bob: {first}");
+    assert!(
+        first.contains("@bob"),
+        "first trigger should mention bob: {first}"
+    );
 
     // The handler records the cooldown timestamp after sending the response;
     // yield briefly so the write lands before we fire the second trigger.

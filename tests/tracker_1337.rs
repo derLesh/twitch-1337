@@ -43,12 +43,10 @@ async fn advance_to_1337_window(bot: &mut TestBot) {
 #[serial]
 async fn tracker_1337_posts_reminder_and_stats() {
     let mut bot = TestBotBuilder::new()
-        .at(
-            Berlin
-                .with_ymd_and_hms(2026, 4, 18, 13, 35, 0)
-                .unwrap()
-                .with_timezone(&chrono::Utc),
-        )
+        .at(Berlin
+            .with_ymd_and_hms(2026, 4, 18, 13, 35, 0)
+            .unwrap()
+            .with_timezone(&chrono::Utc))
         .spawn()
         .await;
 
@@ -57,8 +55,16 @@ async fn tracker_1337_posts_reminder_and_stats() {
     // Inject with tmi-sent-ts=13:37 Berlin so the monitor's hour/minute guard passes.
     let msg_alice = privmsg_at(&bot.channel, "alice", "1337", TMI_TS_13_37_BERLIN);
     let msg_charlie = privmsg_at(&bot.channel, "charlie", "DANKIES", TMI_TS_13_37_BERLIN);
-    bot.transport.inject.send(msg_alice).await.expect("inject alice");
-    bot.transport.inject.send(msg_charlie).await.expect("inject charlie");
+    bot.transport
+        .inject
+        .send(msg_alice)
+        .await
+        .expect("inject alice");
+    bot.transport
+        .inject
+        .send(msg_charlie)
+        .await
+        .expect("inject charlie");
     yield_a_bit().await;
 
     // 13:36:30 → 13:38:00: handler aborts monitor and posts stats.
@@ -79,12 +85,10 @@ async fn tracker_1337_posts_reminder_and_stats() {
 #[serial]
 async fn tracker_1337_zero_users_posts_erm_or_fuh() {
     let mut bot = TestBotBuilder::new()
-        .at(
-            Berlin
-                .with_ymd_and_hms(2026, 4, 18, 13, 35, 0)
-                .unwrap()
-                .with_timezone(&chrono::Utc),
-        )
+        .at(Berlin
+            .with_ymd_and_hms(2026, 4, 18, 13, 35, 0)
+            .unwrap()
+            .with_timezone(&chrono::Utc))
         .spawn()
         .await;
 
