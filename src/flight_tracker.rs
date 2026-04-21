@@ -11,6 +11,7 @@ use twitch_irc::message::PrivmsgMessage;
 
 use crate::AuthenticatedTwitchClient;
 use crate::aviation::{AltBaro, AviationClient, NearbyAircraft, iata_to_coords};
+use crate::clock::Clock;
 
 const FLIGHTS_FILENAME: &str = "flights.ron";
 
@@ -436,8 +437,8 @@ pub(crate) fn msg_approach(flight: &TrackedFlight) -> String {
     format!("{} ist im Approach", format_flight_prefix(flight))
 }
 
-pub(crate) fn msg_landing(flight: &TrackedFlight) -> String {
-    let duration = Utc::now().signed_duration_since(flight.tracked_at);
+pub(crate) fn msg_landing(flight: &TrackedFlight, now: DateTime<Utc>) -> String {
+    let duration = now.signed_duration_since(flight.tracked_at);
     format!(
         "{} ist gelandet! Flugzeit: {}",
         format_flight_prefix(flight),
@@ -467,7 +468,7 @@ pub(crate) fn msg_tracking_lost(flight: &TrackedFlight) -> String {
     format!("{name} Signal verloren, wird nicht mehr getrackt")
 }
 
-pub(crate) fn msg_flight_status(flight: &TrackedFlight) -> String {
+pub(crate) fn msg_flight_status(flight: &TrackedFlight, now: DateTime<Utc>) -> String {
     let prefix = format_flight_prefix(flight);
     let alt = format_alt(flight.altitude_ft);
     let speed = flight
@@ -479,7 +480,7 @@ pub(crate) fn msg_flight_status(flight: &TrackedFlight) -> String {
         .as_ref()
         .map(|s| format!(" | Squawk {s}"))
         .unwrap_or_default();
-    let elapsed = Utc::now().signed_duration_since(flight.tracked_at);
+    let elapsed = now.signed_duration_since(flight.tracked_at);
     let tracking_time = format!("seit {} getrackt", format_duration_hm(elapsed));
     format!(
         "{prefix} | {} {alt}{speed}{squawk} | {tracking_time}",
@@ -541,6 +542,7 @@ pub async fn run_flight_tracker(
     channel: String,
     aviation_client: AviationClient,
     data_dir: PathBuf,
+    clock: Arc<dyn Clock>,
 ) {
     let mut state = load_tracker_state(&data_dir).await;
     info!(flights = state.flights.len(), "Flight tracker started");
@@ -552,15 +554,39 @@ pub async fn run_flight_tracker(
                 info!("Flight tracker command channel closed, shutting down");
                 return;
             };
-            process_command(cmd, &mut state, &client, &aviation_client, &data_dir).await;
+            process_command(
+                cmd,
+                &mut state,
+                &client,
+                &aviation_client,
+                &data_dir,
+                &*clock,
+            )
+            .await;
         } else {
             // Drain all pending commands without blocking
             while let Ok(cmd) = cmd_rx.try_recv() {
-                process_command(cmd, &mut state, &client, &aviation_client, &data_dir).await;
+                process_command(
+                    cmd,
+                    &mut state,
+                    &client,
+                    &aviation_client,
+                    &data_dir,
+                    &*clock,
+                )
+                .await;
             }
 
             // Poll all flights
-            poll_all_flights(&mut state, &client, &channel, &aviation_client, &data_dir).await;
+            poll_all_flights(
+                &mut state,
+                &client,
+                &channel,
+                &aviation_client,
+                &data_dir,
+                &*clock,
+            )
+            .await;
 
             // Sleep with adaptive interval, but wake up early for commands
             let interval = compute_poll_interval(&state.flights);
@@ -581,6 +607,7 @@ pub async fn run_flight_tracker(
                                 &client,
                                 &aviation_client,
                                 &data_dir,
+                                &*clock,
                             )
                             .await;
                         }
@@ -601,6 +628,7 @@ async fn process_command(
     client: &Arc<AuthenticatedTwitchClient>,
     aviation_client: &AviationClient,
     data_dir: &Path,
+    clock: &dyn Clock,
 ) {
     match cmd {
         TrackerCommand::Track {
@@ -616,6 +644,7 @@ async fn process_command(
                 client,
                 aviation_client,
                 data_dir,
+                clock,
             )
             .await;
         }
@@ -640,11 +669,12 @@ async fn process_command(
             identifier,
             reply_to,
         } => {
-            handle_status(identifier.as_deref(), &reply_to, state, client).await;
+            handle_status(identifier.as_deref(), &reply_to, state, client, clock).await;
         }
     }
 }
 
+#[allow(clippy::too_many_arguments)] // internal handler: all args are distinct resources
 async fn handle_track(
     identifier: FlightIdentifier,
     requested_by: &str,
@@ -653,6 +683,7 @@ async fn handle_track(
     client: &Arc<AuthenticatedTwitchClient>,
     aviation_client: &AviationClient,
     data_dir: &Path,
+    clock: &dyn Clock,
 ) {
     // Check global limit
     if state.flights.len() >= MAX_TRACKED_FLIGHTS {
@@ -744,7 +775,7 @@ async fn handle_track(
         .filter(|s| !s.is_empty());
     let hex = ac.hex.clone();
     let aircraft_type = ac.t.clone();
-    let now = Utc::now();
+    let now = clock.now_utc();
 
     let mut flight = TrackedFlight {
         identifier: identifier.clone(),
@@ -866,11 +897,12 @@ async fn handle_status(
     reply_to: &PrivmsgMessage,
     state: &FlightTrackerState,
     client: &Arc<AuthenticatedTwitchClient>,
+    clock: &dyn Clock,
 ) {
     let response = match identifier {
         None => msg_flights_list(&state.flights),
         Some(id) => match find_flight_index(&state.flights, id) {
-            Some(idx) => msg_flight_status(&state.flights[idx]),
+            Some(idx) => msg_flight_status(&state.flights[idx], clock.now_utc()),
             None => format!("{id} nicht gefunden FDM"),
         },
     };
@@ -886,8 +918,9 @@ async fn poll_all_flights(
     channel: &str,
     aviation_client: &AviationClient,
     data_dir: &Path,
+    clock: &dyn Clock,
 ) {
-    let now = Utc::now();
+    let now = clock.now_utc();
     let mut changed = false;
     let mut removals: Vec<usize> = Vec::new();
     let mut messages: Vec<String> = Vec::new();
@@ -1053,7 +1086,7 @@ async fn poll_all_flights(
                 FlightPhase::Cruise => messages.push(msg_cruise(flight)),
                 FlightPhase::Descent => messages.push(msg_descent(flight)),
                 FlightPhase::Approach => messages.push(msg_approach(flight)),
-                FlightPhase::Landing => messages.push(msg_landing(flight)),
+                FlightPhase::Landing => messages.push(msg_landing(flight, now)),
                 _ => {}
             }
 

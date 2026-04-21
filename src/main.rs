@@ -224,6 +224,8 @@ pub async fn main() -> Result<()> {
         }
     };
 
+    let clock: Arc<dyn Clock> = Arc::new(SystemClock);
+
     // Placeholder pending task keeps the tokio::select! arm shape uniform; see shutdown below.
     let (tracker_tx, handler_flight_tracker) = match shared_aviation_client.clone() {
         Some(av) => {
@@ -232,8 +234,10 @@ pub async fn main() -> Result<()> {
                 let client = client.clone();
                 let channel = config.twitch.channel.clone();
                 let data_dir = get_data_dir();
+                let clock = clock.clone();
                 async move {
-                    flight_tracker::run_flight_tracker(rx, client, channel, av, data_dir).await;
+                    flight_tracker::run_flight_tracker(rx, client, channel, av, data_dir, clock)
+                        .await;
                 }
             });
             (Some(tx), handle)
@@ -249,8 +253,6 @@ pub async fn main() -> Result<()> {
 
     // Graceful shutdown signal for handlers that need to drain children (#31).
     let shutdown = Arc::new(tokio::sync::Notify::new());
-
-    let clock: Arc<dyn Clock> = Arc::new(SystemClock);
 
     // Optionally spawn config watcher service and scheduled message handler
     let (watcher_service, handler_scheduled_messages) = if schedules_enabled {
