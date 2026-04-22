@@ -20,10 +20,63 @@ RUST_LOG=trace cargo run   # every ServerMessage
 cargo fmt --all
 cargo clippy --all-targets -- -D warnings
 cargo test
+cargo audit                # optional locally; CI job fails on advisories
 
 # Deploy (Justfile, podman local → docker.homelab SSH)
 just build | just push | just restart | just deploy
 ```
+
+## CI & branch policy
+
+`main` is branch-protected (admin enforced). Direct pushes rejected — use a PR.
+Linear history required, force-push + delete blocked, conversations must resolve.
+
+**Required status checks (7, must all pass to merge):**
+
+| Check | Workflow | Purpose |
+|---|---|---|
+| `fmt + clippy + test` | ci.yml | cargo fmt --check, clippy -D warnings, cargo test |
+| `cargo audit` | ci.yml | RustSec CVE scan of Cargo.lock via rustsec/audit-check |
+| `hadolint (Dockerfile)` | sast.yml | Dockerfile lint, SARIF → Security tab |
+| `trivy config (IaC)` | sast.yml | IaC misconfig scan, HIGH/CRITICAL only |
+| `actionlint (workflows)` | sast.yml | Workflow YAML + shell lint |
+| `zizmor (workflows)` | sast.yml | Workflow security (injection, perms, pinning) |
+| `gitleaks (secrets)` | sast.yml | Full-history secret scan |
+
+`Docker` (build + push ghcr.io/chronophylos/twitch-1337:latest + sha-N) runs only on
+push to main (post-merge), not on PRs — not a required check.
+`Data refresh` runs Sundays 03:00 UTC; opens a `chore/data-refresh` PR.
+
+**Native GitHub security (repo settings):** secret_scanning, push_protection,
+dependabot_security_updates — all enabled. Push-protection blocks commits
+containing known provider tokens at the server.
+
+**Dependabot** (`.github/dependabot.yml`): weekly PRs for `cargo`, `github-actions`,
+`docker`. Cargo minor+patch grouped as `rust-minor-patch`. Docker ecosystem bumps
+both tag AND sha256 digest in Dockerfile.
+
+**Action pinning:** security-critical actions pinned to **commit SHA** with version
+comment: `rustsec/audit-check`, `gitleaks/gitleaks-action`, `zizmorcore/zizmor-action`,
+`aquasecurity/trivy-action` (Mar 2026 supply-chain incident — always SHA-pin trivy).
+Others pinned to major tags; Dependabot keeps them current.
+
+**Typical PR flow:**
+1. branch → commit → push → `gh pr create`
+2. wait for 7 checks green; rebase on main if `strict` blocks merge
+3. `gh pr merge --squash`
+
+**When `cargo audit` fails:**
+- Check open Dependabot PRs first (weekly); a bump may already be queued.
+- Transitive vulns: `cargo tree -i <crate>` to find the parent; bump the parent.
+- If two majors of one crate coexist in Cargo.lock (e.g. rustls-webpki 0.101 + 0.103),
+  both must be resolved — usually by bumping the dep pulling in the old major.
+- Last resort: ignore in `.cargo/audit.toml` with a written-down reason.
+
+**When Dependabot cargo PRs break `fmt + clippy + test`:**
+- Breaking-API bump; adapt code on the dependabot branch and force-push
+  (`git push origin dependabot/cargo/<name>-<ver>`). CI reruns, then merge.
+- Example: rand 0.10 moved `.random::<T>()` from `Rng` to `RngExt` — generic bounds
+  become `impl rand::RngExt`.
 
 ## Config
 
