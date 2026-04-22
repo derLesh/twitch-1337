@@ -17,7 +17,7 @@ jobs:
         with:
           token: ${{ secrets.DATA_REFRESH_PAT }}
 
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v7
 
       - name: Regenerate airlines.csv
         run: bash scripts/generate_airlines_csv.sh
