@@ -37,7 +37,7 @@ jobs:
             echo "plz=$(wc -l < data/plz.csv)"
           } >> "$GITHUB_OUTPUT"
 
-      - uses: peter-evans/create-pull-request@v7
+      - uses: peter-evans/create-pull-request@v8
         with:
           token: ${{ secrets.DATA_REFRESH_PAT }}
           branch: chore/data-refresh
