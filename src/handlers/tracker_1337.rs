@@ -147,10 +147,16 @@ pub(crate) fn is_valid_1337_message(message: &PrivmsgMessage) -> bool {
     message.message_text.contains("DANKIES") || message.message_text.contains("1337")
 }
 
+/// Probability of a meme override firing when the count qualifies.
+const MEME_OVERRIDE_CHANCE: f32 = 0.10;
+
 /// Generates a stats message based on the number of users who said 1337.
 ///
 /// Returns a contextual message with emotes based on participation level.
 pub(crate) fn generate_stats_message(count: usize, user_list: &[String]) -> String {
+    if let Some(meme) = meme_override(count, &mut rand::rng()) {
+        return meme;
+    }
     match count {
         0 => one_of(&["Erm", "fuh"]).to_string(),
         1 => one_of(&[
@@ -211,6 +217,25 @@ pub(crate) fn generate_stats_message(count: usize, user_list: &[String]) -> Stri
 /// Used for adding variety to bot responses by randomly selecting from predefined options.
 pub(crate) fn one_of<const L: usize, T>(array: &[T; L]) -> &T {
     array.choose(&mut rand::rng()).unwrap()
+}
+
+/// Small-chance meme overrides: "777 FORSEN" when count == 7, "6-7" when count
+/// in {6, 7}. Rolls are independent so at count=7 either (or neither) may fire.
+fn meme_override(count: usize, rng: &mut impl rand::Rng) -> Option<String> {
+    if count == 7 && rng.random::<f32>() < MEME_OVERRIDE_CHANCE {
+        return Some(
+            one_of(&[
+                "777 FORSEN 777 FORSEN 777 FORSEN 777",
+                "777 FORSEN 777 FORSEN 777",
+                "777 FORSEN 777",
+            ])
+            .to_string(),
+        );
+    }
+    if matches!(count, 6 | 7) && rng.random::<f32>() < MEME_OVERRIDE_CHANCE {
+        return Some(one_of(&["6-7", "6-7 ICANT", "6-7 OOOO"]).to_string());
+    }
+    None
 }
 
 /// Loads the all-time leaderboard from disk.
