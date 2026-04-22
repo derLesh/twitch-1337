@@ -3,11 +3,11 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use eyre::Result;
 use tokio::sync::RwLock;
-use twitch_irc::{login::LoginCredentials, message::PrivmsgMessage, transport::Transport};
+use twitch_irc::{login::LoginCredentials, transport::Transport};
 
 use crate::ping::PingManager;
 
-use super::{Command, CommandContext};
+use super::{ADMIN_DENIED_MSG, Command, CommandContext, is_admin};
 
 /// Normalize a ping name from user input to the canonical lowercase form.
 fn normalize_ping_name(name: &str) -> String {
@@ -26,15 +26,6 @@ impl PingAdminCommand {
             hidden_admin_ids,
         }
     }
-
-    fn is_admin(&self, privmsg: &PrivmsgMessage) -> bool {
-        for badge in &privmsg.badges {
-            if badge.name == "broadcaster" || badge.name == "moderator" {
-                return true;
-            }
-        }
-        self.hidden_admin_ids.contains(&privmsg.sender.id)
-    }
 }
 
 #[async_trait]
@@ -52,9 +43,9 @@ where
 
         match subcommand {
             "create" | "delete" | "edit" | "add" | "remove" => {
-                if !self.is_admin(ctx.privmsg) {
+                if !is_admin(ctx.privmsg, &self.hidden_admin_ids) {
                     ctx.client
-                        .say_in_reply_to(ctx.privmsg, "Das darfst du nicht FDM".to_string())
+                        .say_in_reply_to(ctx.privmsg, ADMIN_DENIED_MSG.to_string())
                         .await?;
                     return Ok(());
                 }

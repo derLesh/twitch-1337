@@ -38,6 +38,12 @@ client_secret = "your_client_secret"
 # up = 30        # !up command (default: 30)
 # feedback = 300 # !fb command (default: 300)
 
+# Optional: Suspend configuration
+# Controls the default suspend duration applied when no explicit duration is given.
+# Must be between 1 second and 604800 seconds (7 days).
+# [suspend]
+# default_duration_secs = 600  # Default suspend duration in seconds (default: 600 = 10 min)
+
 # Optional: AI configuration for the !ai command
 # If not configured, the !ai command will be disabled.
 #

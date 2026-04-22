@@ -16,6 +16,7 @@ pub mod llm;
 pub mod memory;
 pub mod ping;
 pub mod prefill;
+pub mod suspend;
 pub mod telemetry;
 pub mod token_storage;
 pub mod twitch_setup;
@@ -175,6 +176,8 @@ where
         (None, None)
     };
 
+    let suspension_manager = Arc::new(suspend::SuspensionManager::new());
+
     let latency = Arc::new(AtomicU32::new(config.twitch.expected_latency));
 
     let handler_latency = tokio::spawn({
@@ -220,6 +223,8 @@ where
                 bot_username: config.twitch.username.clone(),
                 channel: config.twitch.channel.clone(),
                 data_dir: data_dir.clone(),
+                suspension_manager: suspension_manager.clone(),
+                suspend: config.suspend.clone(),
             })
             .await;
         }

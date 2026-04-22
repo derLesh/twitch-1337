@@ -15,8 +15,9 @@ use twitch_irc::{
 
 use crate::{
     ChatHistory, PersonalBest, aviation, commands,
-    config::{AiConfig, CooldownsConfig},
+    config::{AiConfig, CooldownsConfig, SuspendConfig},
     flight_tracker, llm, memory, ping, prefill,
+    suspend::SuspensionManager,
 };
 
 /// Configuration for the generic command handler.
@@ -40,6 +41,8 @@ pub struct CommandHandlerConfig<T: Transport, L: LoginCredentials> {
     pub bot_username: String,
     pub channel: String,
     pub data_dir: std::path::PathBuf,
+    pub suspension_manager: Arc<SuspensionManager>,
+    pub suspend: SuspendConfig,
 }
 
 /// Handler for generic text commands that start with `!`.
@@ -68,7 +71,11 @@ where
         bot_username,
         channel,
         data_dir,
+        suspension_manager,
+        suspend,
     } = cfg;
+
+    let default_suspend_duration = Duration::from_secs(suspend.default_duration_secs);
 
     let broadcast_rx = broadcast_tx.subscribe();
 
@@ -103,6 +110,15 @@ where
     let mut cmd_list: Vec<Box<dyn commands::Command<T, L>>> = vec![
         Box::new(commands::ping_admin::PingAdminCommand::new(
             ping_manager.clone(),
+            hidden_admin_ids.clone(),
+        )),
+        Box::new(commands::suspend::SuspendCommand::new(
+            suspension_manager.clone(),
+            hidden_admin_ids.clone(),
+            default_suspend_duration,
+        )),
+        Box::new(commands::suspend::UnsuspendCommand::new(
+            suspension_manager.clone(),
             hidden_admin_ids,
         )),
         Box::new(commands::random_flight::RandomFlightCommand),
@@ -179,6 +195,7 @@ where
         admin_channel,
         chat_history,
         history_length,
+        suspension_manager,
     )
     .await;
 }
@@ -191,6 +208,7 @@ pub(crate) async fn run_command_dispatcher<T, L>(
     admin_channel: Option<String>,
     chat_history: Option<ChatHistory>,
     history_length: usize,
+    suspension_manager: Arc<SuspensionManager>,
 ) where
     T: Transport,
     L: LoginCredentials,
@@ -235,6 +253,18 @@ pub(crate) async fn run_command_dispatcher<T, L>(
                 else {
                     continue;
                 };
+
+                // Must match SuspendCommand's normalization, else admin
+                // suspensions silently miss the dispatcher hook.
+                let suspend_key = crate::commands::normalize_command_name(first_word);
+                if suspension_manager
+                    .is_suspended(&suspend_key)
+                    .await
+                    .is_some()
+                {
+                    debug!(command = %first_word, "Skipping suspended command");
+                    continue;
+                }
 
                 let ctx = crate::commands::CommandContext {
                     privmsg: &privmsg,

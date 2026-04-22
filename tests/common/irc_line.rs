@@ -52,7 +52,15 @@ pub fn privmsg_as_broadcaster(channel: &str, user: &str, text: &str) -> String {
 }
 
 pub fn privmsg_as_mod(channel: &str, user: &str, text: &str) -> String {
-    privmsg_with(channel, user, text, &[("mod", "1")])
+    // Real Twitch sends both the `mod` tag and a `moderator/1` entry in
+    // `badges`. Handlers (e.g. `!suspend`, `!p create`) gate on the badge
+    // list, so set both for realism.
+    privmsg_with(
+        channel,
+        user,
+        text,
+        &[("badges", "moderator/1"), ("mod", "1")],
+    )
 }
 
 /// Build a PRIVMSG with a specific `tmi-sent-ts` (Unix milliseconds).

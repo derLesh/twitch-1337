@@ -141,6 +141,24 @@ impl Default for PingsConfig {
     }
 }
 
+fn default_suspend_duration() -> u64 {
+    600
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct SuspendConfig {
+    #[serde(default = "default_suspend_duration")]
+    pub default_duration_secs: u64,
+}
+
+impl Default for SuspendConfig {
+    fn default() -> Self {
+        Self {
+            default_duration_secs: default_suspend_duration(),
+        }
+    }
+}
+
 fn default_enabled() -> bool {
     true
 }
@@ -177,6 +195,8 @@ pub struct Configuration {
     #[serde(default)]
     pub cooldowns: CooldownsConfig,
     #[serde(default)]
+    pub suspend: SuspendConfig,
+    #[serde(default)]
     pub ai: Option<AiConfig>,
     #[serde(default)]
     pub schedules: Vec<ScheduleConfig>,
@@ -201,6 +221,7 @@ impl Configuration {
             },
             pings: PingsConfig::default(),
             cooldowns: CooldownsConfig::default(),
+            suspend: SuspendConfig::default(),
             ai: None,
             schedules: Vec::new(),
         }
@@ -259,6 +280,13 @@ pub fn validate_config(config: &Configuration) -> Result<()> {
         if admin_ch == &config.twitch.channel {
             bail!("twitch.admin_channel must be different from twitch.channel");
         }
+    }
+
+    if !(1..=7 * 86400).contains(&config.suspend.default_duration_secs) {
+        bail!(
+            "suspend.default_duration_secs must be between 1 and 604800 (7 days) (got {})",
+            config.suspend.default_duration_secs
+        );
     }
 
     if let Some(ref ai) = config.ai
