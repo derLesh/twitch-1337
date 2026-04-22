@@ -5,6 +5,8 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    labels:
+      - "deps:rust"
     groups:
       rust-minor-patch:
         update-types:
@@ -16,9 +18,13 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    labels:
+      - "deps:actions"
 
   - package-ecosystem: docker
     directory: /
     schedule:
       interval: weekly
     open-pull-requests-limit: 3
+    labels:
+      - "deps:docker"
