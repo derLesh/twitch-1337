@@ -187,7 +187,7 @@ pub(crate) fn generate_stats_message(count: usize, user_list: &[String]) -> Stri
                 "verbesserungswürdig Waiting",
                 "unterdurchschnittlich Waiting",
                 "ausbaufähig Waiting",
-                "entspricht nicht ganz den Erwarungen Waiting",
+                "entspricht nicht ganz den Erwartungen Waiting",
                 "bemüht",
                 "anpassungsfähig YEP"
             ])
