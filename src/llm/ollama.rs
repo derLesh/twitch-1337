@@ -271,6 +271,7 @@ impl LlmClient for OllamaClient {
                     id: format!("call_{}", i),
                     name: tc.function.name,
                     arguments: tc.function.arguments,
+                    arguments_parse_error: None,
                 })
                 .collect();
             return Ok(ToolChatCompletionResponse::ToolCalls(calls));
@@ -309,6 +310,7 @@ mod tests {
                         id: "call_0".to_string(),
                         name: "save_memory".to_string(),
                         arguments: serde_json::json!({"key": "k1", "fact": "f1"}),
+                        arguments_parse_error: None,
                     }],
                     results: vec![ToolResultMessage {
                         tool_call_id: "call_0".to_string(),
@@ -321,6 +323,7 @@ mod tests {
                         id: "call_0".to_string(),
                         name: "delete_memory".to_string(),
                         arguments: serde_json::json!({"key": "k2"}),
+                        arguments_parse_error: None,
                     }],
                     results: vec![ToolResultMessage {
                         tool_call_id: "call_0".to_string(),

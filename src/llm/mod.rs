@@ -61,11 +61,45 @@ pub struct ToolDefinition {
 }
 
 /// A single tool call returned by the LLM.
+///
+/// Executors MUST check `arguments_parse_error` before inspecting `arguments`:
+/// when set, the provider returned an unparseable payload and `arguments` is
+/// `Value::Null`. Acting on the empty `arguments` would make a malformed call
+/// indistinguishable from a genuinely empty one.
 #[derive(Debug, Clone, Deserialize)]
 pub struct ToolCall {
     pub id: String,
     pub name: String,
     pub arguments: serde_json::Value,
+    /// Set when the provider delivered `arguments` as an unparseable string
+    /// (OpenAI-compatible APIs only).
+    #[serde(default)]
+    pub arguments_parse_error: Option<ToolCallArgsError>,
+}
+
+/// Details of a malformed `arguments` payload returned from the LLM.
+#[derive(Debug, Clone, Deserialize)]
+pub struct ToolCallArgsError {
+    pub error: String,
+    /// The raw string the provider sent. Already truncated to a bounded length
+    /// to avoid blowing up context budget when echoed back.
+    pub raw: String,
+}
+
+/// Truncate `s` at a char boundary to at most `max_chars` characters, appending
+/// a suffix describing how much was dropped. Used before echoing provider
+/// payloads back into the model context.
+pub(crate) fn truncate_for_echo(s: &str, max_chars: usize) -> String {
+    let total = s.chars().count();
+    if total <= max_chars {
+        return s.to_string();
+    }
+    let cutoff = s
+        .char_indices()
+        .nth(max_chars)
+        .map(|(i, _)| i)
+        .unwrap_or(s.len());
+    format!("{}… ({} more chars)", &s[..cutoff], total - max_chars)
 }
 
 /// Response from a tool-calling chat completion.
@@ -133,5 +167,28 @@ pub fn build_llm_client(
             error!(error = ?e, "Failed to initialize LLM client");
             Ok(None)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::truncate_for_echo;
+
+    #[test]
+    fn truncate_for_echo_short_input_passes_through() {
+        assert_eq!(truncate_for_echo("hi", 10), "hi");
+    }
+
+    #[test]
+    fn truncate_for_echo_long_input_trims_at_char_boundary() {
+        let out = truncate_for_echo("abcdefghij", 4);
+        assert_eq!(out, "abcd… (6 more chars)");
+    }
+
+    #[test]
+    fn truncate_for_echo_respects_multibyte_chars() {
+        // 6 emoji × 4 bytes each; byte slicing would panic mid-codepoint.
+        let out = truncate_for_echo("🙂🙂🙂🙂🙂🙂", 3);
+        assert_eq!(out, "🙂🙂🙂… (3 more chars)");
     }
 }

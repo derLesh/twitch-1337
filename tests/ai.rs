@@ -123,6 +123,7 @@ async fn ai_command_saves_memory_extraction() {
                 "key": "alice_name",
                 "fact": "alice likes coffee"
             }),
+            arguments_parse_error: None,
         }]));
     // Memory extraction loop continues until the LLM stops returning tool calls.
     // Second round: return a plain message to terminate the loop.

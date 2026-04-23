@@ -105,6 +105,15 @@ impl MemoryStore {
 
     /// Execute a single tool call against the store. Returns a result message.
     pub fn execute_tool_call(&mut self, call: &ToolCall, max_memories: usize) -> String {
+        if let Some(err) = &call.arguments_parse_error {
+            return format!(
+                "Error: tool '{name}' arguments were not valid JSON ({error}). \
+                 Raw text: {raw}. Resend with a valid JSON object.",
+                name = call.name,
+                error = err.error,
+                raw = err.raw,
+            );
+        }
         match call.name.as_str() {
             "save_memory" => {
                 let key = call.arguments.get("key").and_then(|v| v.as_str());
@@ -304,4 +313,51 @@ async fn run_memory_extraction(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn empty_store() -> MemoryStore {
+        MemoryStore {
+            memories: HashMap::new(),
+        }
+    }
+
+    #[test]
+    fn execute_tool_call_surfaces_parse_error() {
+        let mut store = empty_store();
+        let call = ToolCall {
+            id: "c1".to_string(),
+            name: "save_memory".to_string(),
+            arguments: serde_json::Value::Null,
+            arguments_parse_error: Some(llm::ToolCallArgsError {
+                error: "expected `,` or `}` at line 1 column 17".to_string(),
+                raw: "{\"key\":\"k\" \"fact\":\"f\"}".to_string(),
+            }),
+        };
+        let result = store.execute_tool_call(&call, 50);
+        assert!(result.contains("not valid JSON"), "got: {result}");
+        assert!(result.contains("save_memory"), "got: {result}");
+        assert!(result.contains("{\"key\":\"k\""), "got: {result}");
+        assert!(store.memories.is_empty());
+    }
+
+    #[test]
+    fn execute_tool_call_missing_args_is_distinct_from_parse_error() {
+        let mut store = empty_store();
+        let call = ToolCall {
+            id: "c2".to_string(),
+            name: "save_memory".to_string(),
+            arguments: serde_json::Value::Null,
+            arguments_parse_error: None,
+        };
+        let result = store.execute_tool_call(&call, 50);
+        assert!(
+            result.contains("requires 'key' and 'fact'"),
+            "got: {result}"
+        );
+        assert!(!result.contains("not valid JSON"), "got: {result}");
+    }
 }
