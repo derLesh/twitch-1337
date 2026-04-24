@@ -16,7 +16,7 @@ use super::{Command, CommandContext};
 
 const NEWS_SYSTEM_PROMPT: &str = "Du fasst Twitch-Chat-Verlaeufe knapp und hilfreich zusammen. Antworte auf Deutsch, erfinde keine Details und konzentriere dich auf Themen, Highlights und wichtige Antworten. Halte die Antwort kurz genug fuer eine einzelne Twitch-Chatnachricht.";
 const EMPTY_HISTORY_MESSAGE: &str =
-    "Ich habe noch keine Chat-Historie fuer eine Zusammenfassung FDM";
+    "Ich habe noch keine Chat-Historie für eine Zusammenfassung FDM";
 const NO_NEW_MESSAGES_MESSAGE: &str =
     "Seit deiner letzten Nachricht ist noch nichts Neues passiert FDM";
 
