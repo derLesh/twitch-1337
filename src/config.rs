@@ -49,8 +49,110 @@ fn default_ai_timeout() -> u64 {
     30
 }
 
-fn default_max_memories() -> usize {
+fn default_true() -> bool {
+    true
+}
+
+pub(crate) fn default_max_user() -> usize {
     50
+}
+
+fn default_max_lore() -> usize {
+    50
+}
+
+fn default_max_pref() -> usize {
+    50
+}
+
+fn default_half_life() -> u32 {
+    30
+}
+
+fn default_max_rounds() -> usize {
+    3
+}
+
+fn default_run_at() -> String {
+    "04:00".to_string()
+}
+
+fn default_consolidation_timeout() -> u64 {
+    120
+}
+
+/// Per-scope caps + decay policy for the AI memory store. See
+/// `[ai.memory]` in `config.toml.example`.
+#[derive(Debug, Clone, Deserialize)]
+pub struct MemoryConfigSection {
+    #[serde(default = "default_max_user")]
+    pub max_user: usize,
+    #[serde(default = "default_max_lore")]
+    pub max_lore: usize,
+    #[serde(default = "default_max_pref")]
+    pub max_pref: usize,
+    #[serde(default = "default_half_life")]
+    pub half_life_days: u32,
+}
+
+impl Default for MemoryConfigSection {
+    fn default() -> Self {
+        Self {
+            max_user: default_max_user(),
+            max_lore: default_max_lore(),
+            max_pref: default_max_pref(),
+            half_life_days: default_half_life(),
+        }
+    }
+}
+
+/// Knobs for the per-turn memory extractor. `model` / `timeout_secs` fall back
+/// to the main `[ai]` values when omitted. See `[ai.extraction]`.
+#[derive(Debug, Clone, Deserialize)]
+pub struct ExtractionConfigSection {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(default)]
+    pub model: Option<String>,
+    #[serde(default)]
+    pub timeout_secs: Option<u64>,
+    #[serde(default = "default_max_rounds")]
+    pub max_rounds: usize,
+}
+
+impl Default for ExtractionConfigSection {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            model: None,
+            timeout_secs: None,
+            max_rounds: default_max_rounds(),
+        }
+    }
+}
+
+/// Knobs for the daily memory-consolidation pass. See `[ai.consolidation]`.
+#[derive(Debug, Clone, Deserialize)]
+pub struct ConsolidationConfigSection {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(default)]
+    pub model: Option<String>,
+    #[serde(default = "default_run_at")]
+    pub run_at: String,
+    #[serde(default = "default_consolidation_timeout")]
+    pub timeout_secs: u64,
+}
+
+impl Default for ConsolidationConfigSection {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            model: None,
+            run_at: default_run_at(),
+            timeout_secs: default_consolidation_timeout(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -83,9 +185,18 @@ pub struct AiConfig {
     /// Enable persistent AI memory (default: false)
     #[serde(default)]
     pub memory_enabled: bool,
-    /// Maximum number of stored memories (default: 50)
-    #[serde(default = "default_max_memories")]
-    pub max_memories: usize,
+    /// Per-scope caps + decay for the memory store.
+    #[serde(default)]
+    pub memory: MemoryConfigSection,
+    /// Per-turn extractor knobs.
+    #[serde(default)]
+    pub extraction: ExtractionConfigSection,
+    /// Daily consolidation pass knobs.
+    #[serde(default)]
+    pub consolidation: ConsolidationConfigSection,
+    /// Deprecated: replaced by `memory.max_user`. Logged as a warning if set.
+    #[serde(default)]
+    pub max_memories: Option<usize>,
 }
 
 fn default_cooldown() -> u64 {
@@ -328,12 +439,23 @@ pub fn validate_config(config: &Configuration) -> Result<()> {
 
     if let Some(ref ai) = config.ai
         && ai.memory_enabled
-        && !(1..=200).contains(&ai.max_memories)
+        && let Some(n) = ai.max_memories
+        && !(1..=200).contains(&n)
     {
-        bail!(
-            "ai.max_memories must be between 1 and 200 (got {})",
-            ai.max_memories
-        );
+        bail!("ai.max_memories must be between 1 and 200 (got {n})");
+    }
+
+    // Parsed again at scheduler spawn; bail here so a typo doesn't take the
+    // bot down after startup.
+    if let Some(ref ai) = config.ai {
+        chrono::NaiveTime::parse_from_str(&ai.consolidation.run_at, "%H:%M").wrap_err_with(
+            || {
+                format!(
+                    "ai.consolidation.run_at must be HH:MM (got {:?})",
+                    ai.consolidation.run_at
+                )
+            },
+        )?;
     }
 
     for schedule in &config.schedules {
@@ -352,4 +474,56 @@ pub fn validate_config(config: &Configuration) -> Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn consolidation_run_at_parses() {
+        let s = ConsolidationConfigSection::default();
+        let t = chrono::NaiveTime::parse_from_str(&s.run_at, "%H:%M").unwrap();
+        assert_eq!(t.format("%H:%M").to_string(), "04:00");
+    }
+
+    fn ai_with_run_at(run_at: &str) -> AiConfig {
+        AiConfig {
+            backend: AiBackend::Ollama,
+            api_key: None,
+            base_url: None,
+            model: "x".into(),
+            system_prompt: default_system_prompt(),
+            instruction_template: default_instruction_template(),
+            timeout: default_ai_timeout(),
+            history_length: 0,
+            history_prefill: None,
+            memory_enabled: false,
+            memory: MemoryConfigSection::default(),
+            extraction: ExtractionConfigSection::default(),
+            consolidation: ConsolidationConfigSection {
+                run_at: run_at.into(),
+                ..ConsolidationConfigSection::default()
+            },
+            max_memories: None,
+        }
+    }
+
+    #[test]
+    fn validate_rejects_malformed_run_at() {
+        let mut c = Configuration::test_default();
+        c.ai = Some(ai_with_run_at("not-a-time"));
+        let err = validate_config(&c).unwrap_err();
+        assert!(
+            format!("{err:#}").contains("ai.consolidation.run_at"),
+            "got: {err:#}"
+        );
+    }
+
+    #[test]
+    fn validate_accepts_well_formed_run_at() {
+        let mut c = Configuration::test_default();
+        c.ai = Some(ai_with_run_at("04:00"));
+        validate_config(&c).unwrap();
+    }
 }

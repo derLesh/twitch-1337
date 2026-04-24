@@ -16,7 +16,7 @@ use twitch_irc::{
 use crate::{
     ChatHistory, PersonalBest, aviation, commands,
     config::{AiConfig, CooldownsConfig, SuspendConfig},
-    flight_tracker, llm, memory, ping, prefill,
+    flight_tracker, llm, ping, prefill,
     suspend::SuspensionManager,
 };
 
@@ -29,6 +29,10 @@ pub struct CommandHandlerConfig<T: Transport, L: LoginCredentials> {
     /// Pre-built LLM client. When `None`, `!ai` is disabled regardless of `ai_config`.
     /// Injected so tests can supply a fake and production can call [`llm::build_llm_client`].
     pub llm: Option<Arc<dyn llm::LlmClient>>,
+    /// Pre-built memory bundle (store handle + extractor deps). Built in
+    /// `run_bot` so the consolidation task in `lib.rs` can share the same
+    /// `store` handle and `path`. `None` disables memory for `!ai`.
+    pub ai_memory: Option<commands::ai::AiMemory>,
     pub leaderboard: Arc<tokio::sync::RwLock<HashMap<String, PersonalBest>>>,
     pub ping_manager: Arc<tokio::sync::RwLock<ping::PingManager>>,
     pub hidden_admin_ids: Vec<String>,
@@ -59,6 +63,7 @@ where
         client,
         ai_config,
         llm,
+        ai_memory,
         leaderboard,
         ping_manager,
         hidden_admin_ids,
@@ -141,23 +146,6 @@ where
     }
 
     if let Some((llm, cfg)) = llm_client {
-        // Load memory store if enabled
-        let memory_config = if cfg.memory_enabled {
-            match memory::MemoryStore::load(&data_dir) {
-                Ok((store, path)) => Some(memory::MemoryConfig {
-                    store: Arc::new(tokio::sync::RwLock::new(store)),
-                    path,
-                    max_memories: cfg.max_memories,
-                }),
-                Err(e) => {
-                    error!(error = ?e, "Failed to load AI memory store, memory disabled");
-                    None
-                }
-            }
-        } else {
-            None
-        };
-
         let chat_ctx = chat_history
             .clone()
             .map(|history| commands::ai::ChatContext {
@@ -176,7 +164,7 @@ where
             Duration::from_secs(cfg.timeout),
             Duration::from_secs(cooldowns.ai),
             chat_ctx,
-            memory_config,
+            ai_memory,
         )));
     }
 

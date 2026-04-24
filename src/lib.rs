@@ -180,6 +180,79 @@ where
 
     let suspension_manager = Arc::new(suspend::SuspensionManager::new());
 
+    // Build the memory bundle once so both `!ai` (extraction) and the
+    // daily consolidation task share the same store handle + path.
+    // Effective model resolution: extraction falls back to the main chat
+    // model; consolidation falls back to extraction and then to chat.
+    let (ai_memory, consolidation_model): (Option<crate::commands::ai::AiMemory>, Option<String>) =
+        match (&config.ai, &llm) {
+            (Some(ai), Some(llm_arc)) if ai.memory_enabled => {
+                let extraction_model = ai
+                    .extraction
+                    .model
+                    .clone()
+                    .unwrap_or_else(|| ai.model.clone());
+                let consolidation_model = ai
+                    .consolidation
+                    .model
+                    .clone()
+                    .or_else(|| ai.extraction.model.clone())
+                    .unwrap_or_else(|| ai.model.clone());
+                match memory::MemoryStore::load(&data_dir) {
+                    Ok((store, path)) => {
+                        // Back-compat: honor the deprecated `ai.max_memories`
+                        // when the user hasn't overridden `[ai.memory].max_user`.
+                        // Either way, emit a warn! so stale configs surface.
+                        let max_user = if let Some(legacy_n) = ai.max_memories {
+                            if ai.memory.max_user == crate::config::default_max_user() {
+                                warn!(
+                                    "ai.max_memories is deprecated; migrating to [ai.memory].max_user = {}. Please update your config.",
+                                    legacy_n
+                                );
+                                legacy_n
+                            } else {
+                                warn!(
+                                    "ai.max_memories={} is deprecated AND ignored because [ai.memory].max_user={} is explicitly set. Remove the deprecated field.",
+                                    legacy_n, ai.memory.max_user
+                                );
+                                ai.memory.max_user
+                            }
+                        } else {
+                            ai.memory.max_user
+                        };
+                        let config = memory::MemoryConfig {
+                            store: Arc::new(tokio::sync::RwLock::new(store)),
+                            path,
+                            caps: memory::Caps {
+                                max_user,
+                                max_lore: ai.memory.max_lore,
+                                max_pref: ai.memory.max_pref,
+                            },
+                            half_life_days: ai.memory.half_life_days,
+                        };
+                        let ai_memory = crate::commands::ai::AiMemory {
+                            config,
+                            extraction_deps: crate::commands::ai::AiExtractionDeps {
+                                enabled: ai.extraction.enabled,
+                                llm: llm_arc.clone(),
+                                model: extraction_model,
+                                timeout: Duration::from_secs(
+                                    ai.extraction.timeout_secs.unwrap_or(ai.timeout),
+                                ),
+                                max_rounds: ai.extraction.max_rounds,
+                            },
+                        };
+                        (Some(ai_memory), Some(consolidation_model))
+                    }
+                    Err(e) => {
+                        error!(error = ?e, "Failed to load AI memory store, memory disabled");
+                        (None, None)
+                    }
+                }
+            }
+            _ => (None, None),
+        };
+
     let latency = Arc::new(AtomicU32::new(config.twitch.expected_latency));
 
     let handler_latency = tokio::spawn({
@@ -204,6 +277,22 @@ where
         }
     });
 
+    // Capture the store handle + path for the consolidation spawn before
+    // `ai_memory` is moved into the command handler. Both `!ai` extraction
+    // (in-handler) and consolidation (below) share these clones. We also
+    // clone the `[ai.consolidation]` knobs so the main chat `config.ai`
+    // can be consumed by the command-handler closure.
+    let consolidation_handle = ai_memory.as_ref().map(|m| {
+        (
+            m.config.store.clone(),
+            m.config.path.clone(),
+            llm.as_ref()
+                .expect("ai_memory only built when llm is Some")
+                .clone(),
+        )
+    });
+    let consolidation_settings = config.ai.as_ref().map(|a| a.consolidation.clone());
+
     let handler_generic_commands = tokio::spawn({
         let btx = broadcast_tx.clone();
         let client = client.clone();
@@ -213,6 +302,7 @@ where
                 client,
                 ai_config: config.ai.clone(),
                 llm,
+                ai_memory,
                 leaderboard,
                 ping_manager,
                 hidden_admin_ids: config.twitch.hidden_admins.clone(),
@@ -231,6 +321,33 @@ where
             .await;
         }
     });
+
+    // Daily memory consolidation pass. Shares the memory store handle with
+    // the extractor so the pass sees any writes made since the last run, and
+    // reuses `shutdown_notify` so Ctrl+C aborts the scheduler mid-sleep.
+    if let (Some(ai), Some((store, path, llm_client)), Some(model)) = (
+        consolidation_settings,
+        consolidation_handle,
+        consolidation_model,
+    ) && ai.enabled
+    {
+        // Format is validated in `validate_config`, so this cannot fail here.
+        let run_at = chrono::NaiveTime::parse_from_str(&ai.run_at, "%H:%M")
+            .expect("ai.consolidation.run_at is validated at config load");
+        memory::spawn_consolidation(
+            llm_client,
+            model,
+            store,
+            path,
+            run_at,
+            Duration::from_secs(ai.timeout_secs),
+            shutdown_notify.clone(),
+        );
+        info!(
+            run_at = %ai.run_at,
+            "Daily AI memory consolidation scheduled"
+        );
+    }
 
     if schedules_enabled {
         info!(

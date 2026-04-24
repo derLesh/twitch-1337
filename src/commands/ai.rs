@@ -26,6 +26,27 @@ pub struct AiPrompts {
     pub instruction_template: String,
 }
 
+/// Dependencies needed to fire the fire-and-forget memory-extraction task
+/// after each successful `!ai` exchange. Kept separate from chat generation
+/// so the extractor can use a different `model` / `timeout` / round budget.
+pub struct AiExtractionDeps {
+    /// Gate for spawning per-turn extraction. Mirrors `[ai.extraction].enabled`.
+    /// When `false`, the extractor never runs; chat generation is unaffected.
+    pub enabled: bool,
+    pub llm: Arc<dyn LlmClient>,
+    pub model: String,
+    pub timeout: Duration,
+    pub max_rounds: usize,
+}
+
+/// Memory store handle + per-turn extractor deps bundled together so
+/// `AiCommand` only has to carry one optional field for the whole
+/// memory subsystem.
+pub struct AiMemory {
+    pub config: memory::MemoryConfig,
+    pub extraction_deps: AiExtractionDeps,
+}
+
 pub struct AiCommand {
     llm_client: Arc<dyn LlmClient>,
     model: String,
@@ -33,7 +54,7 @@ pub struct AiCommand {
     prompts: AiPrompts,
     timeout: Duration,
     chat_ctx: Option<ChatContext>,
-    memory: Option<memory::MemoryConfig>,
+    memory: Option<AiMemory>,
 }
 
 impl AiCommand {
@@ -44,7 +65,7 @@ impl AiCommand {
         timeout: Duration,
         cooldown: Duration,
         chat_ctx: Option<ChatContext>,
-        memory: Option<memory::MemoryConfig>,
+        memory: Option<AiMemory>,
     ) -> Self {
         Self {
             llm_client,
@@ -109,10 +130,9 @@ where
 
         self.cooldown.record(user).await;
 
-        // Build system prompt with memories injected
         let system_prompt = if let Some(ref mem) = self.memory {
-            let store_guard = mem.store.read().await;
-            match store_guard.format_for_prompt() {
+            let mut store_guard = mem.config.store.write().await;
+            match store_guard.format_for_prompt(chrono::Utc::now()) {
                 Some(facts) => format!("{}{}", self.prompts.system, facts),
                 None => self.prompts.system.clone(),
             }
@@ -192,16 +212,30 @@ where
             error!(error = ?e, "Failed to send AI response");
         }
 
-        // Spawn fire-and-forget memory extraction (only on successful AI responses)
-        if let (true, Some(mem)) = (success, &self.memory) {
+        // Spawn fire-and-forget memory extraction (only on successful AI responses
+        // AND when the `[ai.extraction].enabled` flag allows it).
+        if let (true, Some(mem)) = (success, &self.memory)
+            && mem.extraction_deps.enabled
+        {
+            let ext_ctx = memory::ExtractionContext {
+                speaker_id: ctx.privmsg.sender.id.clone(),
+                speaker_username: ctx.privmsg.sender.login.clone(),
+                speaker_role: memory::classify_role(&ctx.privmsg.badges),
+                user_message: instruction.clone(),
+                ai_response: response.clone(),
+            };
             memory::spawn_memory_extraction(
-                self.llm_client.clone(),
-                self.model.clone(),
-                mem,
-                user.clone(),
-                instruction,
-                response,
-                self.timeout,
+                memory::ExtractionDeps {
+                    llm: mem.extraction_deps.llm.clone(),
+                    model: mem.extraction_deps.model.clone(),
+                    store: mem.config.store.clone(),
+                    store_path: mem.config.path.clone(),
+                    caps: mem.config.caps.clone(),
+                    half_life_days: mem.config.half_life_days,
+                    timeout: mem.extraction_deps.timeout,
+                    max_rounds: mem.extraction_deps.max_rounds,
+                },
+                ext_ctx,
             );
         }
 
