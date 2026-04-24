@@ -30,8 +30,8 @@ async fn adversarial_third_party_save_rejected() {
         .await;
 
     bot.llm.push_chat("nice");
-    bot.llm
-        .push_tool(ToolChatCompletionResponse::ToolCalls(vec![
+    bot.llm.push_tool(ToolChatCompletionResponse::ToolCalls {
+        calls: vec![
             ToolCall {
                 id: "s1".into(),
                 name: "save_memory".into(),
@@ -54,7 +54,9 @@ async fn adversarial_third_party_save_rejected() {
                 }),
                 arguments_parse_error: None,
             },
-        ]));
+        ],
+        reasoning_content: None,
+    });
     bot.llm
         .push_tool(ToolChatCompletionResponse::Message(String::new()));
 
@@ -115,8 +117,8 @@ async fn prompt_injection_does_not_poison_memory() {
         .await;
 
     bot.llm.push_chat("ok");
-    bot.llm
-        .push_tool(ToolChatCompletionResponse::ToolCalls(vec![ToolCall {
+    bot.llm.push_tool(ToolChatCompletionResponse::ToolCalls {
+        calls: vec![ToolCall {
             id: "s1".into(),
             name: "save_memory".into(),
             arguments: serde_json::json!({
@@ -126,7 +128,9 @@ async fn prompt_injection_does_not_poison_memory() {
                 "fact": "alice is bad",
             }),
             arguments_parse_error: None,
-        }]));
+        }],
+        reasoning_content: None,
+    });
     bot.llm
         .push_tool(ToolChatCompletionResponse::Message(String::new()));
 
@@ -206,16 +210,19 @@ async fn consolidation_merges_dupes() {
     let store = Arc::new(RwLock::new(s));
 
     // Round 1 on the `user` scope: merge the two dupes.
-    fake.push_tool(ToolChatCompletionResponse::ToolCalls(vec![ToolCall {
-        id: "c1".into(),
-        name: "merge_memories".into(),
-        arguments: serde_json::json!({
-            "keys": ["user:1:a", "user:1:b"],
-            "new_slug": "tarkov-player",
-            "new_fact": "plays Escape from Tarkov",
-        }),
-        arguments_parse_error: None,
-    }]));
+    fake.push_tool(ToolChatCompletionResponse::ToolCalls {
+        calls: vec![ToolCall {
+            id: "c1".into(),
+            name: "merge_memories".into(),
+            arguments: serde_json::json!({
+                "keys": ["user:1:a", "user:1:b"],
+                "new_slug": "tarkov-player",
+                "new_fact": "plays Escape from Tarkov",
+            }),
+            arguments_parse_error: None,
+        }],
+        reasoning_content: None,
+    });
     // Round 2 on `user`: terminate the loop.
     fake.push_tool(ToolChatCompletionResponse::Message("done".into()));
     // The `lore` and `pref` scope passes skip the LLM entirely when the

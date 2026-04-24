@@ -134,7 +134,10 @@ pub async fn run_memory_extraction(deps: ExtractionDeps, ctx: ExtractionContext)
                 debug!(round, "Memory extraction finished (text response)");
                 break;
             }
-            ToolChatCompletionResponse::ToolCalls(calls) => {
+            ToolChatCompletionResponse::ToolCalls {
+                calls,
+                reasoning_content,
+            } => {
                 debug!(
                     round,
                     count = calls.len(),
@@ -160,7 +163,11 @@ pub async fn run_memory_extraction(deps: ExtractionDeps, ctx: ExtractionContext)
                     });
                 }
                 w.save(&deps.store_path)?;
-                prior_rounds.push(ToolCallRound { calls, results });
+                prior_rounds.push(ToolCallRound {
+                    calls,
+                    results,
+                    reasoning_content,
+                });
             }
         }
     }

@@ -33,6 +33,10 @@ pub struct ToolResultMessage {
 pub struct ToolCallRound {
     pub calls: Vec<ToolCall>,
     pub results: Vec<ToolResultMessage>,
+    /// DeepSeek and other thinking models return a `reasoning_content` field
+    /// alongside tool calls; they require it to be echoed back verbatim in the
+    /// reconstructed assistant turn, or they reject the request with a 400.
+    pub reasoning_content: Option<String>,
 }
 
 /// Request for a chat completion.
@@ -107,7 +111,12 @@ pub(crate) fn truncate_for_echo(s: &str, max_chars: usize) -> String {
 pub enum ToolChatCompletionResponse {
     /// The model returned a text response (content may be unused by callers).
     Message(#[allow(dead_code)] String),
-    ToolCalls(Vec<ToolCall>),
+    ToolCalls {
+        calls: Vec<ToolCall>,
+        /// Present on thinking/reasoning models (e.g. DeepSeek); must be
+        /// echoed back in the assistant turn of subsequent requests.
+        reasoning_content: Option<String>,
+    },
 }
 
 /// Trait for LLM backends. Implementations handle serialization
