@@ -328,7 +328,7 @@ pub(crate) async fn save_leaderboard(
 #[instrument(skip(broadcast_rx, total_users))]
 pub(crate) async fn monitor_1337_messages(
     mut broadcast_rx: broadcast::Receiver<ServerMessage>,
-    total_users: Arc<Mutex<HashMap<String, Option<u64>>>>,
+    total_users: Arc<Mutex<HashMap<String, u64>>>,
 ) {
     loop {
         match broadcast_rx.recv().await {
@@ -354,11 +354,10 @@ pub(crate) async fn monitor_1337_messages(
                             + u64::from(local.timestamp_subsec_millis());
                         if ms_since_minute < 1000 {
                             debug!(user = %username, ms = ms_since_minute, "User said 1337 at 13:37 (sub-second)");
-                            users.insert(username, Some(ms_since_minute));
                         } else {
-                            debug!(user = %username, "User said 1337 at 13:37");
-                            users.insert(username, None);
+                            debug!(user = %username, ms = ms_since_minute, "User said 1337 at 13:37");
                         }
+                        users.insert(username, ms_since_minute);
                     }
                 }
             }
