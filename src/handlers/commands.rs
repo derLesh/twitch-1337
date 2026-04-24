@@ -18,6 +18,7 @@ use crate::{
     ChatHistory, PersonalBest, aviation, commands,
     config::{AiConfig, CooldownsConfig, SuspendConfig},
     flight_tracker, llm, ping, prefill,
+    seventv::SevenTvEmoteProvider,
     suspend::SuspensionManager,
 };
 
@@ -113,6 +114,20 @@ where
         None
     };
 
+    let emote_provider = llm_client
+        .as_ref()
+        .and_then(|(_, cfg)| cfg.emotes.enabled.then_some(cfg.emotes.clone()))
+        .and_then(|emotes_cfg| match SevenTvEmoteProvider::new(emotes_cfg, &data_dir) {
+            Ok(provider) => {
+                info!("7TV emote glossary prompt grounding enabled");
+                Some(Arc::new(provider))
+            }
+            Err(e) => {
+                error!(error = ?e, "Failed to initialize 7TV emote provider; AI emotes disabled");
+                None
+            }
+        });
+
     let mut cmd_list: Vec<Box<dyn commands::Command<T, L>>> = vec![
         Box::new(commands::ping_admin::PingAdminCommand::new(
             ping_manager.clone(),
@@ -156,16 +171,19 @@ where
             });
 
         cmd_list.push(Box::new(commands::ai::AiCommand::new(
-            llm,
-            cfg.model,
-            commands::ai::AiPrompts {
-                system: cfg.system_prompt,
-                instruction_template: cfg.instruction_template,
+            commands::ai::AiCommandDeps {
+                llm_client: llm,
+                model: cfg.model,
+                prompts: commands::ai::AiPrompts {
+                    system: cfg.system_prompt,
+                    instruction_template: cfg.instruction_template,
+                },
+                timeout: Duration::from_secs(cfg.timeout),
+                cooldown: Duration::from_secs(cooldowns.ai),
+                chat_ctx,
+                memory: ai_memory,
+                emotes: emote_provider,
             },
-            Duration::from_secs(cfg.timeout),
-            Duration::from_secs(cooldowns.ai),
-            chat_ctx,
-            ai_memory,
         )));
     }
 

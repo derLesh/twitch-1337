@@ -16,6 +16,7 @@ pub mod llm;
 pub mod memory;
 pub mod ping;
 pub mod prefill;
+pub mod seventv;
 pub mod suspend;
 pub mod telemetry;
 pub mod tls;

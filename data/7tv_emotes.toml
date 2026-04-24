@@ -1,0 +1,4913 @@
+# 7TV emote glossary for !ai.
+# Source: https://7tv.app/users/01FZKKA0A8000FP66RDQP75B9A
+# Twitch connection: euterheissgetraenk (784681545)
+# Active emote set: euterheissgetraenk's Emotes (01FZKKA0A8000FP66RDQP75B9A)
+# Generated from 981 active emotes; 981 active meanings filled.
+#
+# Curated, high-confidence entries are ordered first because the bot injects
+# only the first [ai.emotes].max_prompt_emotes non-empty meanings into the prompt.
+
+[[emotes]]
+name = "KEKW"
+meaning = "Lachen; etwas ist lustig oder absurd."
+usage = "bei Witzen, Fails oder absurden Chat-Momenten"
+
+[[emotes]]
+name = "OMEGALUL"
+meaning = "Lachen; etwas ist lustig oder absurd."
+usage = "bei Witzen, Fails oder absurden Chat-Momenten"
+
+[[emotes]]
+name = "MEGALUL"
+meaning = "Lachen; etwas ist lustig oder absurd."
+usage = "bei Witzen, Fails oder absurden Chat-Momenten"
+
+[[emotes]]
+name = "LULE"
+meaning = "Lachen; etwas ist lustig oder absurd."
+usage = "bei Witzen, Fails oder absurden Chat-Momenten"
+
+[[emotes]]
+name = "LUUL"
+meaning = "Lachen; etwas ist lustig oder absurd."
+usage = "bei Witzen, Fails oder absurden Chat-Momenten"
+
+[[emotes]]
+name = "XD"
+meaning = "Lachen; etwas ist lustig oder absurd."
+usage = "bei Witzen, Fails oder absurden Chat-Momenten"
+
+[[emotes]]
+name = "xdd"
+meaning = "Lachen; etwas ist lustig oder absurd."
+usage = "bei Witzen, Fails oder absurden Chat-Momenten"
+
+[[emotes]]
+name = "NODDERS"
+meaning = "Zustimmung; das stimmt oder klingt richtig."
+usage = "wenn man einer Aussage zustimmt oder sie bestaetigt"
+
+[[emotes]]
+name = "HYPERNODDERS"
+meaning = "Zustimmung; das stimmt oder klingt richtig."
+usage = "wenn man einer Aussage zustimmt oder sie bestaetigt"
+
+[[emotes]]
+name = "Okayge"
+meaning = "Zustimmung; das stimmt oder klingt richtig."
+usage = "wenn man einer Aussage zustimmt oder sie bestaetigt"
+
+[[emotes]]
+name = "OK"
+meaning = "Zustimmung; das stimmt oder klingt richtig."
+usage = "wenn man einer Aussage zustimmt oder sie bestaetigt"
+
+[[emotes]]
+name = "YEPPERS"
+meaning = "Zustimmung; das stimmt oder klingt richtig."
+usage = "wenn man einer Aussage zustimmt oder sie bestaetigt"
+
+[[emotes]]
+name = "YESIDOTHINKSO"
+meaning = "Zustimmung; das stimmt oder klingt richtig."
+usage = "wenn man einer Aussage zustimmt oder sie bestaetigt"
+
+[[emotes]]
+name = "NOIDONTTHINKSO"
+meaning = "Ablehnung; eher nein oder das stimmt nicht."
+usage = "wenn man einer Aussage widerspricht"
+
+[[emotes]]
+name = "HUH"
+meaning = "Verwirrung oder Unsicherheit."
+usage = "wenn etwas unklar, seltsam oder schwer einzuordnen ist"
+
+[[emotes]]
+name = "Aware"
+meaning = "Erkenntnis; etwas wird unangenehm klar."
+usage = "wenn jemand eine bittere Wahrheit bemerkt oder realisiert"
+
+[[emotes]]
+name = "Clueless"
+meaning = "Erkenntnis; etwas wird unangenehm klar."
+usage = "wenn jemand eine bittere Wahrheit bemerkt oder realisiert"
+
+[[emotes]]
+name = "WeirdChamp"
+meaning = "Missbilligung oder sarkastische Enttaeuschung."
+usage = "wenn etwas cringe, unpassend oder boomerhaft wirkt"
+
+[[emotes]]
+name = "PauseChamp"
+meaning = "Spannung oder erwartungsvolles Warten."
+usage = "wenn gleich etwas Wichtiges passiert oder ein Ausgang offen ist"
+
+[[emotes]]
+name = "AINTNOWAY"
+meaning = "Unglaeubigkeit; bruh-Moment oder kaum zu fassen."
+usage = "bei absurden, peinlichen oder schwer glaubbaren Aussagen"
+
+[[emotes]]
+name = "BRUH"
+meaning = "Unglaeubigkeit; bruh-Moment oder kaum zu fassen."
+usage = "bei absurden, peinlichen oder schwer glaubbaren Aussagen"
+
+[[emotes]]
+name = "cmonBRUH"
+meaning = "Unglaeubigkeit; bruh-Moment oder kaum zu fassen."
+usage = "bei absurden, peinlichen oder schwer glaubbaren Aussagen"
+
+[[emotes]]
+name = "monkaW"
+meaning = "Nervositaet, Angst oder Alarmstimmung."
+usage = "wenn etwas knapp, riskant oder angespannt ist"
+
+[[emotes]]
+name = "Sadeg"
+meaning = "Traurigkeit, Enttaeuschung oder Verzweiflung."
+usage = "bei Pech, kleinen Rueckschlaegen oder traurigen Chat-Momenten"
+
+[[emotes]]
+name = "PeepoSad"
+meaning = "Traurigkeit, Enttaeuschung oder Verzweiflung."
+usage = "bei Pech, kleinen Rueckschlaegen oder traurigen Chat-Momenten"
+
+[[emotes]]
+name = "Madge"
+meaning = "Wut, Rage oder genervte Stimmung."
+usage = "wenn jemand offensichtlich sauer, getriggert oder am Ranten ist"
+
+[[emotes]]
+name = "PogU"
+meaning = "Hype, Freude oder starke positive Ueberraschung."
+usage = "bei guten News, Plays, Erfolgen oder Vorfreude"
+
+[[emotes]]
+name = "Pag"
+meaning = "Hype, Freude oder starke positive Ueberraschung."
+usage = "bei guten News, Plays, Erfolgen oder Vorfreude"
+
+[[emotes]]
+name = "LETSGO"
+meaning = "Hype, Freude oder starke positive Ueberraschung."
+usage = "bei guten News, Plays, Erfolgen oder Vorfreude"
+
+[[emotes]]
+name = "COOKING"
+meaning = "Kochen oder jemand ist am Cooken."
+usage = "wenn jemand eine gute Idee, einen Plan oder echtes Kochen anspricht"
+
+[[emotes]]
+name = "LETHIMCOOK"
+meaning = "Kochen oder jemand ist am Cooken."
+usage = "wenn jemand eine gute Idee, einen Plan oder echtes Kochen anspricht"
+
+[[emotes]]
+name = "GOTTEM"
+meaning = "Erwischt oder reingelegt; kleiner Gotcha-Moment."
+usage = "wenn jemand beim Troll, Fehler oder Trick erwischt wird"
+
+[[emotes]]
+name = "Yoink"
+meaning = "Erwischt oder reingelegt; kleiner Gotcha-Moment."
+usage = "wenn jemand beim Troll, Fehler oder Trick erwischt wird"
+
+[[emotes]]
+name = "5Head"
+meaning = "Big-brain oder nerdige Korrektur."
+usage = "bei schlauen, uebergenauen oder nerdigen Aussagen"
+
+[[emotes]]
+name = "NOTED"
+meaning = "Notiert; Information wurde zur Kenntnis genommen."
+usage = "wenn etwas gemerkt, protokolliert oder trocken bestaetigt wird"
+
+[[emotes]]
+name = "Thinking"
+meaning = "Nachdenken; ueberlegen oder etwas analysieren."
+usage = "bei Fragen, Spekulation oder vorsichtigem Abwaegen"
+
+[[emotes]]
+name = "Prayge"
+meaning = "Respekt, Gebet oder Salut."
+usage = "bei Dank, Abschied, Respekt oder hoffnungsvollen Momenten"
+
+[[emotes]]
+name = "o7"
+meaning = "Respekt, Gebet oder Salut."
+usage = "bei Dank, Abschied, Respekt oder hoffnungsvollen Momenten"
+
+[[emotes]]
+name = "Waiting"
+meaning = "Warten; etwas laesst auf sich warten."
+usage = "wenn alle auf jemanden, ein Ergebnis oder einen Start warten"
+
+[[emotes]]
+name = "peepoHey"
+meaning = "Begruessung oder freundliches Winken."
+usage = "wenn jemand dazukommt oder man freundlich hallo sagt"
+
+[[emotes]]
+name = "TriKool"
+meaning = "Cooler, gelassener oder zustimmender Vibe."
+usage = "wenn etwas entspannt, cool oder gelungen wirkt"
+
+[[emotes]]
+name = "gachiHacker"
+meaning = "Gachi-/Hacker-Meme; jemand wirkt uebertrieben technisch oder cracked."
+usage = "bei Tech-, Hackerman- oder Tryhard-Momenten"
+
+[[emotes]]
+name = "Thinking2"
+meaning = "Nachdenken; ueberlegen oder etwas analysieren."
+usage = "bei Fragen, Spekulation oder vorsichtigem Abwaegen"
+
+[[emotes]]
+name = "TRUEING"
+meaning = "Zustimmung; das stimmt oder klingt richtig."
+usage = "wenn man einer Aussage zustimmt oder sie bestaetigt"
+
+[[emotes]]
+name = "OkaygeL"
+meaning = "Liebe, Zuneigung oder herzlicher Support."
+usage = "bei lieben, positiven oder supportiven Reaktionen"
+
+[[emotes]]
+name = "snailWalk"
+meaning = "Langsames Vorankommen."
+usage = "wenn etwas sehr langsam passiert oder jemand troedelt"
+
+[[emotes]]
+name = "forsenInsane"
+meaning = "Wahnsinniger oder komplett chaotischer Forsen-Moment."
+usage = "bei absurdem Chaos oder Tilt"
+
+[[emotes]]
+name = "peepoArrive"
+meaning = "Ankunft; jemand kommt in den Chat oder zurueck."
+usage = "wenn jemand dazukommt"
+
+[[emotes]]
+name = "pepeMeltdown"
+meaning = "Meltdown; jemand bricht emotional oder rage-maessig zusammen."
+usage = "bei uebertriebener Frustration"
+
+[[emotes]]
+name = "forsenScoots"
+meaning = "Forsen-/Scoots-Meme; hektisches Wegbewegen oder Rumrutschen."
+usage = "bei hektischer Bewegung oder Ausweichmomenten"
+
+[[emotes]]
+name = "donowall"
+meaning = "DonoWall; eine Nachricht wird ignoriert oder prallt ab."
+usage = "wenn jemand nicht beachtet wird"
+
+[[emotes]]
+name = "Peace"
+meaning = "Frieden, Ruhe oder freundliches Peace-Zeichen."
+usage = "bei versoehnlicher oder entspannter Stimmung"
+
+[[emotes]]
+name = "pepeD"
+meaning = "Dance-/Party-Pepe."
+usage = "wenn Musik oder Bewegung passt"
+
+[[emotes]]
+name = "ppOverheat"
+meaning = "Ueberforderung oder Overheating."
+usage = "wenn etwas zu viel wird oder jemand ueberlastet ist"
+
+[[emotes]]
+name = "Painsge"
+meaning = "Schmerz, Leid oder unangenehmer Moment."
+usage = "bei kleinen Pain- oder Cringe-Momenten"
+
+[[emotes]]
+name = "ZULUL"
+meaning = "ZULUL-/ethnischer Twitch-Meme-Hype."
+usage = "bei klassischem Twitch-Meme-Kontext"
+
+[[emotes]]
+name = "ppAutismo"
+meaning = "Chaotische, ueberfokussierte Meme-Reaktion."
+usage = "bei sehr spezieller oder absurder Chat-Energie"
+
+[[emotes]]
+name = "Copeyeg"
+meaning = "Coping; jemand redet sich etwas schoen."
+usage = "bei Selbsttaeuschung, Ausreden oder uebertriebenem Optimismus"
+
+[[emotes]]
+name = "EgCheg"
+meaning = "Okayeg-/Cheg-Reaktion; leicht schraeges Zustimmen oder Beobachten."
+usage = "bei komischen, aber harmlosen Situationen"
+
+[[emotes]]
+name = "DankG"
+meaning = "Dankes oder danker Meme-Vibe."
+usage = "bei dankem Humor oder ironischem Meme-Kontext"
+
+[[emotes]]
+name = "wideFlop"
+meaning = "Breiter Floppa; alberner Floppa-Moment."
+usage = "bei goofy oder absurd breiten Meme-Reaktionen"
+
+[[emotes]]
+name = "WEEBSDETECTED"
+meaning = "Weebs erkannt."
+usage = "wenn Anime-/Weeb-Themen auftauchen"
+
+[[emotes]]
+name = "ABDUL"
+meaning = "Abdul-/nahostbezogener Meme-Charakter."
+usage = "bei etabliertem Abdul-Meme-Kontext im Chat"
+
+[[emotes]]
+name = "peepoFine"
+meaning = "Alles ist okay oder wird tapfer schoengeredet."
+usage = "wenn jemand so tut, als sei alles in Ordnung"
+
+[[emotes]]
+name = "KKooool"
+meaning = "Sehr cool oder laessig."
+usage = "wenn etwas besonders cool wirkt"
+
+[[emotes]]
+name = "FloppaL"
+meaning = "Floppa-Liebe oder Floppa-Herz."
+usage = "bei Floppa- oder liebevollem Meme-Kontext"
+
+[[emotes]]
+name = "Rainge"
+meaning = "Regen, graue Stimmung oder melancholischer Vibe."
+usage = "bei Regen, Traurigkeit oder ruhigen Momenten"
+
+[[emotes]]
+name = "PepeLa"
+meaning = "Pepe-la; lockere musikalische Reaktion."
+usage = "bei Sing-/La-la- oder Musikmomenten"
+
+[[emotes]]
+name = "EZWink"
+meaning = "Leichtes EZ mit zwinkerndem Unterton."
+usage = "bei spielerischem Triumph oder Necking"
+
+[[emotes]]
+name = "Trolleg"
+meaning = "Trolliger Okayeg-Moment."
+usage = "wenn jemand offensichtlich trollt"
+
+[[emotes]]
+name = "GuesNoEg"
+meaning = "Unsicheres Nein oder skeptisches Ablehnen."
+usage = "wenn etwas wahrscheinlich nicht stimmt"
+
+[[emotes]]
+name = "YOURMOM"
+meaning = "Your-mom-Witz."
+usage = "bei albernem, kindischem Roast-Humor"
+
+[[emotes]]
+name = "Wideg"
+meaning = "Breiter, goofy Okayeg-Moment."
+usage = "bei absurden oder gestreckten Meme-Reaktionen"
+
+[[emotes]]
+name = "3Heading"
+meaning = "3Head-/britischer Denk- oder Erklaermoment."
+usage = "bei britischem Humor oder einfachen Erklaerungen"
+
+[[emotes]]
+name = "BASEDCIGAR"
+meaning = "Based; starke Zustimmung zu einer mutigen oder guten Aussage."
+usage = "bei klarer Zustimmung oder Respekt fuer eine Aussage"
+
+[[emotes]]
+name = "meow"
+meaning = "Katzen-Moment."
+usage = "wenn Katzen, Miauen oder niedliche Cat-Reaktionen passen"
+
+[[emotes]]
+name = "ArnoldHalt"
+meaning = "Stopp/Halt im Arnold-Stil."
+usage = "wenn etwas unterbrochen oder gestoppt werden soll"
+
+[[emotes]]
+name = "EgBusiness"
+meaning = "Business-Okayeg; serioeser oder pseudo-professioneller Moment."
+usage = "bei Business, Planen oder Verhandlungen"
+
+[[emotes]]
+name = "pepeCD"
+meaning = "Cheating-/CD-Meme."
+usage = "bei verdächtigem oder schummelndem Verhalten"
+
+[[emotes]]
+name = "peepoIgnore"
+meaning = "Ignorieren oder bewusst wegschauen."
+usage = "wenn jemand etwas nicht beachten will"
+
+[[emotes]]
+name = "GoodOneBoomer"
+meaning = "Missbilligung oder sarkastische Enttaeuschung."
+usage = "wenn etwas cringe, unpassend oder boomerhaft wirkt"
+
+[[emotes]]
+name = "JoeBiden"
+meaning = "Joe-Biden-/Politik-Meme."
+usage = "wenn Biden oder US-Politik Thema ist"
+
+[[emotes]]
+name = "peepoTalk"
+meaning = "Reden oder Diskutieren."
+usage = "wenn jemand spricht, erklaert oder diskutiert"
+
+[[emotes]]
+name = "Omege"
+meaning = "Omega-/Omegalul-artige Reaktion."
+usage = "bei lustigen oder absurden Situationen"
+
+[[emotes]]
+name = "pepeW"
+meaning = "PepeW; intensives, breites Meme-Lachen."
+usage = "bei starken Lach- oder W-Momenten"
+
+[[emotes]]
+name = "tucked"
+meaning = "Eingekuschelt oder tucked-in."
+usage = "bei cozy, Schlaf- oder Rueckzugsstimmung"
+
+[[emotes]]
+name = "Yepge"
+meaning = "Zustimmung; das stimmt oder klingt richtig."
+usage = "wenn man einer Aussage zustimmt oder sie bestaetigt"
+
+[[emotes]]
+name = "tomatoTime"
+meaning = "Tomaten-/Boo-Moment; jemand wird ausgebuht."
+usage = "bei spielerischem Ausbuhen oder Tomatenwerfen"
+
+[[emotes]]
+name = "dogTrip"
+meaning = "Trip oder verwirrter Hundemoment."
+usage = "bei surrealer oder verwirrter Stimmung"
+
+[[emotes]]
+name = "okge"
+meaning = "Okayge-artige neutrale Zustimmung."
+usage = "bei ruhiger Zustimmung oder Akzeptanz"
+
+[[emotes]]
+name = "PETTHEDOGEGE"
+meaning = "Hund streicheln."
+usage = "bei niedlichen Hundemomenten oder Trost"
+
+[[emotes]]
+name = "egDealer"
+meaning = "Dealer-/zwielichtiger Okayeg-Moment."
+usage = "bei scherzhaft suspekten Angeboten"
+
+[[emotes]]
+name = "PepeGiggle"
+meaning = "Lachen; etwas ist lustig oder absurd."
+usage = "bei Witzen, Fails oder absurden Chat-Momenten"
+
+[[emotes]]
+name = "FloppaDespair"
+meaning = "Traurigkeit, Enttaeuschung oder Verzweiflung."
+usage = "bei Pech, kleinen Rueckschlaegen oder traurigen Chat-Momenten"
+
+[[emotes]]
+name = "peepoTalkR"
+meaning = "Reden nach rechts; Dialog oder Antwort."
+usage = "wenn jemand spricht oder antwortet"
+
+[[emotes]]
+name = "egsqzL"
+meaning = "Linksgerichtetes Squeeze-/Okayeg-Meme."
+usage = "bei engem, gedruecktem oder seitlichem Meme-Kontext"
+
+[[emotes]]
+name = "WideEgg"
+meaning = "Breites Egg-/Okayeg-Meme."
+usage = "bei goofy oder breitgezogenen Reaktionen"
+
+[[emotes]]
+name = "Okayge7"
+meaning = "Okayge-Salut."
+usage = "bei Respekt, Zustimmung oder Abschied"
+
+[[emotes]]
+name = "Paaag"
+meaning = "Hype, Freude oder starke positive Ueberraschung."
+usage = "bei guten News, Plays, Erfolgen oder Vorfreude"
+
+[[emotes]]
+name = "EgHug"
+meaning = "Umarmung, Trost oder Zuneigung."
+usage = "bei freundlichen, warmen oder troestenden Momenten"
+
+[[emotes]]
+name = "BORGIR"
+meaning = "Essen oder Snack-Moment."
+usage = "wenn es um Essen, Hunger oder Snacks geht"
+
+[[emotes]]
+name = "catArrive"
+meaning = "Katze kommt an."
+usage = "wenn jemand oder etwas ankommt"
+
+[[emotes]]
+name = "Copege"
+meaning = "Coping; jemand redet sich etwas schoen."
+usage = "bei Selbsttaeuschung, Ausreden oder uebertriebenem Optimismus"
+
+[[emotes]]
+name = "peepoRant"
+meaning = "Wut, Rage oder genervte Stimmung."
+usage = "wenn jemand offensichtlich sauer, getriggert oder am Ranten ist"
+
+[[emotes]]
+name = "Fishinge"
+meaning = "Angeln oder Bait."
+usage = "wenn jemand baitet oder nach Reaktionen fischt"
+
+[[emotes]]
+name = "Dedge"
+meaning = "Tot/Deadge; etwas ist vorbei."
+usage = "bei Fail, Ende oder komplettem Stillstand"
+
+[[emotes]]
+name = "Bruhge"
+meaning = "Unglaeubigkeit; bruh-Moment oder kaum zu fassen."
+usage = "bei absurden, peinlichen oder schwer glaubbaren Aussagen"
+
+[[emotes]]
+name = "dogBOOP"
+meaning = "Hund/Doge-Moment."
+usage = "wenn ein Hund, Doge oder niedliche Hundereaktion passt"
+
+[[emotes]]
+name = "DankL"
+meaning = "Dank-L; Meme-Niederlage."
+usage = "bei ironischem Verlust oder L-Moment"
+
+[[emotes]]
+name = "BRICK"
+meaning = "Brick; etwas ist dumm, schwerfaellig oder komplett daneben."
+usage = "bei stumpfen Fehlern oder Brick-Momenten"
+
+[[emotes]]
+name = "INSANECAT"
+meaning = "Verrueckte Katze."
+usage = "bei chaotischer Cat-Energie"
+
+[[emotes]]
+name = "monakChrist"
+meaning = "Monak/Christus-Meme."
+usage = "bei ueberdramatischen heiligen oder christlichen Meme-Momenten"
+
+[[emotes]]
+name = "BruhhurB"
+meaning = "Unglaeubigkeit; bruh-Moment oder kaum zu fassen."
+usage = "bei absurden, peinlichen oder schwer glaubbaren Aussagen"
+
+[[emotes]]
+name = "Suseg"
+meaning = "Sus; etwas wirkt verdaechtig."
+usage = "bei verdächtigen, zweideutigen oder Among-Us-artigen Momenten"
+
+[[emotes]]
+name = "EZeg"
+meaning = "Traurigkeit, Pain oder Enttaeuschung."
+usage = "bei Pech, Rueckschlaegen oder trauriger Stimmung"
+
+[[emotes]]
+name = "stopbeingEg"
+meaning = "Traurigkeit, Pain oder Enttaeuschung."
+usage = "bei Pech, Rueckschlaegen oder trauriger Stimmung"
+
+[[emotes]]
+name = "BRUHSIT"
+meaning = "Unglaeubigkeit; bruh-Moment oder kaum zu fassen."
+usage = "bei absurden, peinlichen oder schwer glaubbaren Aussagen"
+
+[[emotes]]
+name = "Wankge"
+meaning = "Derber Wankge-Meme-Moment."
+usage = "bei bewusst derbem oder NSFW-nahem Humor"
+
+[[emotes]]
+name = "DogLookingWickedAndCool"
+meaning = "Hund sieht wicked und cool aus."
+usage = "bei sehr coolem Hund- oder Style-Moment"
+
+[[emotes]]
+name = "DEUTSCHLAND"
+meaning = "Deutschland-Bezug."
+usage = "wenn Deutschland, Deutsch oder deutsche Themen direkt relevant sind"
+
+[[emotes]]
+name = "Richeg"
+meaning = "Based; starke Zustimmung."
+usage = "bei klarer Zustimmung oder Respekt"
+
+[[emotes]]
+name = "WeeWoo"
+meaning = "Nervositaet, Angst oder Alarmstimmung."
+usage = "wenn etwas knapp, riskant oder angespannt ist"
+
+[[emotes]]
+name = "PauseChamps"
+meaning = "Spannung oder erwartungsvolles Warten."
+usage = "wenn gleich etwas Wichtiges passiert oder ein Ausgang offen ist"
+
+[[emotes]]
+name = "bruhSlide"
+meaning = "Bruh-Moment; unglaeubige oder trocken genervte Reaktion."
+usage = "wenn etwas dumm, frustrierend oder kaum zu glauben ist"
+
+[[emotes]]
+name = "AYOOOOO"
+meaning = "Katzen-Meme oder Cat-Reaktion."
+usage = "wenn Katzen oder cat-artige Stimmung passt"
+
+[[emotes]]
+name = "monakHmm"
+meaning = "Nachdenken oder Frage."
+usage = "bei Analyse, Unsicherheit oder Spekulation"
+
+[[emotes]]
+name = "Muhammeg"
+meaning = "Okayeg-/Name-Insider mit ruhiger Zustimmung."
+usage = "bei trockenem Mohammed/Muhammed- oder Name-Meme-Kontext"
+
+[[emotes]]
+name = "FeelsGladMan"
+meaning = "Freundliche Erleichterung oder gute Laune."
+usage = "wenn sich etwas positiv aufloest oder angenehm wirkt"
+
+[[emotes]]
+name = "MaxRebo"
+meaning = "Musik- oder Star-Wars-Referenz."
+usage = "wenn gejammt wird oder ein Star-Wars-Musikmoment passt"
+
+[[emotes]]
+name = "Moodwokege"
+meaning = "Kuh-Meme."
+usage = "bei Kuh-, Farm- oder Muh-Momenten"
+
+[[emotes]]
+name = "BuffDoge"
+meaning = "Gym, Kraft oder Bodybuilding."
+usage = "wenn es um Training, Kraft oder Gym-Memes geht"
+
+[[emotes]]
+name = "FloppaBing"
+meaning = "Floppa-Meme."
+usage = "wenn ein Floppa- oder Chad-Floppa-Moment passt"
+
+[[emotes]]
+name = "Berge"
+meaning = "Berg- oder Okayeg-Insider."
+usage = "bei Hoehen-, Wander- oder Berg-Momenten"
+
+[[emotes]]
+name = "modCheck"
+meaning = "Mod-Check; fragt nach Moderatoren oder Aufmerksamkeit."
+usage = "wenn Mods oder Moderation scherzhaft angesprochen werden"
+
+[[emotes]]
+name = "BOOBA"
+meaning = "Booba-/Horny-Twitch-Meme."
+usage = "bei bewusst horny oder Booba-Meme-Kontext"
+
+[[emotes]]
+name = "StaregeZoom"
+meaning = "Starren oder Beobachten."
+usage = "wenn jemand beobachtet, schaut oder suspekt fixiert"
+
+[[emotes]]
+name = "pepeP"
+meaning = "PepeP; neugierige oder leicht angespannte Pepe-Reaktion."
+usage = "wenn man aufmerksam schaut oder auf etwas wartet"
+
+[[emotes]]
+name = "AlienPls"
+meaning = "Musik, Tanz oder Jam."
+usage = "wenn Musik laeuft, etwas groovt oder Party-Stimmung entsteht"
+
+[[emotes]]
+name = "PogTasty"
+meaning = "Hype oder positive Ueberraschung."
+usage = "bei Erfolg, Vorfreude oder starken Momenten"
+
+[[emotes]]
+name = "Awakege"
+meaning = "Wachgewordene Okayeg-Reaktion."
+usage = "wenn jemand aufmerksam wird oder aufwacht"
+
+[[emotes]]
+name = "ABDULpls"
+meaning = "Musik, Tanz oder Vibe."
+usage = "wenn Musik laeuft oder die Stimmung groovt"
+
+[[emotes]]
+name = "pepeAgony"
+meaning = "Pepe in Qual; Schmerz, Cringe oder Verzweiflung."
+usage = "wenn etwas weh tut, unangenehm oder kaum ertragbar ist"
+
+[[emotes]]
+name = "Cheems"
+meaning = "Hund/Doge-Moment."
+usage = "wenn ein Hund, Doge oder niedliche Hundereaktion passt"
+
+[[emotes]]
+name = "Waving"
+meaning = "Begruessung oder freundliches Winken."
+usage = "wenn jemand dazukommt oder man freundlich hallo sagt"
+
+[[emotes]]
+name = "GachiPls"
+meaning = "Musik, Tanz oder Jam."
+usage = "wenn Musik laeuft, etwas groovt oder Party-Stimmung entsteht"
+
+[[emotes]]
+name = "dankWave"
+meaning = "Begruessung oder freundliches Winken."
+usage = "wenn jemand dazukommt oder man freundlich hallo sagt"
+
+[[emotes]]
+name = "Dogey"
+meaning = "Hund/Doge-Moment."
+usage = "wenn ein Hund, Doge oder niedliche Hundereaktion passt"
+
+[[emotes]]
+name = "pepeJAM"
+meaning = "Musik, Tanz oder Jam."
+usage = "wenn Musik laeuft, etwas groovt oder Party-Stimmung entsteht"
+
+[[emotes]]
+name = "NoBitches"
+meaning = "No-bitches-Meme; jemand ist allein oder erfolglos beim Flirten."
+usage = "nur scherzhaft bei klarer Meme-Stimmung"
+
+[[emotes]]
+name = "zyzzPls"
+meaning = "Musik, Tanz oder Jam."
+usage = "wenn Musik laeuft, etwas groovt oder Party-Stimmung entsteht"
+
+[[emotes]]
+name = "BeerTime"
+meaning = "Bier oder Feierabendgetraenk."
+usage = "wenn es um Bier, Feierabend oder Anstossen geht"
+
+[[emotes]]
+name = "ppHop"
+meaning = "Musik, Tanz oder Jam."
+usage = "wenn Musik laeuft, etwas groovt oder Party-Stimmung entsteht"
+
+[[emotes]]
+name = "UNLUCKY"
+meaning = "Pech gehabt."
+usage = "bei Pech, schlechten Rolls oder knappen Fails"
+
+[[emotes]]
+name = "forsenExplainingHow"
+meaning = "Lange Erklaerung oder Essay."
+usage = "wenn jemand ausfuehrlich erklaert oder yappt"
+
+[[emotes]]
+name = "Saved"
+meaning = "Gerettet; knapp nochmal gut gegangen."
+usage = "wenn etwas gerade noch klappt"
+
+[[emotes]]
+name = "HELLAWICKED"
+meaning = "Krasse, wilde oder boese starke Reaktion."
+usage = "wenn etwas extrem, edgy oder uebertrieben stark wirkt"
+
+[[emotes]]
+name = "Dogege"
+meaning = "Hund/Doge-Moment."
+usage = "wenn ein Hund, Doge oder niedliche Hundereaktion passt"
+
+[[emotes]]
+name = "SusegGun"
+meaning = "Sus; etwas wirkt verdaechtig."
+usage = "bei verdächtigen, zweideutigen oder Among-Us-artigen Momenten"
+
+[[emotes]]
+name = "headBang"
+meaning = "Musik, Tanz oder Jam."
+usage = "wenn Musik laeuft, etwas groovt oder Party-Stimmung entsteht"
+
+[[emotes]]
+name = "DinkDonk"
+meaning = "Hinweis, Reminder oder Glocken-Moment."
+usage = "bei Ankuendigungen, Timern oder kurzen Erinnerungen"
+
+[[emotes]]
+name = "WICKED"
+meaning = "Krasse, wilde oder boese starke Reaktion."
+usage = "wenn etwas extrem, edgy oder uebertrieben stark wirkt"
+
+[[emotes]]
+name = "peepoLeave"
+meaning = "Verabschiedung oder Weggehen."
+usage = "wenn jemand geht, offline geht oder gute Nacht sagt"
+
+[[emotes]]
+name = "FotzenFaschoFritzVonPapen"
+meaning = "Derber politischer Simpsons-/Faschismus-Diss."
+usage = "bei klar satirischem politischen Spott"
+
+[[emotes]]
+name = "TrollDespair"
+meaning = "Traurigkeit, Enttaeuschung oder Verzweiflung."
+usage = "bei Pech, kleinen Rueckschlaegen oder traurigen Chat-Momenten"
+
+[[emotes]]
+name = "FeelsOldMan"
+meaning = "Alt, nostalgisch oder gealtert."
+usage = "bei Nostalgie oder wenn etwas alt wirkt"
+
+[[emotes]]
+name = "ppBounce"
+meaning = "Musik, Tanz oder Jam."
+usage = "wenn Musik laeuft, etwas groovt oder Party-Stimmung entsteht"
+
+[[emotes]]
+name = "KKonaW"
+meaning = "KKona-/Country-Amerika-Meme."
+usage = "bei US-, Country- oder Redneck-Anspielungen"
+
+[[emotes]]
+name = "Amogus"
+meaning = "Sus; etwas wirkt verdaechtig."
+usage = "bei verdächtigen, zweideutigen oder Among-Us-artigen Momenten"
+
+[[emotes]]
+name = "Nerdge"
+meaning = "Big-brain oder nerdige Korrektur."
+usage = "bei schlauen, uebergenauen oder nerdigen Aussagen"
+
+[[emotes]]
+name = "peepoShy"
+meaning = "Schuechternheit oder Verlegenheit."
+usage = "bei suessen, awkward oder leicht verlegenen Momenten"
+
+[[emotes]]
+name = "borpaSpin"
+meaning = "Musik, Tanz oder Jam."
+usage = "wenn Musik laeuft, etwas groovt oder Party-Stimmung entsteht"
+
+[[emotes]]
+name = "MONKE"
+meaning = "Monke-Meme."
+usage = "bei primitiver, alberner oder monke-artiger Reaktion"
+
+[[emotes]]
+name = "sumSmash"
+meaning = "Smash; etwas wird hart getroffen oder zerstoert."
+usage = "bei Smash-/Impact-Momenten"
+
+[[emotes]]
+name = "TOOBASED"
+meaning = "Based; starke Zustimmung zu einer mutigen oder guten Aussage."
+usage = "bei klarer Zustimmung oder Respekt fuer eine Aussage"
+
+[[emotes]]
+name = "MONKEPUTIN"
+meaning = "Monke-Meme."
+usage = "bei primitiver, alberner oder monke-artiger Reaktion"
+
+[[emotes]]
+name = "bruh"
+meaning = "Unglaeubigkeit; bruh-Moment oder kaum zu fassen."
+usage = "bei absurden, peinlichen oder schwer glaubbaren Aussagen"
+
+[[emotes]]
+name = "Voidge"
+meaning = "Traurigkeit, Enttaeuschung oder Verzweiflung."
+usage = "bei Pech, kleinen Rueckschlaegen oder traurigen Chat-Momenten"
+
+[[emotes]]
+name = "Bierge"
+meaning = "Bier oder Feierabendgetraenk."
+usage = "wenn es um Bier, Feierabend oder Anstossen geht"
+
+[[emotes]]
+name = "Latege"
+meaning = "Zu spaet."
+usage = "wenn jemand oder etwas verspaetet ist"
+
+[[emotes]]
+name = "MADeg"
+meaning = "Wut, Rage oder genervte Stimmung."
+usage = "wenn jemand offensichtlich sauer, getriggert oder am Ranten ist"
+
+[[emotes]]
+name = "BASED"
+meaning = "Based; starke Zustimmung zu einer mutigen oder guten Aussage."
+usage = "bei klarer Zustimmung oder Respekt fuer eine Aussage"
+
+[[emotes]]
+name = "OMEGALULiguess"
+meaning = "Lachen; etwas ist lustig oder absurd."
+usage = "bei Witzen, Fails oder absurden Chat-Momenten"
+
+[[emotes]]
+name = "CatChomp"
+meaning = "Essen oder Snack-Moment."
+usage = "wenn es um Essen, Hunger oder Snacks geht"
+
+[[emotes]]
+name = "Fatge"
+meaning = "Dicker/traeger Sadge-Moment."
+usage = "bei scherzhaftem Fatge-Meme-Kontext"
+
+[[emotes]]
+name = "MadgeJuice"
+meaning = "Wut, Rage oder genervte Stimmung."
+usage = "wenn jemand offensichtlich sauer, getriggert oder am Ranten ist"
+
+[[emotes]]
+name = "MadgeLate"
+meaning = "Wut, Rage oder genervte Stimmung."
+usage = "wenn jemand offensichtlich sauer, getriggert oder am Ranten ist"
+
+[[emotes]]
+name = "Prayers"
+meaning = "Respekt, Gebet oder Salut."
+usage = "bei Dank, Abschied, Respekt oder hoffnungsvollen Momenten"
+
+[[emotes]]
+name = "catSmash"
+meaning = "Katze haut drauf."
+usage = "bei Smash- oder Wutmomenten mit Cat-Vibe"
+
+[[emotes]]
+name = "Blusheg"
+meaning = "Schuechternheit oder Verlegenheit."
+usage = "bei suessen, awkward oder leicht verlegenen Momenten"
+
+[[emotes]]
+name = "doggoArrive"
+meaning = "Hund/Doge-Moment."
+usage = "wenn ein Hund, Doge oder niedliche Hundereaktion passt"
+
+[[emotes]]
+name = "hmmMeeting"
+meaning = "Nachdenken oder Frage."
+usage = "bei Analyse, Unsicherheit oder Spekulation"
+
+[[emotes]]
+name = "OkayChamp"
+meaning = "Zustimmung; das stimmt oder klingt richtig."
+usage = "wenn man einer Aussage zustimmt oder sie bestaetigt"
+
+[[emotes]]
+name = "ppConga"
+meaning = "Musik, Tanz oder Jam."
+usage = "wenn Musik laeuft, etwas groovt oder Party-Stimmung entsteht"
+
+[[emotes]]
+name = "flushE"
+meaning = "Flush/wegspuelen."
+usage = "wenn etwas weg, erledigt oder im Klo ist"
+
+[[emotes]]
+name = "zyzzBass"
+meaning = "Musik, Tanz oder Jam."
+usage = "wenn Musik laeuft, etwas groovt oder Party-Stimmung entsteht"
+
+[[emotes]]
+name = "STRONGERS"
+meaning = "Gym, Kraft oder Bodybuilding."
+usage = "wenn es um Training, Kraft oder Gym-Memes geht"
+
+[[emotes]]
+name = "tintinJesus"
+meaning = "Tintin-/Jesus-Meme."
+usage = "bei absurd heiligem oder Tintin-bezogenem Kontext"
+
+[[emotes]]
+name = "SNIFFA"
+meaning = "Schnueffeln oder verdächtiges Riechen."
+usage = "bei suspekter Suche oder Schnueffel-Momenten"
+
+[[emotes]]
+name = "BASADO"
+meaning = "Based; starke Zustimmung zu einer mutigen oder guten Aussage."
+usage = "bei klarer Zustimmung oder Respekt fuer eine Aussage"
+
+[[emotes]]
+name = "gullScream"
+meaning = "Vogel-Meme."
+usage = "bei Bird-, Flug- oder Schrei-Momenten"
+
+[[emotes]]
+name = "TheVoices"
+meaning = "Begruessung oder freundliches Winken."
+usage = "wenn jemand dazukommt oder man Hallo sagt"
+
+[[emotes]]
+name = "catsittingverycomfortablearoundacampfirewithitsfriends"
+meaning = "Begruessung oder freundliches Winken."
+usage = "wenn jemand dazukommt oder man Hallo sagt"
+
+[[emotes]]
+name = "deviW"
+meaning = "Devi-W-Moment."
+usage = "bei lokalem Devi-Insider oder W-Reaktion"
+
+[[emotes]]
+name = "Concerned"
+meaning = "Erkenntnis; etwas wird unangenehm klar."
+usage = "wenn jemand eine bittere Wahrheit bemerkt oder realisiert"
+
+[[emotes]]
+name = "ChatTime"
+meaning = "Chatten oder Schreib-Moment."
+usage = "wenn der Chat aktiv schreibt oder etwas diskutiert"
+
+[[emotes]]
+name = "Zimb3l"
+meaning = "Politik- oder Laender-Meme."
+usage = "wenn das konkrete politische Thema passt"
+
+[[emotes]]
+name = "Erm"
+meaning = "Sus; etwas wirkt verdaechtig."
+usage = "bei verdächtigen, zweideutigen oder Among-Us-artigen Momenten"
+
+[[emotes]]
+name = "bruuuuuuuuuuuuuuuuuuuuuuuuh"
+meaning = "Unglaeubigkeit; bruh-Moment oder kaum zu fassen."
+usage = "bei absurden, peinlichen oder schwer glaubbaren Aussagen"
+
+[[emotes]]
+name = "catNuke"
+meaning = "Katzen-Meme oder Cat-Reaktion."
+usage = "wenn Katzen oder cat-artige Stimmung passt"
+
+[[emotes]]
+name = "Lookinge"
+meaning = "Sus; etwas wirkt verdaechtig."
+usage = "bei verdächtigen, zweideutigen oder Among-Us-artigen Momenten"
+
+[[emotes]]
+name = "AbdulFlop"
+meaning = "Floppa-Meme."
+usage = "bei Floppa, Chad-Floppa oder goofy Cat-Momenten"
+
+[[emotes]]
+name = "Shruge"
+meaning = "Traurigkeit, Pain oder Enttaeuschung."
+usage = "bei Pech, Rueckschlaegen oder trauriger Stimmung"
+
+[[emotes]]
+name = "BrickTime"
+meaning = "Ausbuhen oder Backstein-Moment."
+usage = "wenn etwas verworfen, ausgebuht oder hart abgelehnt wird"
+
+[[emotes]]
+name = "MoomTime"
+meaning = "Traurigkeit, Pain oder Enttaeuschung."
+usage = "bei Pech, Rueckschlaegen oder trauriger Stimmung"
+
+[[emotes]]
+name = "MADDIES"
+meaning = "Wut, Rage oder genervte Stimmung."
+usage = "wenn jemand offensichtlich sauer, getriggert oder am Ranten ist"
+
+[[emotes]]
+name = "SMH"
+meaning = "Kopfschuetteln; Enttaeuschung oder Unglaube."
+usage = "bei kleinen Fehltritten oder absurden Aussagen"
+
+[[emotes]]
+name = "wikked"
+meaning = "Hype oder positive Ueberraschung."
+usage = "bei Erfolg, Vorfreude oder starken Momenten"
+
+[[emotes]]
+name = "VIBE"
+meaning = "Vibe, entspannte Stimmung oder wohliger Moment."
+usage = "bei chilligen, ruhigen oder stimmigen Momenten"
+
+[[emotes]]
+name = "danse"
+meaning = "Musik, Tanz oder Jam."
+usage = "wenn Musik laeuft, etwas groovt oder Party-Stimmung entsteht"
+
+[[emotes]]
+name = "AWOKEGE"
+meaning = "Awoke-/Woke-Okayeg."
+usage = "wenn etwas uebertrieben bewusst, woke oder meta wirkt"
+
+[[emotes]]
+name = "Coldge"
+meaning = "Kalte Okayeg-Reaktion."
+usage = "wenn etwas kalt, frostig oder emotionsarm wirkt"
+
+[[emotes]]
+name = "Aloo"
+meaning = "Kartoffel- oder Food-Referenz."
+usage = "bei Essensmomenten oder albernem Food-Talk"
+
+[[emotes]]
+name = "teaa"
+meaning = "Getraenk oder Trinkmoment."
+usage = "wenn es um Trinken, Kaffee, Bier oder Hydration geht"
+
+[[emotes]]
+name = "luvv"
+meaning = "Liebe, Zuneigung oder herzlicher Support."
+usage = "bei lieben, positiven oder supportiven Reaktionen"
+
+[[emotes]]
+name = "letsgo"
+meaning = "Hype, Freude oder starke positive Ueberraschung."
+usage = "bei guten News, Plays, Erfolgen oder Vorfreude"
+
+[[emotes]]
+name = "sadd"
+meaning = "Traurigkeit, Enttaeuschung oder Verzweiflung."
+usage = "bei Pech, kleinen Rueckschlaegen oder traurigen Chat-Momenten"
+
+[[emotes]]
+name = "NukeMoscow"
+meaning = "Kuh-Meme."
+usage = "bei Kuh-, Farm- oder Muh-Momenten"
+
+[[emotes]]
+name = "fricc"
+meaning = "Hype oder positive Ueberraschung."
+usage = "bei Erfolg, Vorfreude oder starken Momenten"
+
+[[emotes]]
+name = "wikk"
+meaning = "Hype oder positive Ueberraschung."
+usage = "bei Erfolg, Vorfreude oder starken Momenten"
+
+[[emotes]]
+name = "Chatting"
+meaning = "Chatten oder Schreib-Moment."
+usage = "wenn der Chat aktiv schreibt oder etwas diskutiert"
+
+[[emotes]]
+name = "essaying"
+meaning = "Lange Erklaerung oder Essay."
+usage = "wenn jemand ausfuehrlich erklaert oder yappt"
+
+[[emotes]]
+name = "CowDance"
+meaning = "Musik, Tanz oder Jam."
+usage = "wenn Musik laeuft, etwas groovt oder Party-Stimmung entsteht"
+
+[[emotes]]
+name = "JosefScheisser"
+meaning = "Derber Josef-Insider-Diss."
+usage = "bei spottischer Ablehnung eines Josef- oder Insider-Moments"
+
+[[emotes]]
+name = "pepeJAMMER"
+meaning = "Musik, Tanz oder Vibe."
+usage = "wenn Musik laeuft oder die Stimmung groovt"
+
+[[emotes]]
+name = "SmokeTime"
+meaning = "Rauch-/Smoke-Meme."
+usage = "bei Smoke- oder Kiffer-Meme-Kontext"
+
+[[emotes]]
+name = "pugPls"
+meaning = "Musik, Tanz oder Jam."
+usage = "wenn Musik laeuft, etwas groovt oder Party-Stimmung entsteht"
+
+[[emotes]]
+name = "GUMO"
+meaning = "Guten Morgen."
+usage = "als morgendliche Begruessung"
+
+[[emotes]]
+name = "SCHIZO"
+meaning = "Schizo-/Voices-Meme."
+usage = "bei uebertrieben paranoidem oder wirrem Meme-Kontext"
+
+[[emotes]]
+name = "peepoPooRocket"
+meaning = "Poo-Rocket; sehr derber, absurder Peepo-Moment."
+usage = "bei Fäkal- oder Rocket-Humor"
+
+[[emotes]]
+name = "sajj"
+meaning = "Traurigkeit, Enttaeuschung oder Verzweiflung."
+usage = "bei Pech, kleinen Rueckschlaegen oder traurigen Chat-Momenten"
+
+[[emotes]]
+name = "Applecatrun"
+meaning = "Applecat rennt."
+usage = "bei schnellem Weglaufen oder Cat-Run-Momenten"
+
+[[emotes]]
+name = "widepeepoHappy"
+meaning = "Breites glueckliches Peepo."
+usage = "bei grosser Freude"
+
+[[emotes]]
+name = "pogg"
+meaning = "Hype, Freude oder starke positive Ueberraschung."
+usage = "bei guten News, Plays, Erfolgen oder Vorfreude"
+
+[[emotes]]
+name = "CMONLETSGO"
+meaning = "Hype, Freude oder starke positive Ueberraschung."
+usage = "bei guten News, Plays, Erfolgen oder Vorfreude"
+
+[[emotes]]
+name = "MyHonestReaction"
+meaning = "Meine ehrliche Reaktion."
+usage = "bei trockener Reaktions-Meme-Antwort"
+
+[[emotes]]
+name = "billyReady"
+meaning = "Begruessung oder freundliches Winken."
+usage = "wenn jemand dazukommt oder man Hallo sagt"
+
+[[emotes]]
+name = "XiPls"
+meaning = "Xi-/China-Meme tanzt."
+usage = "bei China-/Xi- oder Musik-Meme-Kontext"
+
+[[emotes]]
+name = "lookUp"
+meaning = "Nach oben schauen."
+usage = "wenn jemand nach oben schaut oder etwas oben passiert"
+
+[[emotes]]
+name = "PokiKiss"
+meaning = "Liebe, Zuneigung oder herzlicher Support."
+usage = "bei lieben, positiven oder supportiven Reaktionen"
+
+[[emotes]]
+name = "EARTHQUAKE"
+meaning = "Begruessung oder freundliches Winken."
+usage = "wenn jemand dazukommt oder man Hallo sagt"
+
+[[emotes]]
+name = "BirdgeLeave"
+meaning = "Verabschiedung oder Weggehen."
+usage = "wenn jemand geht, offline geht oder gute Nacht sagt"
+
+[[emotes]]
+name = "HmmNotes"
+meaning = "Notiert; Information wurde zur Kenntnis genommen."
+usage = "wenn etwas gemerkt, protokolliert oder trocken bestaetigt wird"
+
+[[emotes]]
+name = "CluelessCouncil"
+meaning = "Erkenntnis; etwas wird unangenehm klar."
+usage = "wenn jemand eine bittere Wahrheit bemerkt oder realisiert"
+
+[[emotes]]
+name = "sStrat"
+meaning = "Ratten-Meme."
+usage = "bei Rat-, Shake- oder hektischem Meme-Kontext"
+
+[[emotes]]
+name = "BRRRRRRRRRRRRRT"
+meaning = "Flugzeug- oder Aviation-Meme."
+usage = "wenn Flugzeuge, Jets oder Fliegen Thema sind"
+
+[[emotes]]
+name = "BENZER"
+meaning = "Benzer-Insider/Reaktionsmeme."
+usage = "bei lokalem Benzer-Kontext"
+
+[[emotes]]
+name = "SUSSY"
+meaning = "Sus; etwas wirkt verdaechtig."
+usage = "bei verdächtigen, zweideutigen oder Among-Us-artigen Momenten"
+
+[[emotes]]
+name = "Deadge"
+meaning = "Deadge; tot, vorbei oder komplett erledigt."
+usage = "bei Ende, Fail oder Stille"
+
+[[emotes]]
+name = "hmjj"
+meaning = "Nachdenklicher hmjj-Moment."
+usage = "bei unsicherem Nachdenken"
+
+[[emotes]]
+name = "Uhm"
+meaning = "Verwirrung oder Unsicherheit."
+usage = "wenn etwas unklar, seltsam oder schwer einzuordnen ist"
+
+[[emotes]]
+name = "WINK"
+meaning = "Zwinkern."
+usage = "bei spielerischem Hinweis oder Scherz"
+
+[[emotes]]
+name = "BirdgeArrive"
+meaning = "Vogel-Meme."
+usage = "bei Bird-, Flug- oder Schrei-Momenten"
+
+[[emotes]]
+name = "VOICES"
+meaning = "Die Stimmen; innere Stimmen oder Schizo-Meme."
+usage = "bei uebertrieben wirrem Gedankenchaos"
+
+[[emotes]]
+name = "IveGonePastThePointOfInsanity"
+meaning = "Jenseits des Wahnsinns."
+usage = "bei komplett eskaliertem Unsinn"
+
+[[emotes]]
+name = "danseparty"
+meaning = "Musik, Tanz oder Jam."
+usage = "wenn Musik laeuft, etwas groovt oder Party-Stimmung entsteht"
+
+[[emotes]]
+name = "REEEE"
+meaning = "Kreischen oder uebertriebene Rage."
+usage = "bei lauter, ueberzeichneter Frustration"
+
+[[emotes]]
+name = "Hydrationge"
+meaning = "Trinken nicht vergessen; Hydration Reminder."
+usage = "als freundliche Erinnerung, Wasser zu trinken"
+
+[[emotes]]
+name = "Awareg"
+meaning = "Erkenntnis; etwas wird unangenehm klar."
+usage = "wenn jemand eine bittere Wahrheit bemerkt oder realisiert"
+
+[[emotes]]
+name = "Copeless"
+meaning = "Coping; jemand redet sich etwas schoen."
+usage = "bei Selbsttaeuschung, Ausreden oder uebertriebenem Optimismus"
+
+[[emotes]]
+name = "Capybara"
+meaning = "Capybara-Moment."
+usage = "bei ruhiger, stare-artiger oder capybara-bezogener Stimmung"
+
+[[emotes]]
+name = "FORSEN"
+meaning = "Forsen-Meme."
+usage = "bei Forsen- oder klassischem Twitch-Meme-Kontext"
+
+[[emotes]]
+name = "plonk"
+meaning = "Cat-Stare/Plonk."
+usage = "bei stummem, komischem Anstarren"
+
+[[emotes]]
+name = "catSleep"
+meaning = "Muede, schlaefrig oder Zeit fuers Bett."
+usage = "bei Muedigkeit, spaeter Uhrzeit oder sleepy Stimmung"
+
+[[emotes]]
+name = "kiwiDance"
+meaning = "Musik, Tanz oder Jam."
+usage = "wenn Musik laeuft, etwas groovt oder Party-Stimmung entsteht"
+
+[[emotes]]
+name = "ThumbsUpSadCat"
+meaning = "Traurige Zustimmung mit Daumen hoch."
+usage = "bei bittersuesser Akzeptanz"
+
+[[emotes]]
+name = "GIGALONSO"
+meaning = "Giga-Alonso."
+usage = "bei starken Fernando-Alonso- oder F1-Momenten"
+
+[[emotes]]
+name = "PLEASE"
+meaning = "Bitten oder Flehen."
+usage = "wenn jemand lieb oder verzweifelt bittet"
+
+[[emotes]]
+name = "Sisi"
+meaning = "Ja ja; Zustimmung."
+usage = "bei lockerer Zustimmung"
+
+[[emotes]]
+name = "SquidJAM"
+meaning = "Musik, Tanz oder Jam."
+usage = "wenn Musik laeuft, etwas groovt oder Party-Stimmung entsteht"
+
+[[emotes]]
+name = "Maracagers"
+meaning = "Musik, Tanz oder Jam."
+usage = "wenn Musik laeuft, etwas groovt oder Party-Stimmung entsteht"
+
+[[emotes]]
+name = "WIDEGIGALONSO"
+meaning = "Breiter Giga-Alonso."
+usage = "bei besonders starkem Alonso-/F1-Meme"
+
+[[emotes]]
+name = "MarkusLanz"
+meaning = "Markus-Lanz-/Talkshow-Meme."
+usage = "bei Talkshow, Diskussion oder deutschem TV-Kontext"
+
+[[emotes]]
+name = "DIEGRÜNEN"
+meaning = "Die Gruenen als Politik-Meme."
+usage = "wenn deutsche Gruenen-Politik Thema ist"
+
+[[emotes]]
+name = "peepoExplosion"
+meaning = "Explosion oder kompletter Boom."
+usage = "bei explosiven Ereignissen oder Ueberraschung"
+
+[[emotes]]
+name = "Mexicaneg"
+meaning = "Traurigkeit, Pain oder Enttaeuschung."
+usage = "bei Pech, Rueckschlaegen oder trauriger Stimmung"
+
+[[emotes]]
+name = "PTSDge"
+meaning = "Traurigkeit, Pain oder Enttaeuschung."
+usage = "bei Pech, Rueckschlaegen oder trauriger Stimmung"
+
+[[emotes]]
+name = "Maggus"
+meaning = "Politik- oder Laender-Meme."
+usage = "wenn das konkrete politische Thema passt"
+
+[[emotes]]
+name = "Coffeege"
+meaning = "Kaffee oder Koffein."
+usage = "wenn es um Kaffee, Wachwerden oder Koffeinbedarf geht"
+
+[[emotes]]
+name = "peepoCoffee"
+meaning = "Kaffee oder Koffein."
+usage = "wenn es um Kaffee, Wachwerden oder Koffeinbedarf geht"
+
+[[emotes]]
+name = "HmmmOK"
+meaning = "Nachdenken; ueberlegen oder etwas analysieren."
+usage = "bei Fragen, Spekulation oder vorsichtigem Abwaegen"
+
+[[emotes]]
+name = "TOPXI"
+meaning = "Politik- oder Laender-Meme."
+usage = "wenn das konkrete politische Thema passt"
+
+[[emotes]]
+name = "peepoRun"
+meaning = "Peepo rennt."
+usage = "wenn jemand schnell weg oder loslaeuft"
+
+[[emotes]]
+name = "MmmHmm"
+meaning = "Zustimmung; das stimmt oder klingt richtig."
+usage = "wenn man einer Aussage zustimmt oder sie bestaetigt"
+
+[[emotes]]
+name = "spongePls"
+meaning = "Musik, Tanz oder Vibe."
+usage = "wenn Musik laeuft oder die Stimmung groovt"
+
+[[emotes]]
+name = "literallyme"
+meaning = "Gym, Kraft oder Bodybuilding."
+usage = "wenn Training, Muskeln oder Chad-Energie passt"
+
+[[emotes]]
+name = "birdgeWhatIsGoingOn"
+meaning = "Vogel-Meme."
+usage = "bei Bird-, Flug- oder Schrei-Momenten"
+
+[[emotes]]
+name = "MEGALULING"
+meaning = "Lachen; etwas ist lustig oder absurd."
+usage = "bei Witzen, Fails oder absurden Chat-Momenten"
+
+[[emotes]]
+name = "AlonsoLookingAtYou"
+meaning = "Formel-1-Bezug."
+usage = "wenn Formel 1, Fahrer oder Teams Thema sind"
+
+[[emotes]]
+name = "pigPls"
+meaning = "Musik, Tanz oder Jam."
+usage = "wenn Musik laeuft, etwas groovt oder Party-Stimmung entsteht"
+
+[[emotes]]
+name = "HmmPhone"
+meaning = "Nachdenken; ueberlegen oder etwas analysieren."
+usage = "bei Fragen, Spekulation oder vorsichtigem Abwaegen"
+
+[[emotes]]
+name = "HmmYAPPP"
+meaning = "Lange Erklaerung oder Essay."
+usage = "wenn jemand ausfuehrlich erklaert oder yappt"
+
+[[emotes]]
+name = "WaitingAngry"
+meaning = "Wut, Rage oder genervte Stimmung."
+usage = "wenn jemand offensichtlich sauer, getriggert oder am Ranten ist"
+
+[[emotes]]
+name = "averageFan"
+meaning = "Wut, Tilt oder genervte Stimmung."
+usage = "bei Rage, Rants oder Frust"
+
+[[emotes]]
+name = "AverageTurkishMan"
+meaning = "Wut, Tilt oder genervte Stimmung."
+usage = "bei Rage, Rants oder Frust"
+
+[[emotes]]
+name = "StarwarsTime"
+meaning = "Star-Wars-Zeit."
+usage = "wenn Star Wars Thema wird"
+
+[[emotes]]
+name = "WtF"
+meaning = "Verwirrung oder Unsicherheit."
+usage = "wenn etwas unklar, seltsam oder schwer einzuordnen ist"
+
+[[emotes]]
+name = "Heyge"
+meaning = "Freundliches Heyge-Hallo."
+usage = "bei Begruessungen"
+
+[[emotes]]
+name = "notListening"
+meaning = "Nicht zuhoeren."
+usage = "wenn jemand bewusst ausblendet"
+
+[[emotes]]
+name = "Camoningerland"
+meaning = "England- oder Fussball-Chant."
+usage = "zum Anfeuern oder ironischen Hypen von England/Fussball"
+
+[[emotes]]
+name = "wideduckass"
+meaning = "Enten-Meme."
+usage = "bei Duck-, Quack- oder alberner Tierstimmung"
+
+[[emotes]]
+name = "Bruvge"
+meaning = "Britischer Bruv-Okayeg."
+usage = "bei UK-, Bro- oder Mate-Vibe"
+
+[[emotes]]
+name = "angy"
+meaning = "Wut, Rage oder genervte Stimmung."
+usage = "wenn jemand offensichtlich sauer, getriggert oder am Ranten ist"
+
+[[emotes]]
+name = "3Head"
+meaning = "3Head-/britischer Meme-Moment."
+usage = "bei britischem oder simpel-denkendem Humor"
+
+[[emotes]]
+name = "JarJarSwole"
+meaning = "Swole Jar Jar."
+usage = "bei Star-Wars- oder Muskel-Meme"
+
+[[emotes]]
+name = "MaN"
+meaning = "Unglaeubiges Mann/Man-Meme."
+usage = "bei genervtem oder erstauntem Ausruf"
+
+[[emotes]]
+name = "Exquisite"
+meaning = "Exquisit; stilvoll oder gehoben."
+usage = "bei elegantem, feinem oder ironisch edlem Moment"
+
+[[emotes]]
+name = "HolUp"
+meaning = "Moment mal; kurz stoppen und nachdenken."
+usage = "wenn etwas suspekt oder unerwartet ist"
+
+[[emotes]]
+name = "LOLE"
+meaning = "Lachen; etwas ist lustig oder absurd."
+usage = "bei Witzen, Fails oder absurden Chat-Momenten"
+
+[[emotes]]
+name = "pepePalpatine"
+meaning = "Star-Wars-Meme."
+usage = "wenn Star Wars oder Sci-Fi-Kontext passt"
+
+[[emotes]]
+name = "catBombing"
+meaning = "Katzen-Meme oder Cat-Reaktion."
+usage = "wenn Katzen oder cat-artige Stimmung passt"
+
+[[emotes]]
+name = "peepoStrong"
+meaning = "Gym, Kraft oder Bodybuilding."
+usage = "wenn es um Training, Kraft oder Gym-Memes geht"
+
+[[emotes]]
+name = "Serene"
+meaning = "Vibe, entspannte Stimmung oder wohliger Moment."
+usage = "bei chilligen, ruhigen oder stimmigen Momenten"
+
+[[emotes]]
+name = "YODA"
+meaning = "Yoda-/Star-Wars-Meme."
+usage = "bei Star-Wars- oder weisem Spruch"
+
+[[emotes]]
+name = "HelloThere"
+meaning = "Hello there."
+usage = "bei Star-Wars-Gruessen oder ikonischem Hallo"
+
+[[emotes]]
+name = "VaderListening"
+meaning = "Star-Wars-Meme."
+usage = "wenn Star Wars oder Sci-Fi-Kontext passt"
+
+[[emotes]]
+name = "speziTime"
+meaning = "Spezi-Getraenk oder Spezi-Moment."
+usage = "wenn es um Spezi oder Getraenke geht"
+
+[[emotes]]
+name = "BRUHDespair"
+meaning = "Traurigkeit, Enttaeuschung oder Verzweiflung."
+usage = "bei Pech, kleinen Rueckschlaegen oder traurigen Chat-Momenten"
+
+[[emotes]]
+name = "WHAT"
+meaning = "Verwirrung oder Unsicherheit."
+usage = "wenn etwas unklar, seltsam oder schwer einzuordnen ist"
+
+[[emotes]]
+name = "WIRES"
+meaning = "Verkabelt oder technisch chaotisch."
+usage = "bei Kabel-, Technik- oder Setup-Chaos"
+
+[[emotes]]
+name = "Ferrarieg"
+meaning = "Formel-1-Bezug."
+usage = "wenn Formel 1, Fahrer oder Teams Thema sind"
+
+[[emotes]]
+name = "peepoYELLING"
+meaning = "Wut, Rage oder genervte Stimmung."
+usage = "wenn jemand offensichtlich sauer, getriggert oder am Ranten ist"
+
+[[emotes]]
+name = "FeelsLagMan"
+meaning = "Lag, Verzoegerung oder technische Traegheit."
+usage = "wenn etwas haengt, verzögert reagiert oder laggt"
+
+[[emotes]]
+name = "juh"
+meaning = "Kurzer Cat-/Meme-Ausdruck."
+usage = "bei kleiner, alberner Reaktion"
+
+[[emotes]]
+name = "peepoUK"
+meaning = "Laenderbezug."
+usage = "wenn das konkrete Land Thema ist"
+
+[[emotes]]
+name = "WannDayZ"
+meaning = "Gaming- oder Spielmoment."
+usage = "bei Gameplay, Queue, Skill oder Game-Talk"
+
+[[emotes]]
+name = "DEVI"
+meaning = "Devi-Channel-Insider."
+usage = "wenn ein Devi-Running-Gag oder Devi-Moment angesprochen wird"
+
+[[emotes]]
+name = "catFU"
+meaning = "Katzen-Meme oder Cat-Reaktion."
+usage = "wenn Katzen oder cat-artige Stimmung passt"
+
+[[emotes]]
+name = "WatchingForsen"
+meaning = "Forsen beobachten."
+usage = "wenn jemand beobachtet oder Forsen-Kontext da ist"
+
+[[emotes]]
+name = "plinkbedge"
+meaning = "Muede, schlaefrig oder Zeit fuers Bett."
+usage = "bei Muedigkeit, spaeter Uhrzeit oder sleepy Stimmung"
+
+[[emotes]]
+name = "peepoCookie"
+meaning = "Essen oder Snack-Moment."
+usage = "wenn es um Essen, Hunger oder Snacks geht"
+
+[[emotes]]
+name = "HyperSwoleMEGAdoggersOnPreWorkoutOnLegDayWithAChestPumpGoing"
+meaning = "Hype oder positive Ueberraschung."
+usage = "bei Erfolg, Vorfreude oder starken Momenten"
+
+[[emotes]]
+name = "alooo"
+meaning = "Aloo-Hallo."
+usage = "bei freundlichem Auftauchen"
+
+[[emotes]]
+name = "joever"
+meaning = "It is Joever; etwas ist vorbei."
+usage = "bei Niederlage oder Ende mit Biden-Meme"
+
+[[emotes]]
+name = "AlonsoStare"
+meaning = "Alonso starrt."
+usage = "bei intensivem Alonso-/F1-Blick"
+
+[[emotes]]
+name = "donkRun"
+meaning = "Donk rennt."
+usage = "bei schnellem Losrennen"
+
+[[emotes]]
+name = "MOURINHO"
+meaning = "Mourinho-Shush."
+usage = "wenn jemand schweigen oder nichts sagen soll"
+
+[[emotes]]
+name = "CLANKERS"
+meaning = "Star-Wars-Meme."
+usage = "wenn Star Wars oder Sci-Fi-Kontext passt"
+
+[[emotes]]
+name = "ICANT"
+meaning = "Unglaeubigkeit; bruh-Moment oder kaum zu fassen."
+usage = "bei absurden, peinlichen oder schwer glaubbaren Aussagen"
+
+[[emotes]]
+name = "buh"
+meaning = "Buh/Guh-Reaktion."
+usage = "bei kleinem Schock, Ratlosigkeit oder Albernheit"
+
+[[emotes]]
+name = "THONKERS"
+meaning = "Nachdenken; ueberlegen oder etwas analysieren."
+usage = "bei Fragen, Spekulation oder vorsichtigem Abwaegen"
+
+[[emotes]]
+name = "DogHello"
+meaning = "Begruessung oder freundliches Winken."
+usage = "wenn jemand dazukommt oder man freundlich hallo sagt"
+
+[[emotes]]
+name = "vibee"
+meaning = "Vibe, entspannte Stimmung oder wohliger Moment."
+usage = "bei chilligen, ruhigen oder stimmigen Momenten"
+
+[[emotes]]
+name = "Okayegg"
+meaning = "Zustimmung; das stimmt oder klingt richtig."
+usage = "wenn man einer Aussage zustimmt oder sie bestaetigt"
+
+[[emotes]]
+name = "peepoSpit"
+meaning = "Ausspucken vor Schock oder Lachen."
+usage = "bei ueberraschenden Aussagen"
+
+[[emotes]]
+name = "GOTTEM2"
+meaning = "Erwischt oder reingelegt; kleiner Gotcha-Moment."
+usage = "wenn jemand beim Troll, Fehler oder Trick erwischt wird"
+
+[[emotes]]
+name = "NotLikeDuck"
+meaning = "NotLikeDuck; Unbehagen oder Abneigung."
+usage = "wenn etwas unangenehm wirkt"
+
+[[emotes]]
+name = "peepoVanish"
+meaning = "Peepo verschwindet."
+usage = "wenn jemand abhaut oder aus der Situation raus will"
+
+[[emotes]]
+name = "Platypus"
+meaning = "Perry-/Schnabeltier-Referenz."
+usage = "bei random Tier-, Agenten- oder Perry-Momenten"
+
+[[emotes]]
+name = "grass"
+meaning = "Touch-grass- oder Pflanzen-Typ-Referenz."
+usage = "wenn jemand rausgehen soll oder Natur/Pokemon-Gras passt"
+
+[[emotes]]
+name = "LukashenkaExplainingHow"
+meaning = "Lange Erklaerung oder Essay."
+usage = "wenn jemand ausfuehrlich erklaert oder yappt"
+
+[[emotes]]
+name = "Blindge"
+meaning = "Blind oder nichts gesehen."
+usage = "bei uebersehenen Dingen oder Blindheit im Spiel"
+
+[[emotes]]
+name = "DonkHunter"
+meaning = "Donk-Jagd; jemanden beim Donk-Verhalten erwischen."
+usage = "wenn ein clowniger oder dummer Moment aufgedeckt wird"
+
+[[emotes]]
+name = "HUHBibi"
+meaning = "Verwirrung oder Unsicherheit."
+usage = "wenn etwas unklar, seltsam oder schwer einzuordnen ist"
+
+[[emotes]]
+name = "mexicat"
+meaning = "Katzen-Meme oder Cat-Reaktion."
+usage = "wenn Katzen oder cat-artige Stimmung passt"
+
+[[emotes]]
+name = "BOXBOX"
+meaning = "Katzen-Meme oder Cat-Reaktion."
+usage = "wenn Katzen oder cat-artige Stimmung passt"
+
+[[emotes]]
+name = "DIESOFPAIN"
+meaning = "Traurigkeit, Enttaeuschung oder Verzweiflung."
+usage = "bei Pech, kleinen Rueckschlaegen oder traurigen Chat-Momenten"
+
+[[emotes]]
+name = "ALOO"
+meaning = "Aloo-Call oder freundlicher Ruf."
+usage = "bei Hallo-/Call-Momenten"
+
+[[emotes]]
+name = "PHEW"
+meaning = "Erleichterung nach einem knappen Moment."
+usage = "wenn etwas gerade noch gut gegangen ist"
+
+[[emotes]]
+name = "WHERE"
+meaning = "Wo? Frage nach Ort oder Sache."
+usage = "wenn jemand fragt, wo etwas ist"
+
+[[emotes]]
+name = "monkaX"
+meaning = "Nervositaet, Angst oder Alarmstimmung."
+usage = "wenn etwas knapp, riskant oder angespannt ist"
+
+[[emotes]]
+name = "FDM"
+meaning = "FeelsDankMan; danker Meme-Vibe."
+usage = "bei trockenem oder dankem Humor"
+
+[[emotes]]
+name = "peepoFrance"
+meaning = "Laenderbezug."
+usage = "wenn das konkrete Land Thema ist"
+
+[[emotes]]
+name = "donkWalk"
+meaning = "Donk laeuft."
+usage = "bei Lauf- oder Weggeh-Momenten"
+
+[[emotes]]
+name = "peepoPride"
+meaning = "Pride oder stolzer Peepo."
+usage = "bei Stolz, Support oder Pride-Bezug"
+
+[[emotes]]
+name = "Oldge"
+meaning = "Alt, nostalgisch oder gealtert."
+usage = "bei Nostalgie oder wenn etwas alt wirkt"
+
+[[emotes]]
+name = "WOAH"
+meaning = "Hype, Freude oder starke positive Ueberraschung."
+usage = "bei guten News, Plays, Erfolgen oder Vorfreude"
+
+[[emotes]]
+name = "KLASSIKER"
+meaning = "Klassiker; das passiert wieder typisch."
+usage = "bei wiederkehrenden, bekannten Situationen"
+
+[[emotes]]
+name = "NOPERS"
+meaning = "Ablehnung; eher nein oder das stimmt nicht."
+usage = "wenn man einer Aussage widerspricht"
+
+[[emotes]]
+name = "dobro"
+meaning = "Hund/Doge-Meme."
+usage = "wenn Hund, Doge oder niedlicher Hundemoment passt"
+
+[[emotes]]
+name = "BLEHHHH"
+meaning = "Begruessung oder freundliches Winken."
+usage = "wenn jemand dazukommt oder man Hallo sagt"
+
+[[emotes]]
+name = "CatBedge"
+meaning = "Muede, schlaefrig oder Zeit fuers Bett."
+usage = "bei Muedigkeit, spaeter Uhrzeit oder sleepy Stimmung"
+
+[[emotes]]
+name = "stopbeingmean"
+meaning = "Traurigkeit, Pain oder Enttaeuschung."
+usage = "bei Pech, Rueckschlaegen oder trauriger Stimmung"
+
+[[emotes]]
+name = "Pidser"
+meaning = "Pizza-/Apu-Meme."
+usage = "bei Pizza oder Essensmomenten"
+
+[[emotes]]
+name = "COPIUMSHUTTLE"
+meaning = "Coping; jemand redet sich etwas schoen."
+usage = "bei Selbsttaeuschung, Ausreden oder uebertriebenem Optimismus"
+
+[[emotes]]
+name = "hugg"
+meaning = "Umarmung, Trost oder Zuneigung."
+usage = "bei freundlichen, warmen oder troestenden Momenten"
+
+[[emotes]]
+name = "YoCat"
+meaning = "Begruessung oder freundliches Winken."
+usage = "wenn jemand dazukommt oder man Hallo sagt"
+
+[[emotes]]
+name = "uwuu"
+meaning = "Uwu; suess oder verspielt."
+usage = "bei niedlicher, softer Stimmung"
+
+[[emotes]]
+name = "forsenLaughingAtYou"
+meaning = "Lachen; etwas ist lustig oder absurd."
+usage = "bei Witzen, Fails oder absurden Chat-Momenten"
+
+[[emotes]]
+name = "peepoAustralia"
+meaning = "Laenderbezug."
+usage = "wenn das konkrete Land Thema ist"
+
+[[emotes]]
+name = "RatgeStratge"
+meaning = "Ratten-Meme."
+usage = "bei Rat-, Shake- oder hektischem Meme-Kontext"
+
+[[emotes]]
+name = "peepoSpeziSpin"
+meaning = "Getraenk oder Trinkmoment."
+usage = "wenn es um Trinken, Kaffee, Bier oder Hydration geht"
+
+[[emotes]]
+name = "DankLook"
+meaning = "Derber oder horny Meme-Humor."
+usage = "nur bei eindeutig scherzhaftem derbem Chat-Kontext"
+
+[[emotes]]
+name = "IHaveAQuestion"
+meaning = "Nachdenken; ueberlegen oder etwas analysieren."
+usage = "bei Fragen, Spekulation oder vorsichtigem Abwaegen"
+
+[[emotes]]
+name = "notee"
+meaning = "Notiert; Information wurde zur Kenntnis genommen."
+usage = "wenn etwas gemerkt, protokolliert oder trocken bestaetigt wird"
+
+[[emotes]]
+name = "Nowoted"
+meaning = "Notiert; Information wurde zur Kenntnis genommen."
+usage = "wenn etwas gemerkt, protokolliert oder trocken bestaetigt wird"
+
+[[emotes]]
+name = "uwu7"
+meaning = "Respekt, Gebet oder Salut."
+usage = "bei Dank, Abschied, Respekt oder hoffnungsvollen Momenten"
+
+[[emotes]]
+name = "owo7"
+meaning = "Respekt, Gebet oder Salut."
+usage = "bei Dank, Abschied, Respekt oder hoffnungsvollen Momenten"
+
+[[emotes]]
+name = "Pointless"
+meaning = "Traurigkeit, Pain oder Enttaeuschung."
+usage = "bei Pech, Rueckschlaegen oder trauriger Stimmung"
+
+[[emotes]]
+name = "Arbeitszeitbetrug"
+meaning = "Scherz ueber Chatten statt Arbeiten."
+usage = "wenn jemand waehrend der Arbeit im Chat ist"
+
+[[emotes]]
+name = "Cowge"
+meaning = "Kuh-Meme."
+usage = "bei Kuh-, Farm- oder Muh-Momenten"
+
+[[emotes]]
+name = "WAYTOOBUH"
+meaning = "Unglaeubigkeit; bruh-Moment oder kaum zu fassen."
+usage = "bei absurden, peinlichen oder schwer glaubbaren Aussagen"
+
+[[emotes]]
+name = "CowRoll"
+meaning = "Kuh rollt."
+usage = "bei alberner Bewegung oder Kuh-Meme"
+
+[[emotes]]
+name = "Suffering"
+meaning = "Traurigkeit, Enttaeuschung oder Verzweiflung."
+usage = "bei Pech, kleinen Rueckschlaegen oder traurigen Chat-Momenten"
+
+[[emotes]]
+name = "MoomTime2"
+meaning = "Wut, Tilt oder genervte Stimmung."
+usage = "bei Rage, Rants oder Frust"
+
+[[emotes]]
+name = "HUHFarmer"
+meaning = "Verwirrung oder Unsicherheit."
+usage = "wenn etwas unklar, seltsam oder schwer einzuordnen ist"
+
+[[emotes]]
+name = "BASEDFARMING"
+meaning = "Based; starke Zustimmung zu einer mutigen oder guten Aussage."
+usage = "bei klarer Zustimmung oder Respekt fuer eine Aussage"
+
+[[emotes]]
+name = "Barack"
+meaning = "Obama-/Barack-Meme."
+usage = "bei Barack Obama oder US-Politik"
+
+[[emotes]]
+name = "PIASTRI"
+meaning = "Formel-1-Bezug."
+usage = "wenn Formel 1, Fahrer oder Teams Thema sind"
+
+[[emotes]]
+name = "GotCaughtTrolling"
+meaning = "Erwischt oder reingelegt; kleiner Gotcha-Moment."
+usage = "wenn jemand beim Troll, Fehler oder Trick erwischt wird"
+
+[[emotes]]
+name = "Saddies"
+meaning = "Traurigkeit, Enttaeuschung oder Verzweiflung."
+usage = "bei Pech, kleinen Rueckschlaegen oder traurigen Chat-Momenten"
+
+[[emotes]]
+name = "WhereMonkey"
+meaning = "Monke-Meme."
+usage = "bei primitiver, alberner oder monke-artiger Reaktion"
+
+[[emotes]]
+name = "MONKA"
+meaning = "Nervositaet, Angst oder Alarmstimmung."
+usage = "wenn etwas knapp, riskant oder angespannt ist"
+
+[[emotes]]
+name = "catmakingpizza"
+meaning = "Essen oder Snack-Moment."
+usage = "wenn es um Essen, Hunger oder Snacks geht"
+
+[[emotes]]
+name = "plink"
+meaning = "Hype oder positive Ueberraschung."
+usage = "bei Erfolg, Vorfreude oder starken Momenten"
+
+[[emotes]]
+name = "ccpL"
+meaning = "Begruessung oder freundliches Winken."
+usage = "wenn jemand dazukommt oder man Hallo sagt"
+
+[[emotes]]
+name = "peepoNATO"
+meaning = "Politik- oder Laender-Meme."
+usage = "wenn das konkrete politische Thema passt"
+
+[[emotes]]
+name = "HmmScoots"
+meaning = "Nachdenken; ueberlegen oder etwas analysieren."
+usage = "bei Fragen, Spekulation oder vorsichtigem Abwaegen"
+
+[[emotes]]
+name = "howdy"
+meaning = "Begruessung oder freundliches Winken."
+usage = "wenn jemand dazukommt oder man freundlich hallo sagt"
+
+[[emotes]]
+name = "Carlos"
+meaning = "Formel-1-Bezug."
+usage = "wenn Formel 1, Fahrer oder Teams Thema sind"
+
+[[emotes]]
+name = "doot"
+meaning = "Skeleton-Trumpet/Doot."
+usage = "bei Spooky-, Trompeten- oder Halloween-Momenten"
+
+[[emotes]]
+name = "NotSure"
+meaning = "Verwirrung oder Unsicherheit."
+usage = "wenn etwas unklar, seltsam oder schwer einzuordnen ist"
+
+[[emotes]]
+name = "DisneyDance"
+meaning = "Musik, Tanz oder Jam."
+usage = "wenn Musik laeuft, etwas groovt oder Party-Stimmung entsteht"
+
+[[emotes]]
+name = "Purge"
+meaning = "Purge; wegraeumen oder ausmisten."
+usage = "wenn etwas entfernt werden soll"
+
+[[emotes]]
+name = "JAN"
+meaning = "Jan-/Duck-Spin-Insider."
+usage = "bei lokalem Jan- oder Spin-Kontext"
+
+[[emotes]]
+name = "DIESOFCRINGE"
+meaning = "Cringe oder Fremdschaemen."
+usage = "bei unangenehmen oder peinlichen Momenten"
+
+[[emotes]]
+name = "AlwaysHasBeen"
+meaning = "Erkenntnis; etwas wird unangenehm klar."
+usage = "wenn jemand eine bittere Wahrheit bemerkt oder realisiert"
+
+[[emotes]]
+name = "unkok"
+meaning = "Unkok; Gegenstueck zu kok."
+usage = "bei nicht-kok oder Anti-kok-Momenten"
+
+[[emotes]]
+name = "SKILLISSUE"
+meaning = "Skill issue; scherzhafter Hinweis auf fehlende Spiel-Faehigkeit."
+usage = "bei kleinen Gameplay-Fehlern oder scherzhaftem Necking"
+
+[[emotes]]
+name = "CowBelling"
+meaning = "Kuh-Meme."
+usage = "bei Kuh-, Farm- oder Muh-Momenten"
+
+[[emotes]]
+name = "okjj"
+meaning = "okjj; kurze trockene Bestaetigung."
+usage = "bei sehr knapper Zustimmung"
+
+[[emotes]]
+name = "owoshy"
+meaning = "Schuechternheit oder Verlegenheit."
+usage = "bei suessen, awkward oder leicht verlegenen Momenten"
+
+[[emotes]]
+name = "owoslay"
+meaning = "Uwu/Owo mit Slay-Vibe."
+usage = "bei cute und selbstbewusster Stimmung"
+
+[[emotes]]
+name = "CatCozy"
+meaning = "Vibe, entspannte Stimmung oder wohliger Moment."
+usage = "bei chilligen, ruhigen oder stimmigen Momenten"
+
+[[emotes]]
+name = "HetIsVoorbij"
+meaning = "Es ist vorbei."
+usage = "bei Ende oder Niederlage"
+
+[[emotes]]
+name = "3DPrinting"
+meaning = "3D-Druck."
+usage = "wenn es um 3D-Druck oder Drucken geht"
+
+[[emotes]]
+name = "wideNessie"
+meaning = "Breite Nessie-Reaktion."
+usage = "bei niedlichen, albernen oder mascotartigen Momenten"
+
+[[emotes]]
+name = "ratJAM"
+meaning = "Musik, Tanz oder Jam."
+usage = "wenn Musik laeuft, etwas groovt oder Party-Stimmung entsteht"
+
+[[emotes]]
+name = "Wokege"
+meaning = "Muedigkeit oder Ruhebeduerfnis."
+usage = "bei sleepy, spaeter oder erschoepfter Stimmung"
+
+[[emotes]]
+name = "ELCLASSICO"
+meaning = "Klassiker; das passiert wieder typisch."
+usage = "bei wiederkehrenden, bekannten Situationen"
+
+[[emotes]]
+name = "TRRRRRRRRRRR"
+meaning = "Katzen-Meme oder Cat-Reaktion."
+usage = "wenn Katzen oder cat-artige Stimmung passt"
+
+[[emotes]]
+name = "Bedge"
+meaning = "Muede, schlaefrig oder Zeit fuers Bett."
+usage = "bei Muedigkeit, spaeter Uhrzeit oder sleepy Stimmung"
+
+[[emotes]]
+name = "Kapp"
+meaning = "Kappa-artiger Sarkasmus."
+usage = "wenn etwas offensichtlich ironisch gemeint ist"
+
+[[emotes]]
+name = "owoWiggle"
+meaning = "Hype oder positive Ueberraschung."
+usage = "bei Erfolg, Vorfreude oder starken Momenten"
+
+[[emotes]]
+name = "Handshakege"
+meaning = "Handshake-Zustimmung; Einigkeit oder Deal."
+usage = "wenn zwei Seiten sich einig sind"
+
+[[emotes]]
+name = "bidenBlast"
+meaning = "Politik- oder Laender-Meme."
+usage = "wenn das konkrete politische Thema passt"
+
+[[emotes]]
+name = "Hmmge"
+meaning = "Nachdenken; ueberlegen oder etwas analysieren."
+usage = "bei Fragen, Spekulation oder vorsichtigem Abwaegen"
+
+[[emotes]]
+name = "Evilge"
+meaning = "Nachdenken oder Frage."
+usage = "bei Analyse, Unsicherheit oder Spekulation"
+
+[[emotes]]
+name = "veryPog"
+meaning = "Hype, Freude oder starke positive Ueberraschung."
+usage = "bei guten News, Plays, Erfolgen oder Vorfreude"
+
+[[emotes]]
+name = "hUh"
+meaning = "Verwirrung oder Unsicherheit."
+usage = "wenn etwas unklar, seltsam oder schwer einzuordnen ist"
+
+[[emotes]]
+name = "NoseTime"
+meaning = "Nasen-Moment."
+usage = "bei Nase, Schnueffeln oder Fokus auf Gesicht"
+
+[[emotes]]
+name = "peepoLost"
+meaning = "Peepo ist verloren; Orientierungslosigkeit."
+usage = "wenn jemand nicht weiter weiss oder sich verlaufen hat"
+
+[[emotes]]
+name = "YEK"
+meaning = "Yek/Kek-artiges Lachen."
+usage = "bei kurzem Meme-Lachen"
+
+[[emotes]]
+name = "RIPBOZO"
+meaning = "Spöttisches RIP nach einem Fail."
+usage = "bei scherzhaften Niederlagen oder Fails"
+
+[[emotes]]
+name = "binrusselL"
+meaning = "Formel-1- oder Motorsport-Meme."
+usage = "wenn F1, Fahrer oder Rennen Thema sind"
+
+[[emotes]]
+name = "yodance"
+meaning = "Musik, Tanz oder Vibe."
+usage = "wenn Musik laeuft oder die Stimmung groovt"
+
+[[emotes]]
+name = "GoslingDrive"
+meaning = "Bewegung, Ankommen oder Fahren."
+usage = "bei Lauf-, Fahr- oder Bewegungsmomenten"
+
+[[emotes]]
+name = "peepoSwim"
+meaning = "Bewegung, Ankommen oder Fahren."
+usage = "bei Lauf-, Fahr- oder Bewegungsmomenten"
+
+[[emotes]]
+name = "monkaTriggered"
+meaning = "Nervositaet, Angst oder Alarmstimmung."
+usage = "wenn etwas knapp, riskant oder angespannt ist"
+
+[[emotes]]
+name = "DankDrive"
+meaning = "Bewegung, Ankommen oder Fahren."
+usage = "bei Lauf-, Fahr- oder Bewegungsmomenten"
+
+[[emotes]]
+name = "Hmmm"
+meaning = "Nachdenken; ueberlegen oder etwas analysieren."
+usage = "bei Fragen, Spekulation oder vorsichtigem Abwaegen"
+
+[[emotes]]
+name = "Buyegg"
+meaning = "Essen, Kochen oder Snack-Moment."
+usage = "wenn Essen oder Kochen Thema ist"
+
+[[emotes]]
+name = "Thisisfine"
+meaning = "Alles ist angeblich okay, obwohl es brennt."
+usage = "bei Chaos, das jemand gelassen hinnimmt"
+
+[[emotes]]
+name = "SusgeSitCute"
+meaning = "Wut, Tilt oder genervte Stimmung."
+usage = "bei Rage, Rants oder Frust"
+
+[[emotes]]
+name = "MadgeSit"
+meaning = "Wut, Rage oder genervte Stimmung."
+usage = "wenn jemand offensichtlich sauer, getriggert oder am Ranten ist"
+
+[[emotes]]
+name = "ClassicDuck"
+meaning = "Enten-Meme."
+usage = "bei Duck-, Quack- oder alberner Tierstimmung"
+
+[[emotes]]
+name = "monkaSTEER"
+meaning = "Bewegung, Ankommen oder Fahren."
+usage = "bei Lauf-, Fahr- oder Bewegungsmomenten"
+
+[[emotes]]
+name = "GIGACHAD"
+meaning = "Gym, Kraft oder Bodybuilding."
+usage = "wenn es um Training, Kraft oder Gym-Memes geht"
+
+[[emotes]]
+name = "bla"
+meaning = "Bla; Gerede oder unwichtiger Text."
+usage = "wenn jemand nur labert"
+
+[[emotes]]
+name = "uuh"
+meaning = "Katzen-Meme oder Cat-Reaktion."
+usage = "wenn Katzen oder cat-artige Stimmung passt"
+
+[[emotes]]
+name = "DANKIES"
+meaning = "Dankies; Channel-/Dank-Meme."
+usage = "bei danker Zustimmung oder 1337-Kontext"
+
+[[emotes]]
+name = "catJAM"
+meaning = "Musik, Tanz oder Jam."
+usage = "wenn Musik laeuft, etwas groovt oder Party-Stimmung entsteht"
+
+[[emotes]]
+name = "kok"
+meaning = "Kok; Channel-Insider-Emote."
+usage = "bei lokalem kok- oder Channel-Meme-Kontext"
+
+[[emotes]]
+name = "HalbeBibel"
+meaning = "Textwand oder sehr langer Vortrag."
+usage = "wenn jemand einen halben Roman schreibt oder zu viel erklaert"
+
+[[emotes]]
+name = "HabeckGrin"
+meaning = "Lachen oder Humor-Reaktion."
+usage = "bei lustigen oder absurden Momenten"
+
+[[emotes]]
+name = "SICHERLICH"
+meaning = "Zustimmung; das stimmt oder klingt richtig."
+usage = "wenn man einer Aussage zustimmt oder sie bestaetigt"
+
+[[emotes]]
+name = "DANKHACKERMANS"
+meaning = "Dank Hackerman."
+usage = "bei technischem oder hackerhaftem Dank-Meme"
+
+[[emotes]]
+name = "GotCaughtTrolling1"
+meaning = "Erwischt oder reingelegt; kleiner Gotcha-Moment."
+usage = "wenn jemand beim Troll, Fehler oder Trick erwischt wird"
+
+[[emotes]]
+name = ":DDDDDDDDDD"
+meaning = "Lachen; etwas ist lustig oder absurd."
+usage = "bei Witzen, Fails oder absurden Chat-Momenten"
+
+[[emotes]]
+name = "PartyAnimals"
+meaning = "Musik, Tanz oder Jam."
+usage = "wenn Musik laeuft, etwas groovt oder Party-Stimmung entsteht"
+
+[[emotes]]
+name = "PeepoFarmerRiot"
+meaning = "Peepo-Farmer-Riot; laendlicher Protestwitz."
+usage = "wenn Farmer-, Dorf- oder Aufstands-Humor passt"
+
+[[emotes]]
+name = "UltraMad"
+meaning = "Wut, Rage oder genervte Stimmung."
+usage = "wenn jemand offensichtlich sauer, getriggert oder am Ranten ist"
+
+[[emotes]]
+name = "CatDriving"
+meaning = "Katzen-Meme oder Cat-Reaktion."
+usage = "wenn Katzen oder cat-artige Stimmung passt"
+
+[[emotes]]
+name = "KEKL"
+meaning = "Lachen; etwas ist lustig oder absurd."
+usage = "bei Witzen, Fails oder absurden Chat-Momenten"
+
+[[emotes]]
+name = "zonedout"
+meaning = "Erkenntnis; etwas wird unangenehm klar."
+usage = "wenn jemand eine bittere Wahrheit bemerkt oder realisiert"
+
+[[emotes]]
+name = "JUP"
+meaning = "Zustimmung; das stimmt oder klingt richtig."
+usage = "wenn man einer Aussage zustimmt oder sie bestaetigt"
+
+[[emotes]]
+name = "buhShakey"
+meaning = "Buh/Guh-artige kurze Meme-Reaktion."
+usage = "bei Verwirrung, Schock oder albernem Ausruf"
+
+[[emotes]]
+name = "AufGnocc"
+meaning = "Auf Gnocc warten/gehen; lokaler Gnocc-Insider."
+usage = "bei Gnocc- oder lokalen Insider-Momenten"
+
+[[emotes]]
+name = "peepoConfused"
+meaning = "Verwirrter Peepo."
+usage = "wenn etwas keinen Sinn ergibt"
+
+[[emotes]]
+name = "THERE"
+meaning = "Da ist es; genau dort."
+usage = "wenn auf etwas gezeigt oder hingewiesen wird"
+
+[[emotes]]
+name = "Houthis"
+meaning = "Begruessung oder freundliches Winken."
+usage = "wenn jemand dazukommt oder man Hallo sagt"
+
+[[emotes]]
+name = "ZUSTIMMUNGSVERWEIGERUNG"
+meaning = "Verweigerte Zustimmung."
+usage = "wenn jemand absichtlich nicht zustimmt"
+
+[[emotes]]
+name = "omgHi"
+meaning = "Begruessung oder freundliches Winken."
+usage = "wenn jemand dazukommt oder man freundlich hallo sagt"
+
+[[emotes]]
+name = "KratosFall"
+meaning = "Ratten-Meme."
+usage = "bei Rat-, Shake- oder hektischem Meme-Kontext"
+
+[[emotes]]
+name = "PhonegeSleepy"
+meaning = "Muede, schlaefrig oder Zeit fuers Bett."
+usage = "bei Muedigkeit, spaeter Uhrzeit oder sleepy Stimmung"
+
+[[emotes]]
+name = "eeeh"
+meaning = "Eeeh; zoegernde Unsicherheit."
+usage = "bei awkward oder unsicherer Reaktion"
+
+[[emotes]]
+name = "HmmmLaptop"
+meaning = "Nachdenken; ueberlegen oder etwas analysieren."
+usage = "bei Fragen, Spekulation oder vorsichtigem Abwaegen"
+
+[[emotes]]
+name = "Uhmm"
+meaning = "Verwirrung oder Unsicherheit."
+usage = "wenn etwas unklar, seltsam oder schwer einzuordnen ist"
+
+[[emotes]]
+name = "PhonegeAddict"
+meaning = "Abschied oder Weggehen."
+usage = "wenn jemand geht oder gute Nacht sagt"
+
+[[emotes]]
+name = "AufFloWarten"
+meaning = "Warten; etwas laesst auf sich warten."
+usage = "wenn alle auf jemanden, ein Ergebnis oder einen Start warten"
+
+[[emotes]]
+name = "YEPL"
+meaning = "Zustimmung; das stimmt oder klingt richtig."
+usage = "wenn man einer Aussage zustimmt oder sie bestaetigt"
+
+[[emotes]]
+name = "HUHW"
+meaning = "Verwirrung oder Unsicherheit."
+usage = "wenn etwas unklar, seltsam oder schwer einzuordnen ist"
+
+[[emotes]]
+name = "Overcope"
+meaning = "Coping; jemand redet sich etwas schoen."
+usage = "bei Selbsttaeuschung, Ausreden oder uebertriebenem Optimismus"
+
+[[emotes]]
+name = "monkaLaugh"
+meaning = "Lachen; etwas ist lustig oder absurd."
+usage = "bei Witzen, Fails oder absurden Chat-Momenten"
+
+[[emotes]]
+name = "monkaClock"
+meaning = "Nervositaet, Angst oder Alarmstimmung."
+usage = "wenn etwas knapp, riskant oder angespannt ist"
+
+[[emotes]]
+name = "Listening"
+meaning = "Gebet, heiliger oder religioeser Meme-Kontext."
+usage = "bei ueberdramatisch heiligen Momenten"
+
+[[emotes]]
+name = "FloppaDude"
+meaning = "Floppa-Meme."
+usage = "wenn ein Floppa- oder Chad-Floppa-Moment passt"
+
+[[emotes]]
+name = "AAAA"
+meaning = "Schrei oder Panik."
+usage = "bei lautem Chaos oder Schreck"
+
+[[emotes]]
+name = "MainzerFlu"
+meaning = "Deutschland- oder Ortsbezug."
+usage = "wenn der konkrete Ort oder Deutschland Thema ist"
+
+[[emotes]]
+name = "WeWaiting"
+meaning = "Warten; etwas laesst auf sich warten."
+usage = "wenn alle auf jemanden, ein Ergebnis oder einen Start warten"
+
+[[emotes]]
+name = "MeinMann"
+meaning = "Mein Mann; Zustimmung oder Anerkennung."
+usage = "bei Support fuer jemanden"
+
+[[emotes]]
+name = "PeepiBlush"
+meaning = "Schuechternheit oder Verlegenheit."
+usage = "bei suessen, awkward oder leicht verlegenen Momenten"
+
+[[emotes]]
+name = "peepoKaiserslautern"
+meaning = "Deutschland- oder Ortsbezug."
+usage = "wenn der konkrete Ort oder Deutschland Thema ist"
+
+[[emotes]]
+name = "widepeepoSad"
+meaning = "Traurigkeit, Enttaeuschung oder Verzweiflung."
+usage = "bei Pech, kleinen Rueckschlaegen oder traurigen Chat-Momenten"
+
+[[emotes]]
+name = "slayyy"
+meaning = "Selbstbewusstes Feiern oder stylisher Erfolg."
+usage = "wenn jemand stark, elegant oder iconic wirkt"
+
+[[emotes]]
+name = "CapybaraStare"
+meaning = "Capybara-Moment."
+usage = "bei ruhiger, stare-artiger oder capybara-bezogener Stimmung"
+
+[[emotes]]
+name = "NilsWennErMorgenInDenChatKommtUndRealisiertDassSeineGanzenLieblingsEmotesRausSind"
+meaning = "Erkenntnis oder Aware-Moment."
+usage = "wenn jemand etwas merkt oder bitter realisiert"
+
+[[emotes]]
+name = "huhu"
+meaning = "Begruessung oder freundliches Winken."
+usage = "wenn jemand dazukommt oder man freundlich hallo sagt"
+
+[[emotes]]
+name = "AufKok"
+meaning = "Auf Kok; lokaler Channel-Insider."
+usage = "bei kok- oder Channel-Kontext"
+
+[[emotes]]
+name = "DennisPlaybackSpeed"
+meaning = "Playback- oder Tempo-Witz."
+usage = "wenn etwas zu schnell, zu langsam oder verstellt klingt"
+
+[[emotes]]
+name = "Mainz"
+meaning = "Deutscher Ortsbezug."
+usage = "wenn der konkrete Ort oder die Region Thema ist"
+
+[[emotes]]
+name = "Susdog"
+meaning = "Sus; etwas wirkt verdaechtig."
+usage = "bei verdächtigen, zweideutigen oder Among-Us-artigen Momenten"
+
+[[emotes]]
+name = "DOGGING"
+meaning = "Derber Hund-/Dogging-Meme."
+usage = "bei bewusst derbem Chat-Humor"
+
+[[emotes]]
+name = "COOL"
+meaning = "Cool; Zustimmung oder Anerkennung."
+usage = "wenn etwas gut oder laessig ist"
+
+[[emotes]]
+name = "ScheiseErwischt"
+meaning = "Erwischt oder reingelegt; kleiner Gotcha-Moment."
+usage = "wenn jemand beim Troll, Fehler oder Trick erwischt wird"
+
+[[emotes]]
+name = "mhm"
+meaning = "Zustimmung; das stimmt oder klingt richtig."
+usage = "wenn man einer Aussage zustimmt oder sie bestaetigt"
+
+[[emotes]]
+name = "ezz"
+meaning = "Easy; leichter Sieg."
+usage = "bei einfachen Erfolgen oder spielerischem Flex"
+
+[[emotes]]
+name = "FeelsStrongJAM"
+meaning = "Musik, Tanz oder Vibe."
+usage = "wenn Musik laeuft oder die Stimmung groovt"
+
+[[emotes]]
+name = "peepoStuttgart"
+meaning = "Deutscher Ortsbezug."
+usage = "wenn der konkrete Ort oder die Region Thema ist"
+
+[[emotes]]
+name = "CUM"
+meaning = "Derber NSFW-Meme."
+usage = "nur bei klarer derber Meme-Stimmung"
+
+[[emotes]]
+name = "catRose"
+meaning = "Katzen-Meme oder Cat-Reaktion."
+usage = "wenn Katzen oder cat-artige Stimmung passt"
+
+[[emotes]]
+name = "AINTNOCAT"
+meaning = "Sus; etwas wirkt verdaechtig."
+usage = "bei verdächtigen, zweideutigen oder Among-Us-artigen Momenten"
+
+[[emotes]]
+name = "LIFE"
+meaning = "Life; Lebensmoment."
+usage = "bei allgemeinen Life- oder Real-Talk-Momenten"
+
+[[emotes]]
+name = "LifeTogether"
+meaning = "Gemeinsames Leben/Zusammenhalt."
+usage = "bei warmen Community- oder Together-Momenten"
+
+[[emotes]]
+name = "MaggusBased"
+meaning = "Based; starke Zustimmung zu einer mutigen oder guten Aussage."
+usage = "bei klarer Zustimmung oder Respekt fuer eine Aussage"
+
+[[emotes]]
+name = "meowdy"
+meaning = "Begruessung oder freundliches Winken."
+usage = "wenn jemand dazukommt oder man freundlich hallo sagt"
+
+[[emotes]]
+name = "frfr"
+meaning = "Zustimmung; das stimmt oder klingt richtig."
+usage = "wenn man einer Aussage zustimmt oder sie bestaetigt"
+
+[[emotes]]
+name = "Nerdga"
+meaning = "Big-brain oder nerdige Korrektur."
+usage = "bei schlauen, uebergenauen oder nerdigen Aussagen"
+
+[[emotes]]
+name = "peepoGiggle"
+meaning = "Lachen; etwas ist lustig oder absurd."
+usage = "bei Witzen, Fails oder absurden Chat-Momenten"
+
+[[emotes]]
+name = "Kuhtee"
+meaning = "Kuhtee/Cute-Kuh."
+usage = "bei niedlicher Kuh- oder Cute-Stimmung"
+
+[[emotes]]
+name = "ADDICTED"
+meaning = "Suechtig nach etwas im Meme-Sinn."
+usage = "bei wiederholtem Verlangen nach Spiel, Kaffee oder Thema"
+
+[[emotes]]
+name = "GAMING"
+meaning = "Gaming oder bestimmtes Spielthema."
+usage = "wenn es direkt um Gaming oder dieses Spiel geht"
+
+[[emotes]]
+name = "Gymgers"
+meaning = "Gym, Kraft oder Bodybuilding."
+usage = "wenn es um Training, Kraft oder Gym-Memes geht"
+
+[[emotes]]
+name = "CatTime"
+meaning = "Katzen-Moment."
+usage = "wenn Katzen, Miauen oder niedliche Cat-Reaktionen passen"
+
+[[emotes]]
+name = "Byege"
+meaning = "Verabschiedung oder Weggehen."
+usage = "wenn jemand geht, offline geht oder gute Nacht sagt"
+
+[[emotes]]
+name = "happi"
+meaning = "Gluecklich."
+usage = "bei Freude oder niedlicher positiver Reaktion"
+
+[[emotes]]
+name = "JIPPIE"
+meaning = "Hype, Freude oder starke positive Ueberraschung."
+usage = "bei guten News, Plays, Erfolgen oder Vorfreude"
+
+[[emotes]]
+name = "PETTHEPEEPO"
+meaning = "Peepo streicheln."
+usage = "bei Trost oder niedlicher Peepo-Stimmung"
+
+[[emotes]]
+name = "DiedOfHeat"
+meaning = "Traurigkeit, Enttaeuschung oder Verzweiflung."
+usage = "bei Pech, kleinen Rueckschlaegen oder traurigen Chat-Momenten"
+
+[[emotes]]
+name = "peepotalkButPeepoIsNotTalkingButInsteadIsOkay"
+meaning = "Peepo ist okay statt zu reden."
+usage = "bei ruhiger, okay-artiger Antwort statt Diskussion"
+
+[[emotes]]
+name = "CoffeeAddict"
+meaning = "Kaffee oder Koffein."
+usage = "wenn es um Kaffee, Wachwerden oder Koffeinbedarf geht"
+
+[[emotes]]
+name = "xdding"
+meaning = "Lachen; etwas ist lustig oder absurd."
+usage = "bei Witzen, Fails oder absurden Chat-Momenten"
+
+[[emotes]]
+name = "SURE"
+meaning = "Sicher doch; oft skeptisch oder ironisch."
+usage = "bei zweifelnder Zustimmung"
+
+[[emotes]]
+name = "Poor"
+meaning = "Arm oder bedauerlich."
+usage = "bei Mitleid oder Geldmangel-Meme"
+
+[[emotes]]
+name = "DortmundRope"
+meaning = "BVB-/Dortmund-Frust."
+usage = "bei enttaeuschten oder ironisch dunklen Fussball-Reaktionen"
+
+[[emotes]]
+name = "nh"
+meaning = "Nice hand / nice hit / knappe Anerkennung."
+usage = "bei kurzer Anerkennung im Spielkontext"
+
+[[emotes]]
+name = "huhh"
+meaning = "Verwirrung oder Unsicherheit."
+usage = "wenn etwas unklar, seltsam oder schwer einzuordnen ist"
+
+[[emotes]]
+name = "Sadding"
+meaning = "Traurigkeit, Enttaeuschung oder Verzweiflung."
+usage = "bei Pech, kleinen Rueckschlaegen oder traurigen Chat-Momenten"
+
+[[emotes]]
+name = "PagChomp"
+meaning = "Pag mit Chomp; hungriger Hype."
+usage = "bei leckerem oder hype Moment"
+
+[[emotes]]
+name = "peepoSlam"
+meaning = "Peepo slammt auf den Tisch."
+usage = "wenn etwas hart betont oder dramatisch gesetzt wird"
+
+[[emotes]]
+name = "CoolChamp"
+meaning = "CoolChamp; laessige Spannung."
+usage = "bei coolem, erwartungsvollem Moment"
+
+[[emotes]]
+name = "monkaFly"
+meaning = "Flugzeug- oder Aviation-Meme."
+usage = "wenn Flugzeuge, Jets oder Fliegen Thema sind"
+
+[[emotes]]
+name = "peepoNetherlands"
+meaning = "Laenderbezug."
+usage = "wenn das konkrete Land Thema ist"
+
+[[emotes]]
+name = "HmmmBye"
+meaning = "Abschied oder Weggehen."
+usage = "wenn jemand geht oder gute Nacht sagt"
+
+[[emotes]]
+name = "pepePoint"
+meaning = "Pepe zeigt auf ein Detail."
+usage = "um etwas hervorzuheben oder spottend darauf zu zeigen"
+
+[[emotes]]
+name = "peepoEngland"
+meaning = "Laenderbezug."
+usage = "wenn das konkrete Land Thema ist"
+
+[[emotes]]
+name = "HuggingButTheresAnEarthquake"
+meaning = "Umarmung, Trost oder Zuneigung."
+usage = "bei freundlichen, warmen oder troestenden Momenten"
+
+[[emotes]]
+name = "Hannover"
+meaning = "Deutscher Ortsbezug."
+usage = "wenn der konkrete Ort oder die Region Thema ist"
+
+[[emotes]]
+name = "PeepoBerlin"
+meaning = "Deutscher Ortsbezug."
+usage = "wenn der konkrete Ort oder die Region Thema ist"
+
+[[emotes]]
+name = "Bayern"
+meaning = "Deutscher Ortsbezug."
+usage = "wenn der konkrete Ort oder die Region Thema ist"
+
+[[emotes]]
+name = "CountMeIn"
+meaning = "Zustimmung; das stimmt oder klingt richtig."
+usage = "wenn man einer Aussage zustimmt oder sie bestaetigt"
+
+[[emotes]]
+name = "BeeHappy"
+meaning = "Glueckliche, freundliche Bienen-Reaktion."
+usage = "wenn etwas wholesome oder froehlich ist"
+
+[[emotes]]
+name = "AMOOOGUS"
+meaning = "Sus; etwas wirkt verdaechtig."
+usage = "bei verdächtigen, zweideutigen oder Among-Us-artigen Momenten"
+
+[[emotes]]
+name = "SUUUUUREEEE"
+meaning = "Sarkastisches Ja-klar; starke Skepsis."
+usage = "wenn man eine Aussage nicht wirklich glaubt"
+
+[[emotes]]
+name = "doog"
+meaning = "Hund/Doge-Moment."
+usage = "wenn ein Hund, Doge oder niedliche Hundereaktion passt"
+
+[[emotes]]
+name = "HeimlichManeuver"
+meaning = "Heimlich-Manoever."
+usage = "bei Verschlucken, Retten oder absurd physischem Humor"
+
+[[emotes]]
+name = "speziCope"
+meaning = "Spezi-Getraenk oder Spezi-Moment."
+usage = "wenn es um Spezi oder Getraenke geht"
+
+[[emotes]]
+name = "Plaul"
+meaning = "Nerdige Korrektur oder Falsch-Reaktion."
+usage = "wenn jemand rechthaberisch korrigiert oder etwas falsch ist"
+
+[[emotes]]
+name = "PUUUH"
+meaning = "Puh; Erleichterung oder Anstrengung."
+usage = "wenn etwas knapp oder anstrengend war"
+
+[[emotes]]
+name = "Spezige"
+meaning = "Spezi-Getraenk oder Spezi-Moment."
+usage = "wenn es um Spezi oder Getraenke geht"
+
+[[emotes]]
+name = "BBoomer"
+meaning = "Missbilligung oder sarkastische Enttaeuschung."
+usage = "wenn etwas cringe, unpassend oder boomerhaft wirkt"
+
+[[emotes]]
+name = "Deutschge"
+meaning = "Deutschland-Bezug."
+usage = "wenn Deutschland, Deutsch oder deutsche Themen direkt relevant sind"
+
+[[emotes]]
+name = "ppPoof"
+meaning = "Poof; verschwindet ploetzlich."
+usage = "wenn etwas weg ist"
+
+[[emotes]]
+name = "peepoBike"
+meaning = "Peepo faehrt Rad."
+usage = "bei Bewegung, Reise oder Los-gehts-Momenten"
+
+[[emotes]]
+name = "waa"
+meaning = "Waa; kurzer Schrei oder Verwirrung."
+usage = "bei kleinem Schreck"
+
+[[emotes]]
+name = "BirdgeStare"
+meaning = "Vogel-Meme."
+usage = "bei Bird-, Flug- oder Schrei-Momenten"
+
+[[emotes]]
+name = "glorpNotL"
+meaning = "Katzen-Meme oder Cat-Reaktion."
+usage = "wenn Katzen oder cat-artige Stimmung passt"
+
+[[emotes]]
+name = "ADHDge"
+meaning = "Unruhige ADHS-/Okayeg-Reaktion."
+usage = "bei sprunghafter Energie oder Konzentrationschaos"
+
+[[emotes]]
+name = "catPunch"
+meaning = "Katzen-Meme oder Cat-Reaktion."
+usage = "wenn Katzen oder cat-artige Stimmung passt"
+
+[[emotes]]
+name = "MAYO"
+meaning = "Mayo."
+usage = "wenn Mayonnaise oder weisser Sauce-Humor passt"
+
+[[emotes]]
+name = "Mashallah"
+meaning = "Mashallah; positive Anerkennung."
+usage = "bei beeindruckenden oder segensreichen Momenten"
+
+[[emotes]]
+name = "Cinema"
+meaning = "Cinema; grosses Kino."
+usage = "bei dramatischen oder sehr unterhaltsamen Momenten"
+
+[[emotes]]
+name = "rooon"
+meaning = "Bewegung, Ankommen oder Fahren."
+usage = "bei Lauf-, Fahr- oder Bewegungsmomenten"
+
+[[emotes]]
+name = "ALERT"
+meaning = "Nervositaet, Angst oder Alarmstimmung."
+usage = "wenn etwas knapp, riskant oder angespannt ist"
+
+[[emotes]]
+name = "xqcL"
+meaning = "Liebe, Zuneigung oder herzlicher Support."
+usage = "bei lieben, positiven oder supportiven Reaktionen"
+
+[[emotes]]
+name = "glorpDude"
+meaning = "Katzen-Meme oder Cat-Reaktion."
+usage = "wenn Katzen oder cat-artige Stimmung passt"
+
+[[emotes]]
+name = "Elglorpo"
+meaning = "Katzen-Meme oder Cat-Reaktion."
+usage = "wenn Katzen oder cat-artige Stimmung passt"
+
+[[emotes]]
+name = "glorpBuisness"
+meaning = "Katzen-Meme oder Cat-Reaktion."
+usage = "wenn Katzen oder cat-artige Stimmung passt"
+
+[[emotes]]
+name = "HMmm"
+meaning = "Nachdenken; ueberlegen oder etwas analysieren."
+usage = "bei Fragen, Spekulation oder vorsichtigem Abwaegen"
+
+[[emotes]]
+name = "Mannheim"
+meaning = "Deutscher Ortsbezug."
+usage = "wenn der konkrete Ort oder die Region Thema ist"
+
+[[emotes]]
+name = "zoomies"
+meaning = "Wirrer oder wahnsinniger Meme-Moment."
+usage = "bei uebertrieben chaotischen Gedanken oder Voices-Memes"
+
+[[emotes]]
+name = "SCATTER"
+meaning = "Auseinanderlaufen oder verstreuen."
+usage = "wenn alle schnell weg oder auseinander sollen"
+
+[[emotes]]
+name = "NerdRadar"
+meaning = "Big-brain oder nerdige Korrektur."
+usage = "bei schlauen, uebergenauen oder nerdigen Aussagen"
+
+[[emotes]]
+name = "yonose"
+meaning = "Katzen-Meme oder Cat-Reaktion."
+usage = "wenn Katzen oder cat-artige Stimmung passt"
+
+[[emotes]]
+name = "kola"
+meaning = "Cola-/Getraenke-Moment."
+usage = "wenn Cola oder Softdrink passt"
+
+[[emotes]]
+name = "racist"
+meaning = "Problematischer Rassismus- oder CmonBruh-Moment."
+usage = "wenn etwas rassistisch, grenzwertig oder unangenehm wirkt"
+
+[[emotes]]
+name = "WickedSteer"
+meaning = "Formel-1- oder Motorsport-Meme."
+usage = "wenn F1, Fahrer oder Rennen Thema sind"
+
+[[emotes]]
+name = "buhroar"
+meaning = "Buh/Guh-artige kurze Meme-Reaktion."
+usage = "bei Verwirrung, Schock oder albernem Ausruf"
+
+[[emotes]]
+name = "anotado"
+meaning = "Notiert auf Spanisch/Portugiesisch."
+usage = "wenn etwas registriert wird"
+
+[[emotes]]
+name = "maloche"
+meaning = "Arbeit oder Malochen."
+usage = "wenn es um Arbeit geht"
+
+[[emotes]]
+name = "buhL"
+meaning = "Buh/Guh-artige kurze Meme-Reaktion."
+usage = "bei Verwirrung, Schock oder albernem Ausruf"
+
+[[emotes]]
+name = "MussEinfachNurSchmieden"
+meaning = "Begruessung oder freundliches Winken."
+usage = "wenn jemand dazukommt oder man Hallo sagt"
+
+[[emotes]]
+name = "VFBierchen"
+meaning = "Bier oder Feierabendgetraenk."
+usage = "wenn es um Bier, Feierabend oder Anstossen geht"
+
+[[emotes]]
+name = "DankSpin"
+meaning = "Musik, Tanz oder Jam."
+usage = "wenn Musik laeuft, etwas groovt oder Party-Stimmung entsteht"
+
+[[emotes]]
+name = "monkaE"
+meaning = "Nervositaet, Angst oder Alarmstimmung."
+usage = "wenn etwas knapp, riskant oder angespannt ist"
+
+[[emotes]]
+name = "monkaTracklimits"
+meaning = "Formel-1- oder Motorsport-Meme."
+usage = "wenn F1, Fahrer oder Rennen Thema sind"
+
+[[emotes]]
+name = "CrusadeHmm"
+meaning = "Traurigkeit, Pain oder Enttaeuschung."
+usage = "bei Pech, Rueckschlaegen oder trauriger Stimmung"
+
+[[emotes]]
+name = "HaltEinfachDeineFresseDuHurensohn"
+meaning = "Sehr derbe Rage-Ablehnung."
+usage = "wenn ein harter Meme-Diss den beleidigenden Ton markieren soll"
+
+[[emotes]]
+name = "COCKBedge"
+meaning = "Muedigkeit oder Ruhebeduerfnis."
+usage = "bei sleepy, spaeter oder erschoepfter Stimmung"
+
+[[emotes]]
+name = "GUNA"
+meaning = "Gute Nacht oder Schlafenszeit."
+usage = "zur Verabschiedung spaet am Abend"
+
+[[emotes]]
+name = "unzips"
+meaning = "Derber oder horny Meme-Humor."
+usage = "nur bei eindeutig scherzhaftem derbem Chat-Kontext"
+
+[[emotes]]
+name = "doubleCatRose"
+meaning = "Katzen-Meme oder Cat-Reaktion."
+usage = "wenn Katzen oder cat-artige Stimmung passt"
+
+[[emotes]]
+name = "oleg"
+meaning = "Gym, Kraft oder Bodybuilding."
+usage = "wenn Training, Muskeln oder Chad-Energie passt"
+
+[[emotes]]
+name = "CatType"
+meaning = "Katzen-Moment."
+usage = "wenn Katzen, Miauen oder niedliche Cat-Reaktionen passen"
+
+[[emotes]]
+name = "WHATAWEEK"
+meaning = "Was fuer eine Woche."
+usage = "bei anstrengender oder ereignisreicher Woche"
+
+[[emotes]]
+name = "MarkFelton"
+meaning = "Geschichts- oder Militaerdoku-Referenz."
+usage = "bei historischen, dokumentarischen oder WW2-nahen Themen"
+
+[[emotes]]
+name = "Haback"
+meaning = "Habeck-/Politik-Meme."
+usage = "bei Robert-Habeck- oder Politik-Kontext"
+
+[[emotes]]
+name = "DONDE"
+meaning = "Wo? auf Spanisch."
+usage = "wenn nach Ort oder Sache gefragt wird"
+
+[[emotes]]
+name = "makscookingskills"
+meaning = "Kochen oder jemand ist am Cooken."
+usage = "wenn jemand eine gute Idee, einen Plan oder echtes Kochen anspricht"
+
+[[emotes]]
+name = "brainrot"
+meaning = "Brainrot; komplett Internet-vergifteter Unsinn."
+usage = "bei sehr absurdem Meme-Content"
+
+[[emotes]]
+name = "GIGHABECK"
+meaning = "Politik- oder Laender-Meme."
+usage = "wenn das konkrete politische Thema passt"
+
+[[emotes]]
+name = "RobertThumbUp"
+meaning = "Politik- oder Laender-Meme."
+usage = "wenn das konkrete politische Thema passt"
+
+[[emotes]]
+name = "BLUBBER"
+meaning = "Erkaeltung, Schniefen oder krankes Blubbern."
+usage = "wenn jemand krank, verschnupft oder verrotzt wirkt"
+
+[[emotes]]
+name = "hehe"
+meaning = "Lachen; etwas ist lustig oder absurd."
+usage = "bei Witzen, Fails oder absurden Chat-Momenten"
+
+[[emotes]]
+name = "IASKED"
+meaning = "Wer hat gefragt? / Ich habe gefragt."
+usage = "bei sarkastischem Reaktionshumor"
+
+[[emotes]]
+name = "NODFEST"
+meaning = "Massive Zustimmung."
+usage = "wenn sehr viele zustimmen"
+
+[[emotes]]
+name = "Gato"
+meaning = "Katzen-Moment."
+usage = "wenn Katzen, Miauen oder niedliche Cat-Reaktionen passen"
+
+[[emotes]]
+name = "RealBenzer"
+meaning = "Benzer-Insider."
+usage = "wenn ein echter Benzer-Moment oder Name-Drop passt"
+
+[[emotes]]
+name = "Moodge"
+meaning = "Mood; relatable Stimmung."
+usage = "wenn etwas sehr nachvollziehbar ist"
+
+[[emotes]]
+name = "Lindnover"
+meaning = "Lindner-/Politik-Insider."
+usage = "bei FDP-, Lindner- oder liberalen Politik-Momenten"
+
+[[emotes]]
+name = "Businessge"
+meaning = "Geld, Business oder Handel."
+usage = "bei Money-, Business- oder Deal-Momenten"
+
+[[emotes]]
+name = "ExplainingHow"
+meaning = "Lange Erklaerung oder Essay."
+usage = "wenn jemand ausfuehrlich erklaert oder yappt"
+
+[[emotes]]
+name = "BuntenbachLike"
+meaning = "Buntenbach-Insider mit Like-Vibe."
+usage = "wenn ein Buntenbach-Running-Gag zustimmend passt"
+
+[[emotes]]
+name = "habeckO7"
+meaning = "Respekt, Gebet oder Salut."
+usage = "bei Dank, Abschied, Respekt oder hoffnungsvollen Momenten"
+
+[[emotes]]
+name = "Egeg"
+meaning = "Okayeg-artige Standardreaktion."
+usage = "bei neutralem Meme-Kommentar"
+
+[[emotes]]
+name = "HORSEN"
+meaning = "Pferde-/Forsen-Meme."
+usage = "bei albernen Horse-, Forsen- oder Stall-Momenten"
+
+[[emotes]]
+name = "JucktMichNicht"
+meaning = "Ist mir egal."
+usage = "wenn etwas ausdruecklich egal ist"
+
+[[emotes]]
+name = "peepoSick"
+meaning = "Kranker Peepo."
+usage = "wenn jemand sich schlecht, krank oder verschnupft fuehlt"
+
+[[emotes]]
+name = "Baseg"
+meaning = "Based; starke Zustimmung zu einer mutigen oder guten Aussage."
+usage = "bei klarer Zustimmung oder Respekt fuer eine Aussage"
+
+[[emotes]]
+name = "catVibe"
+meaning = "Vibe, entspannte Stimmung oder wohliger Moment."
+usage = "bei chilligen, ruhigen oder stimmigen Momenten"
+
+[[emotes]]
+name = "ewHOI"
+meaning = "Hearts-of-Iron- oder Mapgame-Reaktion."
+usage = "wenn Strategie, Karten oder HOI4 Thema sind"
+
+[[emotes]]
+name = "Whey"
+meaning = "Begruessung oder freundliches Winken."
+usage = "wenn jemand dazukommt oder man Hallo sagt"
+
+[[emotes]]
+name = "DonaldPls"
+meaning = "Musik, Tanz oder Jam."
+usage = "wenn Musik laeuft, etwas groovt oder Party-Stimmung entsteht"
+
+[[emotes]]
+name = "COOKED"
+meaning = "Kochen oder jemand ist am Cooken."
+usage = "wenn jemand eine gute Idee, einen Plan oder echtes Kochen anspricht"
+
+[[emotes]]
+name = "GOTEM"
+meaning = "Erwischt oder reingelegt; kleiner Gotcha-Moment."
+usage = "wenn jemand beim Troll, Fehler oder Trick erwischt wird"
+
+[[emotes]]
+name = "peepoAntifa"
+meaning = "Peepo-Antifa; niedlicher Protest-Moment."
+usage = "bei linken Politik- oder Protest-Bezuegen"
+
+[[emotes]]
+name = "AntistasiExperience"
+meaning = "Gaming- oder Spielmoment."
+usage = "bei Gameplay, Queue, Skill oder Game-Talk"
+
+[[emotes]]
+name = "peepoTinfoil"
+meaning = "Lachen oder Humor-Reaktion."
+usage = "bei lustigen oder absurden Momenten"
+
+[[emotes]]
+name = "LETHERCOOK"
+meaning = "Kochen oder jemand ist am Cooken."
+usage = "wenn jemand eine gute Idee, einen Plan oder echtes Kochen anspricht"
+
+[[emotes]]
+name = "FTZNFRTZ"
+meaning = "Politik- oder Laender-Meme."
+usage = "wenn das konkrete politische Thema passt"
+
+[[emotes]]
+name = "SNIPER"
+meaning = "Sniper."
+usage = "bei gezieltem Treffer oder Stream-Sniping-Kontext"
+
+[[emotes]]
+name = "yeeeeeeeeeeeeeeee"
+meaning = "Langgezogenes Yeah."
+usage = "bei Freude oder Zustimmung"
+
+[[emotes]]
+name = "plinkVibe"
+meaning = "Vibe, entspannte Stimmung oder wohliger Moment."
+usage = "bei chilligen, ruhigen oder stimmigen Momenten"
+
+[[emotes]]
+name = "kinkk"
+meaning = "Kink- oder zweideutiger Vorlieben-Witz."
+usage = "bei absurd zweideutigem oder degeneriertem Chat-Humor"
+
+[[emotes]]
+name = "Marx"
+meaning = "Begruessung oder freundliches Winken."
+usage = "wenn jemand dazukommt oder man Hallo sagt"
+
+[[emotes]]
+name = "nocap"
+meaning = "Zustimmung; das stimmt oder klingt richtig."
+usage = "wenn man einer Aussage zustimmt oder sie bestaetigt"
+
+[[emotes]]
+name = "ErmIDontThinkSo"
+meaning = "Ablehnung; eher nein oder das stimmt nicht."
+usage = "wenn man einer Aussage widerspricht"
+
+[[emotes]]
+name = "yeeeee"
+meaning = "Kurzes Yeah."
+usage = "bei Freude oder Zustimmung"
+
+[[emotes]]
+name = "HusoPepeDank"
+meaning = "Derber danker Pepe-Diss."
+usage = "bei hartem Meme-Spott oder sehr rauem Chat-Humor"
+
+[[emotes]]
+name = "ANTIFA"
+meaning = "Antifa- oder linkspolitischer Protest-Moment."
+usage = "bei linken Politik-, Protest- oder Anti-Faschismus-Bezuegen"
+
+[[emotes]]
+name = "Scared"
+meaning = "Nervositaet, Angst oder Alarmstimmung."
+usage = "wenn etwas knapp, riskant oder angespannt ist"
+
+[[emotes]]
+name = "eww"
+meaning = "Ekel oder Ablehnung."
+usage = "wenn etwas widerlich oder unangenehm ist"
+
+[[emotes]]
+name = "peepoDJ"
+meaning = "Peepo-DJ; Musik und Party."
+usage = "wenn aufgelegt, gejammt oder gefeiert wird"
+
+[[emotes]]
+name = "BiggusDickus"
+meaning = "Derber oder horny Meme-Humor."
+usage = "nur bei eindeutig scherzhaftem derbem Chat-Kontext"
+
+[[emotes]]
+name = "nothingeverhappens"
+meaning = "Es passiert sowieso nichts."
+usage = "bei zynischem oder abgebruehtem Abwarten"
+
+[[emotes]]
+name = "Coffeegers"
+meaning = "Kaffee oder Koffein."
+usage = "wenn es um Kaffee, Wachwerden oder Koffeinbedarf geht"
+
+[[emotes]]
+name = "TEISCHENTE"
+meaning = "Teichenten- oder Duck-Meme."
+usage = "bei albernen Enten- oder Teich-Momenten"
+
+[[emotes]]
+name = "RacistModeEngaged"
+meaning = "Politik- oder Laender-Meme."
+usage = "wenn das konkrete politische Thema passt"
+
+[[emotes]]
+name = "AUSTRIAN"
+meaning = "Oesterreich-Referenz."
+usage = "wenn Oesterreich, oesterreichischer Akzent oder Austria-Memes passen"
+
+[[emotes]]
+name = "Ryanair"
+meaning = "Flugzeug- oder Aviation-Meme."
+usage = "wenn Flugzeuge, Jets oder Fliegen Thema sind"
+
+[[emotes]]
+name = "WAR"
+meaning = "Krieg/Kampf-Meme."
+usage = "bei Kampf-, Streit- oder War-Kontext"
+
+[[emotes]]
+name = "wideKok"
+meaning = "Breiter Kok-/Channel-Insider."
+usage = "bei ueberzogenen breiten Channel-Reaktionen"
+
+[[emotes]]
+name = "MadTyper"
+meaning = "Wut, Rage oder genervte Stimmung."
+usage = "wenn jemand offensichtlich sauer, getriggert oder am Ranten ist"
+
+[[emotes]]
+name = "JDpwease"
+meaning = "Bettelnde Please-Reaktion mit JD-Vance-Insider."
+usage = "wenn jemand fleht, bittet oder puppy-eyes macht"
+
+[[emotes]]
+name = "guuh"
+meaning = "Katzen-Meme oder Cat-Reaktion."
+usage = "wenn Katzen oder cat-artige Stimmung passt"
+
+[[emotes]]
+name = "okurwa"
+meaning = "Polnischer Ausruf der Ueberraschung."
+usage = "bei Schock oder Frust im Meme-Stil"
+
+[[emotes]]
+name = "Devi2"
+meaning = "Zweite Devi-Insider-Reaktion."
+usage = "wenn ein weiterer Devi-Moment oder Running Gag passt"
+
+[[emotes]]
+name = "Bitti"
+meaning = "Bitte/Bitte-Moment."
+usage = "bei Bitte oder Nachfrage"
+
+[[emotes]]
+name = "pastry"
+meaning = "Essen oder Snack-Moment."
+usage = "wenn es um Essen, Hunger oder Snacks geht"
+
+[[emotes]]
+name = "DailyGettingPaidForShittingAppreciationPost"
+meaning = "Begruessung oder freundliches Winken."
+usage = "wenn jemand dazukommt oder man Hallo sagt"
+
+[[emotes]]
+name = "glorpCheer"
+meaning = "Glorp-Cheer; positives Anfeuern."
+usage = "wenn gejubelt, supported oder gehypt wird"
+
+[[emotes]]
+name = "dosehiii"
+meaning = "Begruessung oder freundliches Winken."
+usage = "wenn jemand dazukommt oder man Hallo sagt"
+
+[[emotes]]
+name = "azb"
+meaning = "Katzen-Meme oder Cat-Reaktion."
+usage = "wenn Katzen oder cat-artige Stimmung passt"
+
+[[emotes]]
+name = "OlesWeeklyValorantMeltdownRant"
+meaning = "Wut, Tilt oder genervte Stimmung."
+usage = "bei Rage, Rants oder Frust"
+
+[[emotes]]
+name = "WASHED"
+meaning = "Washed; nicht mehr in Form."
+usage = "bei scherzhaften Performance-Fails"
+
+[[emotes]]
+name = "REDFLAG"
+meaning = "Red Flag; Warnzeichen."
+usage = "wenn etwas offensichtlich problematisch wirkt"
+
+[[emotes]]
+name = "duckDisco"
+meaning = "Duck-Disco."
+usage = "bei Musik, Tanz oder Party"
+
+[[emotes]]
+name = "peepoEyeroll"
+meaning = "Augenrollen."
+usage = "bei Genervtheit oder Unglauben"
+
+[[emotes]]
+name = "zazaBinks"
+meaning = "Star-Wars-Meme."
+usage = "wenn Star Wars oder Sci-Fi-Kontext passt"
+
+[[emotes]]
+name = "SchizoYoda"
+meaning = "Begruessung oder freundliches Winken."
+usage = "wenn jemand dazukommt oder man Hallo sagt"
+
+[[emotes]]
+name = "waitingJAM"
+meaning = "Musik, Tanz oder Jam."
+usage = "wenn Musik laeuft, etwas groovt oder Party-Stimmung entsteht"
+
+[[emotes]]
+name = "gurkenrichard"
+meaning = "Geld, Business oder Handel."
+usage = "bei Money-, Business- oder Deal-Momenten"
+
+[[emotes]]
+name = "P1"
+meaning = "Formel-1-Bezug."
+usage = "wenn Formel 1, Fahrer oder Teams Thema sind"
+
+[[emotes]]
+name = "xddShrug"
+meaning = "Lachen oder Humor-Reaktion."
+usage = "bei lustigen oder absurden Momenten"
+
+[[emotes]]
+name = "tuh"
+meaning = "Katzen-Meme oder Cat-Reaktion."
+usage = "wenn Katzen oder cat-artige Stimmung passt"
+
+[[emotes]]
+name = "WHOLETHIMCOOK"
+meaning = "Begruessung oder freundliches Winken."
+usage = "wenn jemand dazukommt oder man Hallo sagt"
+
+[[emotes]]
+name = "oda"
+meaning = "Oda- oder One-Piece-Referenz."
+usage = "bei Autoren-, Story- oder One-Piece-Momenten"
+
+[[emotes]]
+name = "HULKW"
+meaning = "Formel-1- oder Motorsport-Meme."
+usage = "wenn F1, Fahrer oder Rennen Thema sind"
+
+[[emotes]]
+name = "averageSauerlaender"
+meaning = "Wut, Tilt oder genervte Stimmung."
+usage = "bei Rage, Rants oder Frust"
+
+[[emotes]]
+name = "WennNilsMalWiederImChatDasWortMetaLesenMussZuEinerBubenGamingSession"
+meaning = "Essen, Kochen oder Snack-Moment."
+usage = "wenn Essen oder Kochen Thema ist"
+
+[[emotes]]
+name = "FeelsADHDMan"
+meaning = "ADHS-/Unruhe-Meme."
+usage = "bei Ablenkung oder Hyperfokus im Meme-Kontext"
+
+[[emotes]]
+name = "????"
+meaning = "Nachdenken oder Frage."
+usage = "bei Analyse, Unsicherheit oder Spekulation"
+
+[[emotes]]
+name = "ABOBA"
+meaning = "Aboba-Meme; absurde Reaktion."
+usage = "bei russisch/osteuropaeischem Meme-Humor"
+
+[[emotes]]
+name = "PERHAPS"
+meaning = "Verwirrung oder Unsicherheit."
+usage = "wenn etwas unklar, seltsam oder schwer einzuordnen ist"
+
+[[emotes]]
+name = "ratgeRacer"
+meaning = "Ratten-Meme."
+usage = "bei rattenbezogenen oder hektischen Meme-Momenten"
+
+[[emotes]]
+name = "Breadge"
+meaning = "Brot- oder Food-Okayeg."
+usage = "bei Brot-, Essen- oder Bakery-Momenten"
+
+[[emotes]]
+name = "FeelsQueueMan"
+meaning = "Gaming- oder Spielmoment."
+usage = "bei Gameplay, Queue, Skill oder Game-Talk"
+
+[[emotes]]
+name = "MitNicoUndDirkZeltenAberInDerNachtStoßenDieGämseSteineVonDerSteilwand"
+meaning = "Wander-/Bergunfall-Insider mit absurdem Szenario."
+usage = "bei langen, spezifischen oder absurd dramatischen Berggeschichten"
+
+[[emotes]]
+name = "PausersHype"
+meaning = "Hype, Freude oder starke positive Ueberraschung."
+usage = "bei guten News, Plays, Erfolgen oder Vorfreude"
+
+[[emotes]]
+name = "gadse"
+meaning = "Katze/Gadse."
+usage = "bei Katzenmomenten"
+
+[[emotes]]
+name = "DagothUr"
+meaning = "Morrowind-/Dagoth-Ur-Meme."
+usage = "bei dramatischem Boesewicht-, Kult- oder RPG-Vibe"
+
+[[emotes]]
+name = "BADEMEISTER"
+meaning = "Bademeister."
+usage = "bei Schwimmen, Pool oder Aufsicht"
+
+[[emotes]]
+name = "Ratge"
+meaning = "Ratten-Meme."
+usage = "bei rattenbezogenen oder hektischen Meme-Momenten"
+
+[[emotes]]
+name = "RatgeNV"
+meaning = "Ratten-Meme."
+usage = "bei rattenbezogenen oder hektischen Meme-Momenten"
+
+[[emotes]]
+name = "RatShake"
+meaning = "Ratten-Meme."
+usage = "bei rattenbezogenen oder hektischen Meme-Momenten"
+
+[[emotes]]
+name = "buhRave"
+meaning = "Musik, Tanz oder Jam."
+usage = "wenn Musik laeuft, etwas groovt oder Party-Stimmung entsteht"
+
+[[emotes]]
+name = "Pepege"
+meaning = "Pepege; goofy Pepe-Reaktion."
+usage = "bei alberner oder dummer Situation"
+
+[[emotes]]
+name = "peepoEggs"
+meaning = "Eier- oder Fruehstuecks-Peepo."
+usage = "bei Food-, Eier- oder Morgenmomenten"
+
+[[emotes]]
+name = "$f1"
+meaning = "Formel-1-Kommando/Shortcut."
+usage = "bei F1-Kontext"
+
+[[emotes]]
+name = "Wowers"
+meaning = "Hype, Freude oder starke positive Ueberraschung."
+usage = "bei guten News, Plays, Erfolgen oder Vorfreude"
+
+[[emotes]]
+name = "FloppaBusiness"
+meaning = "Floppa-Meme."
+usage = "wenn ein Floppa- oder Chad-Floppa-Moment passt"
+
+[[emotes]]
+name = "DeusVult"
+meaning = "Gebet, heiliger oder religioeser Meme-Kontext."
+usage = "bei ueberdramatisch heiligen Momenten"
+
+[[emotes]]
+name = "fuh"
+meaning = "Fuh; kurzer verwirrter Ausruf."
+usage = "bei Ratlosigkeit"
+
+[[emotes]]
+name = "MAN"
+meaning = "Man/Mann-Ausruf."
+usage = "bei genervtem oder erstauntem Ausruf"
+
+[[emotes]]
+name = "dummarsch"
+meaning = "Derber Dummarsch-Insult."
+usage = "bei sehr derbem, scherzhaftem Chat-Humor"
+
+[[emotes]]
+name = "ehehe"
+meaning = "Lachen; etwas ist lustig oder absurd."
+usage = "bei Witzen, Fails oder absurden Chat-Momenten"
+
+[[emotes]]
+name = "WannSommer"
+meaning = "Ungeduld auf Sommer oder warme Tage."
+usage = "wenn Sommer vermisst oder Hitze herbeigesehnt wird"
+
+[[emotes]]
+name = "plinkge"
+meaning = "Plink-/Gitarren-Okayeg."
+usage = "bei sanftem Sound, Musik oder kleinen Pling-Momenten"
+
+[[emotes]]
+name = "DIESOFR2D2"
+meaning = "Cringe oder Fremdschaemen."
+usage = "bei unangenehmen oder peinlichen Momenten"
+
+[[emotes]]
+name = "VS"
+meaning = "Sus oder Among-Us-Reaktion."
+usage = "bei verdaechtigen oder zweideutigen Momenten"
+
+[[emotes]]
+name = "AlienWave"
+meaning = "Begruessung oder freundliches Winken."
+usage = "wenn jemand dazukommt oder man freundlich hallo sagt"
+
+[[emotes]]
+name = "WannWinter"
+meaning = "Ungeduld auf Winter oder kalte Tage."
+usage = "wenn Winter, Kaelte oder Schnee vermisst wird"
+
+[[emotes]]
+name = "japierdole"
+meaning = "Polnischer Frust-/Schockausruf."
+usage = "bei starkem Schock oder Frust"
+
+[[emotes]]
+name = "YesYes"
+meaning = "Zustimmung; das stimmt oder klingt richtig."
+usage = "wenn man einer Aussage zustimmt oder sie bestaetigt"
+
+[[emotes]]
+name = "WannEUV"
+meaning = "Wann EUV? Insiderfrage."
+usage = "wenn nach EUV oder lang erwartetem Thema gefragt wird"
+
+[[emotes]]
+name = "Feels1444Man"
+meaning = "Europa-Universalis-4-/1444-Start-Meme."
+usage = "bei Geschichts-, Mapgame- oder EU4-Nostalgie"
+
+[[emotes]]
+name = "Susge"
+meaning = "Sus; etwas wirkt verdaechtig."
+usage = "bei verdächtigen, zweideutigen oder Among-Us-artigen Momenten"
+
+[[emotes]]
+name = "CantinaJAM"
+meaning = "Musik, Tanz oder Jam."
+usage = "wenn Musik laeuft, etwas groovt oder Party-Stimmung entsteht"
+
+[[emotes]]
+name = "DankStick"
+meaning = "Danker Twitch-Meme-Vibe."
+usage = "bei trockenem, ironischem oder dankem Humor"
+
+[[emotes]]
+name = "BLANKIES"
+meaning = "Decken- oder Comfort-Moment."
+usage = "wenn Einkuscheln, Schutz oder cozy Stimmung passt"
+
+[[emotes]]
+name = "FloppaRave"
+meaning = "Musik, Tanz oder Jam."
+usage = "wenn Musik laeuft, etwas groovt oder Party-Stimmung entsteht"
+
+[[emotes]]
+name = "IntothemotherlandtheGermanarmymarchComradesstandsidebysidetostoptheNazichargePanzersonRussiansoil"
+meaning = "Sabaton-/Kriegslied-Referenz."
+usage = "bei dramatischem Mitsingen oder History-Metal-Momenten"
+
+[[emotes]]
+name = "HORNY"
+meaning = "Horny-Meme."
+usage = "bei klarer horny Meme-Stimmung"
+
+[[emotes]]
+name = "CatHug"
+meaning = "Umarmung, Trost oder Zuneigung."
+usage = "bei freundlichen, warmen oder troestenden Momenten"
+
+[[emotes]]
+name = "FloppaPong"
+meaning = "Floppa-Meme."
+usage = "wenn ein Floppa- oder Chad-Floppa-Moment passt"
+
+[[emotes]]
+name = "FLOPPACHAD"
+meaning = "Floppa-Meme."
+usage = "wenn ein Floppa- oder Chad-Floppa-Moment passt"
+
+[[emotes]]
+name = "BINGCHILLING"
+meaning = "Bing Chilling/China-Meme."
+usage = "bei China- oder Eiscreme-Meme-Kontext"
+
+[[emotes]]
+name = "AkiraDespair"
+meaning = "Traurigkeit, Enttaeuschung oder Verzweiflung."
+usage = "bei Pech, kleinen Rueckschlaegen oder traurigen Chat-Momenten"
+
+[[emotes]]
+name = "catRAVE"
+meaning = "Musik, Tanz oder Jam."
+usage = "wenn Musik laeuft, etwas groovt oder Party-Stimmung entsteht"
+
+[[emotes]]
+name = "startbeingNice"
+meaning = "Sei nett."
+usage = "wenn jemand freundlich sein soll"
+
+[[emotes]]
+name = "forsenCD"
+meaning = "ForsenCD; cheating/Doc-Meme."
+usage = "bei Cheat- oder ForsenCD-Kontext"
+
+[[emotes]]
+name = "nymnCC"
+meaning = "NymnCC-Copyright/Meme."
+usage = "bei Nymn- oder CC-Kontext"
+
+[[emotes]]
+name = "MEN"
+meaning = "Men-Meme."
+usage = "bei maennlicher, gym- oder gachiartiger Stimmung"
+
+[[emotes]]
+name = "amongEg"
+meaning = "Sus; etwas wirkt verdaechtig."
+usage = "bei verdächtigen, zweideutigen oder Among-Us-artigen Momenten"
+
+[[emotes]]
+name = "STONING"
+meaning = "Stoning; Steinigen als derbes Meme."
+usage = "bei sehr derbem Straf-/Mob-Humor"
+
+[[emotes]]
+name = "tintinHeadbang"
+meaning = "Musik, Tanz oder Jam."
+usage = "wenn Musik laeuft, etwas groovt oder Party-Stimmung entsteht"
+
+[[emotes]]
+name = "latinoHug"
+meaning = "Umarmung, Trost oder Zuneigung."
+usage = "bei freundlichen, warmen oder troestenden Momenten"
+
+[[emotes]]
+name = ":d"
+meaning = "Kleines Grinsen."
+usage = "bei freundlichem, albernem Lachen"
+
+[[emotes]]
+name = "GIRLDETECTED"
+meaning = "Girl detected."
+usage = "bei Girl-/Gender-Meme im Chat"
+
+[[emotes]]
+name = "PepegaDriving"
+meaning = "Pepega faehrt Auto; schlechtes Fahren."
+usage = "bei Verkehrschaos oder dummen Fahrfehlern"
+
+[[emotes]]
+name = "peepoPonderingEternity"
+meaning = "Nachdenken oder Frage."
+usage = "bei Analyse, Unsicherheit oder Spekulation"
+
+[[emotes]]
+name = "koklick"
+meaning = "Kok-/Lick-Insider."
+usage = "bei frechen, spielerischen Channel-Momenten"
+
+[[emotes]]
+name = "sipp"
+meaning = "Sip; trinken oder beobachten."
+usage = "bei Tee/Kaffee-Sip oder abwartendem Zuschauen"
+
+[[emotes]]
+name = "majj"
+meaning = "Majj; freundlicher lokaler Meme-Vibe."
+usage = "bei positivem lokalen Insider-Kontext"
+
+[[emotes]]
+name = "bejjtogeth"
+meaning = "Bejj together; zusammen sein."
+usage = "bei Gemeinschaft oder Together-Vibe"
+
+[[emotes]]
+name = "bejj"
+meaning = "Bejj; freundlicher lokaler Meme-Vibe."
+usage = "bei positivem lokalen Insider-Kontext"
+
+[[emotes]]
+name = "peepoCheer"
+meaning = "Peepo feuert an."
+usage = "bei Support oder Anfeuern"
+
+[[emotes]]
+name = "peepoGrüne"
+meaning = "Hype oder positive Ueberraschung."
+usage = "bei Erfolg, Vorfreude oder starken Momenten"
+
+[[emotes]]
+name = "lookDown"
+meaning = "Nach unten schauen."
+usage = "wenn etwas unten passiert oder jemand herabschaut"
+
+[[emotes]]
+name = "60TonnenEinigkeitRechtUndFreiheit"
+meaning = "Deutsches Panzer-/Patriotismus-Meme."
+usage = "bei deutschem Militär- oder Patriotismus-Kontext"
+
+[[emotes]]
+name = "ezStrat"
+meaning = "Einfache Strategie."
+usage = "wenn ein Plan simpel oder offensichtlich ist"
+
+[[emotes]]
+name = "GermanDank"
+meaning = "Deutschland- oder Ortsbezug."
+usage = "wenn der konkrete Ort oder Deutschland Thema ist"
+
+[[emotes]]
+name = "mlem"
+meaning = "Katzen-Moment."
+usage = "wenn Katzen, Miauen oder niedliche Cat-Reaktionen passen"
+
+[[emotes]]
+name = "FeelsNukeMan"
+meaning = "Explosion, Tod oder kompletter Fail als Meme."
+usage = "bei ueberzeichnetem Chaos oder Ende"
+
+[[emotes]]
+name = "CLEAN"
+meaning = "Sauber; clean gespielt oder geloest."
+usage = "bei sauberer Ausfuehrung oder elegantem Move"
+
+[[emotes]]
+name = "catLeave"
+meaning = "Verabschiedung oder Weggehen."
+usage = "wenn jemand geht, offline geht oder gute Nacht sagt"
+
+[[emotes]]
+name = "AlonsoSigma"
+meaning = "Formel-1-Bezug."
+usage = "wenn Formel 1, Fahrer oder Teams Thema sind"
+
+[[emotes]]
+name = "Adiosge"
+meaning = "Verabschiedung oder Weggehen."
+usage = "wenn jemand geht, offline geht oder gute Nacht sagt"
+
+[[emotes]]
+name = "AlonsoPls"
+meaning = "Formel-1-Bezug."
+usage = "wenn Formel 1, Fahrer oder Teams Thema sind"
+
+[[emotes]]
+name = "AlonsoHola"
+meaning = "Formel-1-Bezug."
+usage = "wenn Formel 1, Fahrer oder Teams Thema sind"
+
+[[emotes]]
+name = "ASSEMBLE"
+meaning = "Versammeln; alle zusammenkommen."
+usage = "wenn Chat, Gruppe oder Team zusammenkommen soll"
+
+[[emotes]]
+name = "veryCat"
+meaning = "Hype oder positive Ueberraschung."
+usage = "bei Erfolg, Vorfreude oder starken Momenten"
+
+[[emotes]]
+name = "HECOOKED"
+meaning = "Kochen oder jemand ist am Cooken."
+usage = "wenn jemand eine gute Idee, einen Plan oder echtes Kochen anspricht"
+
+[[emotes]]
+name = "BillySmoke"
+meaning = "Rauch-/Smoke-Meme."
+usage = "bei Smoke- oder Kiffer-Meme-Kontext"
+
+[[emotes]]
+name = "SpeziDank"
+meaning = "Spezi-Getraenk oder Spezi-Moment."
+usage = "wenn es um Spezi oder Getraenke geht"
+
+[[emotes]]
+name = "Fighter2"
+meaning = "Fighter-/Kampfjet-Kontext."
+usage = "bei Flugzeug oder Kampfjet-Momenten"
+
+[[emotes]]
+name = "SOCIALCREDITING"
+meaning = "Begruessung oder freundliches Winken."
+usage = "wenn jemand dazukommt oder man Hallo sagt"
+
+[[emotes]]
+name = "RightThere"
+meaning = "Da ist es; genau dort."
+usage = "wenn auf etwas gezeigt oder hingewiesen wird"
+
+[[emotes]]
+name = "MENNO"
+meaning = "Menno; kindlich genervt."
+usage = "bei kleiner Enttaeuschung"
+
+[[emotes]]
+name = "Madwokege"
+meaning = "Wut, Rage oder genervte Stimmung."
+usage = "wenn jemand offensichtlich sauer, getriggert oder am Ranten ist"
+
+[[emotes]]
+name = "hornerC"
+meaning = "Christian-Horner-/Formel-1-Meme."
+usage = "bei F1-Teamchef-Drama oder Red-Bull-Insidern"
+
+[[emotes]]
+name = "peepoPlant"
+meaning = "Peepo mit Pflanze; ruhiger Naturmoment."
+usage = "bei Garten, Wachstum oder cozy Plant-Vibe"
+
+[[emotes]]
+name = "TrumpetTime"
+meaning = "Musik, Tanz oder Jam."
+usage = "wenn Musik laeuft, etwas groovt oder Party-Stimmung entsteht"
+
+[[emotes]]
+name = "sajjbutluvv"
+meaning = "Liebe, Zuneigung oder herzlicher Support."
+usage = "bei lieben, positiven oder supportiven Reaktionen"
+
+[[emotes]]
+name = "crunch"
+meaning = "Crunch; knusprig/zerquetscht."
+usage = "bei Crunch-, Snack- oder Druckmomenten"
+
+[[emotes]]
+name = "leavee"
+meaning = "Verabschiedung oder Weggehen."
+usage = "wenn jemand geht, offline geht oder gute Nacht sagt"
+
+[[emotes]]
+name = "SERVUS"
+meaning = "Begruessung oder freundliches Winken."
+usage = "wenn jemand dazukommt oder man freundlich hallo sagt"
+
+[[emotes]]
+name = "KKool"
+meaning = "Laessige Coolness mit KKona/K-Insider-Vibe."
+usage = "bei lockerer Zustimmung oder ironischem Coolsein"
+
+[[emotes]]
+name = "NotALOO"
+meaning = "Nicht ALOO."
+usage = "bei Aloo-Verneinung oder Gegenreaktion"
+
+[[emotes]]
+name = "PartyPls"
+meaning = "Musik, Tanz oder Jam."
+usage = "wenn Musik laeuft, etwas groovt oder Party-Stimmung entsteht"
+
+[[emotes]]
+name = "CrazyIWasCrazyOnceTheyPutMeInARoomARubberroomARubberroomFilledWithRatsRatsMakeMeGoCrazy"
+meaning = "Lachen oder Humor-Reaktion."
+usage = "bei lustigen oder absurden Momenten"
+
+[[emotes]]
+name = "peepoMcLaren"
+meaning = "Formel-1-Bezug."
+usage = "wenn Formel 1, Fahrer oder Teams Thema sind"
+
+[[emotes]]
+name = "glebeGlebe"
+meaning = "Glebe-Insider mit wiederholtem Meme-Ausruf."
+usage = "bei komischer Wiederholung oder Insider-Zustimmung"
+
+[[emotes]]
+name = "PeepoHappyLeave"
+meaning = "Verabschiedung oder Weggehen."
+usage = "wenn jemand geht, offline geht oder gute Nacht sagt"
+
+[[emotes]]
+name = "peepoSpace"
+meaning = "Hype oder positive Ueberraschung."
+usage = "bei Erfolg, Vorfreude oder starken Momenten"
+
+[[emotes]]
+name = "FCKAFD"
+meaning = "Anti-AfD-Politikstatement."
+usage = "bei klarer Ablehnung rechter Politik"
+
+[[emotes]]
+name = "peepoGoodNight"
+meaning = "Verabschiedung oder Weggehen."
+usage = "wenn jemand geht, offline geht oder gute Nacht sagt"
+
+[[emotes]]
+name = "flowerr"
+meaning = "Hype oder positive Ueberraschung."
+usage = "bei Erfolg, Vorfreude oder starken Momenten"
+
+[[emotes]]
+name = "FUKUYAMA"
+meaning = "Begruessung oder freundliches Winken."
+usage = "wenn jemand dazukommt oder man Hallo sagt"
+
+[[emotes]]
+name = "KKrikey"
+meaning = "Krikey-/australischer Ausruf."
+usage = "bei ueberraschtem australischem Meme"
+
+[[emotes]]
+name = "ArnoldShake"
+meaning = "Arnold-, Shake- oder Gym-Moment."
+usage = "bei Fitness, Muskeln oder Bodybuilding"
+
+[[emotes]]
+name = "HELLOWO"
+meaning = "Begruessung oder freundliches Winken."
+usage = "wenn jemand dazukommt oder man freundlich hallo sagt"
+
+[[emotes]]
+name = "MyExistenceIsNothingButAGrainOfSandComparedToTheEntireScaleOfTheUniverse"
+meaning = "Musik, Tanz oder Vibe."
+usage = "wenn Musik laeuft oder die Stimmung groovt"
+
+[[emotes]]
+name = "peepoCCP"
+meaning = "Begruessung oder freundliches Winken."
+usage = "wenn jemand dazukommt oder man Hallo sagt"
+
+[[emotes]]
+name = "Geroellge"
+meaning = "Geroell- oder Steinlawinen-Okayeg."
+usage = "bei Berg-, Stein- oder Chaosmomenten"
+
+[[emotes]]
+name = "GNOCCI"
+meaning = "Alberner Donkey-/Gnocchi-Moment."
+usage = "bei goofy Food-, Donkey- oder Tierwitzen"
+
+[[emotes]]
+name = "popCat"
+meaning = "Katzen-Moment."
+usage = "wenn Katzen, Miauen oder niedliche Cat-Reaktionen passen"
+
+[[emotes]]
+name = "TESTSIEGER"
+meaning = "Testsieger; etwas gewinnt den Vergleich."
+usage = "wenn etwas ironisch oder ernst als beste Option dargestellt wird"
+
+[[emotes]]
+name = "NessieParty"
+meaning = "Essen oder Snack-Moment."
+usage = "wenn es um Essen, Hunger oder Snacks geht"
+
+[[emotes]]
+name = "DEATH"
+meaning = "Tod/Ende als Meme."
+usage = "bei kompletter Niederlage oder Deadge-Moment"
+
+[[emotes]]
+name = "RollCat"
+meaning = "Katzen-Moment."
+usage = "wenn Katzen, Miauen oder niedliche Cat-Reaktionen passen"
+
+[[emotes]]
+name = "DougDimmaDab"
+meaning = "Wut, Tilt oder genervte Stimmung."
+usage = "bei Rage, Rants oder Frust"
+
+[[emotes]]
+name = "howody"
+meaning = "Begruessung oder freundliches Winken."
+usage = "wenn jemand dazukommt oder man freundlich hallo sagt"
+
+[[emotes]]
+name = "plaisieren"
+meaning = "Bewegung, Ankommen oder Fahren."
+usage = "bei Lauf-, Fahr- oder Bewegungsmomenten"
+
+[[emotes]]
+name = "TriDance"
+meaning = "Musik, Tanz oder Jam."
+usage = "wenn Musik laeuft, etwas groovt oder Party-Stimmung entsteht"
+
+[[emotes]]
+name = "HonestWork"
+meaning = "Arbeit oder Arbeitszeit-Meme."
+usage = "wenn Job, Schicht oder Arbeiten Thema ist"
+
+[[emotes]]
+name = "ewLeague"
+meaning = "Abschied oder Weggehen."
+usage = "wenn jemand geht oder gute Nacht sagt"
+
+[[emotes]]
+name = "Nessie"
+meaning = "Nessie-Meme."
+usage = "bei Nessie oder Monster-Momenten"
+
+[[emotes]]
+name = "duckass"
+meaning = "Duckass; Enten-/Albernheitsmeme."
+usage = "bei albernem Entenhumor"
+
+[[emotes]]
+name = "peepoDyingFromToxicFumesReleasedFromASpraypaintCanBecauseHeWasNotWearingAMask"
+meaning = "Traurigkeit, Pain oder Enttaeuschung."
+usage = "bei Pech, Rueckschlaegen oder trauriger Stimmung"
+
+[[emotes]]
+name = "dogMeditation"
+meaning = "Hund/Doge-Moment."
+usage = "wenn ein Hund, Doge oder niedliche Hundereaktion passt"
+
+[[emotes]]
+name = "AREYOUAGIRL"
+meaning = "Awkward Chat-Frage oder cringe Bait."
+usage = "wenn jemand unangenehm neugierig oder weird fragt"
+
+[[emotes]]
+name = "DAMN"
+meaning = "Verdammt; starke Reaktion."
+usage = "bei Ueberraschung, Respekt oder Schock"
+
+[[emotes]]
+name = "YeahBuddy"
+meaning = "Gym, Kraft oder Bodybuilding."
+usage = "wenn es um Training, Kraft oder Gym-Memes geht"
+
+[[emotes]]
+name = "xqcShare"
+meaning = "Liebe, Zuneigung oder herzlicher Support."
+usage = "bei lieben, positiven oder supportiven Reaktionen"
+
+[[emotes]]
+name = "SALAMIhand"
+meaning = "Essen oder Snack-Moment."
+usage = "wenn es um Essen, Hunger oder Snacks geht"
+
+[[emotes]]
+name = "SoyPoint2"
+meaning = "Hype oder positive Ueberraschung."
+usage = "bei Erfolg, Vorfreude oder starken Momenten"
+
+[[emotes]]
+name = "miamor"
+meaning = "Liebevoller Mi-amor-Moment."
+usage = "bei Zuneigung, Flirt-Vibe oder herzlicher Ansprache"
+
+[[emotes]]
+name = "PokiShare"
+meaning = "Liebe, Zuneigung oder herzlicher Support."
+usage = "bei lieben, positiven oder supportiven Reaktionen"
+
+[[emotes]]
+name = "shower"
+meaning = "Duschen, Hygiene oder Touch-grass-nahe Aufforderung."
+usage = "wenn jemand scherzhaft duschen oder sich frisch machen soll"
+
+[[emotes]]
+name = "Clowneg"
+meaning = "Clown-Okayeg; laecherliches Verhalten."
+usage = "wenn jemand clownesk oder peinlich handelt"
+
+[[emotes]]
+name = "MarshmellowTime"
+meaning = "Essen, Kochen oder Snack-Moment."
+usage = "wenn Essen oder Kochen Thema ist"
+
+[[emotes]]
+name = "eierschaukeln"
+meaning = "Faulenzen oder nichts Produktives tun."
+usage = "wenn jemand chillt, prokrastiniert oder Arbeit vermeidet"
+
+[[emotes]]
+name = "peepoFeet"
+meaning = "Derber oder horny Meme-Humor."
+usage = "nur bei eindeutig scherzhaftem derbem Chat-Kontext"
+
+[[emotes]]
+name = "Noot"
+meaning = "Noot noot / Pinguin-Meme."
+usage = "bei Pinguin- oder Noot-Momenten"
+
+[[emotes]]
+name = "CURSED"
+meaning = "Cursed; verflucht oder unangenehm seltsam."
+usage = "bei sehr komischen, cursed Bildern oder Aussagen"
+
+[[emotes]]
+name = "SoSnowy"
+meaning = "Gebet, heiliger oder religioeser Meme-Kontext."
+usage = "bei ueberdramatisch heiligen Momenten"
+
+[[emotes]]
+name = "Toothless"
+meaning = "Toothless-Drachenmeme."
+usage = "bei Drachen-, Tanz- oder Toothless-Kontext"
+
+[[emotes]]
+name = "UHM"
+meaning = "Verwirrung oder Unsicherheit."
+usage = "wenn etwas unklar, seltsam oder schwer einzuordnen ist"
+
+[[emotes]]
+name = "spezifisch"
+meaning = "Spezifisch; sehr genau oder passend."
+usage = "wenn etwas auffaellig spezifisch ist"
+
+[[emotes]]
+name = "Dudge"
+meaning = "Dudge-/Dudege-artige trockene Skepsis."
+usage = "wenn man urteilt, zweifelt oder trocken reagiert"
+
+[[emotes]]
+name = "SoyPoint"
+meaning = "Soyjack-Pointing; uebertriebenes Zeigen oder Fan-Hype."
+usage = "wenn jemand etwas begeistert oder spottend anzeigt"
+
+[[emotes]]
+name = "ARSCHKRATZEN"
+meaning = "Derbes Kratzen-/Faulheitsmeme."
+usage = "bei derbem Koerperhumor"
+
+[[emotes]]
+name = "Nyehehehe"
+meaning = "Lachen; etwas ist lustig oder absurd."
+usage = "bei Witzen, Fails oder absurden Chat-Momenten"
+
+[[emotes]]
+name = "FluteTime"
+meaning = "Musik, Tanz oder Jam."
+usage = "wenn Musik laeuft, etwas groovt oder Party-Stimmung entsteht"
+
+[[emotes]]
+name = "monakNotSure"
+meaning = "Verwirrung oder Unsicherheit."
+usage = "wenn etwas unklar, seltsam oder schwer einzuordnen ist"
+
+[[emotes]]
+name = "peepoMonster"
+meaning = "Peepo-Monster; spielerisch gruselig."
+usage = "bei kleinen Horror-, Monster- oder Boo-Momenten"
+
+[[emotes]]
+name = "NOWAYING"
+meaning = "Unglaeubigkeit; bruh-Moment oder kaum zu fassen."
+usage = "bei absurden, peinlichen oder schwer glaubbaren Aussagen"
+
+[[emotes]]
+name = "DaGoth"
+meaning = "Dagoth-/Morrowind-Meme."
+usage = "bei Dagoth- oder Elder-Scrolls-Kontext"
+
+[[emotes]]
+name = "marc_yoyo"
+meaning = "Spongebob-/Marc-Insider."
+usage = "bei albernen, verwirrten oder cartoonigen Momenten"
+
+[[emotes]]
+name = "annehatschonwiedernichtszutunwährenddesazb"
+meaning = "AZB-/Anne-Insider; scheinbar nichts zu tun."
+usage = "wenn jemand im Ausbildungs-/Arbeitskontext idle wirkt"
+
+[[emotes]]
+name = "grrr"
+meaning = "Knurren oder kleine Wut."
+usage = "bei spielerischer Aggression"
+
+[[emotes]]
+name = "LOGGERS"
+meaning = "Logger-/Holzfäller-Meme."
+usage = "bei Holz, Logs oder Logging"
+
+[[emotes]]
+name = "bieberbutzemanPepe"
+meaning = "Bieberbutzemann-/Pepe-Insider."
+usage = "bei skurrilen lokalen oder Pepe-Insider-Momenten"
+
+[[emotes]]
+name = "Truck"
+meaning = "Truck/LKW."
+usage = "bei LKW oder Transport"
+
+[[emotes]]
+name = "Nilstime"
+meaning = "Nils-Time; lokaler Insider."
+usage = "wenn Nils oder Nils-Kontext Thema ist"
+
+[[emotes]]
+name = "catSigh"
+meaning = "Traurigkeit, Enttaeuschung oder Verzweiflung."
+usage = "bei Pech, kleinen Rueckschlaegen oder traurigen Chat-Momenten"
+
+[[emotes]]
+name = "monkeSpin"
+meaning = "Musik, Tanz oder Jam."
+usage = "wenn Musik laeuft, etwas groovt oder Party-Stimmung entsteht"
+
+[[emotes]]
+name = "totarsch"
+meaning = "Derber Totalarsch-Insider."
+usage = "bei sehr derbem Chat-Humor"
+
+[[emotes]]
+name = "SoCute"
+meaning = "Sehr suess."
+usage = "bei niedlichen Momenten"
+
+[[emotes]]
+name = "hub"
+meaning = "Buh-/Hub-Quatsch als kurzer alberner Ausruf."
+usage = "bei kleinen absurd-komischen Zwischenrufen"
+
+[[emotes]]
+name = "Floppy"
+meaning = "Floppy/Floppa-artiger lockerer Moment."
+usage = "bei goofy oder laessiger Reaktion"
+
+[[emotes]]
+name = "peepoMayo"
+meaning = "Peepo mit Mayo."
+usage = "bei Mayo- oder Food-Meme"
+
+[[emotes]]
+name = "OlesDailyRageWegenDenBubenInCS"
+meaning = "Wut, Tilt oder genervte Stimmung."
+usage = "bei Rage, Rants oder Frust"
+
+[[emotes]]
+name = "Egium"
+meaning = "Egium-Insider als ruhiger Chat-Ausruf."
+usage = "bei Egium-Name-Momenten oder trockenem Insider-Kontext"
+
+[[emotes]]
+name = "EGIUM"
+meaning = "Egium-Insider als lauter Chat-Ausruf."
+usage = "bei Egium-Name-Momenten oder betontem Insider-Kontext"
+
+[[emotes]]
+name = "NOTSUSSY"
+meaning = "Sus; etwas wirkt verdaechtig."
+usage = "bei verdächtigen, zweideutigen oder Among-Us-artigen Momenten"
+
+[[emotes]]
+name = "ppFoop"
+meaning = "Alberner PP-/Foop-Humor."
+usage = "bei kindischem Quatsch oder Nonsens"
+
+[[emotes]]
+name = "omE"
+meaning = "OmE; kurzer ueberraschter Meme-Ausdruck."
+usage = "bei kleinem Schock"
+
+[[emotes]]
+name = "AlienGathering"
+meaning = "Alien-Versammlung."
+usage = "bei Gruppen- oder Alien-Meme-Kontext"
+
+[[emotes]]
+name = "piwo"
+meaning = "Bier oder Feierabendgetraenk."
+usage = "wenn es um Bier, Feierabend oder Anstossen geht"
+
+[[emotes]]
+name = "devi3"
+meaning = "Getraenk oder Trinkmoment."
+usage = "wenn es um Trinken, Kaffee, Bier oder Hydration geht"
+
+[[emotes]]
+name = "Devi11SekundenNachdemErAusDemAutoSteigtAufSizilien"
+meaning = "Devi-Sizilien-Insider; sofortiger Chaosmoment."
+usage = "wenn Urlaub, Autoausstieg oder schneller Eskalationswitz passt"
+
+[[emotes]]
+name = "Timeout"
+meaning = "Timeout oder kurz rausnehmen."
+usage = "wenn Moderation/Timeout scherzhaft Thema ist"
+
+[[emotes]]
+name = "WennTristenAbsichtlichScheisseInCSGebautHatUndOleGeradeNuklearCrashOutGeht"
+meaning = "Lachen oder Humor-Reaktion."
+usage = "bei lustigen oder absurden Momenten"
+
+[[emotes]]
+name = "darthnotL"
+meaning = "Darth-/Star-Wars-L-Meme."
+usage = "bei Star-Wars- oder Niederlagenmoment"
+
+[[emotes]]
+name = "gorm"
+meaning = "Gorm; lokaler Insider-Name."
+usage = "bei Gorm-Kontext"
+
+[[emotes]]
+name = "piesek"
+meaning = "Hund auf Polnisch."
+usage = "bei Hundemomenten"
+
+[[emotes]]
+name = "happyBUHrday"
+meaning = "Happy Birthday im Buh-Stil."
+usage = "bei Geburtstagen"
+
+[[emotes]]
+name = "PotFriend"
+meaning = "Pot Friend; Topf-/Pflanzenfreund."
+usage = "bei Pflanzen oder freundlichem Objekt-Meme"
+
+[[emotes]]
+name = "MAXWELL"
+meaning = "Katzen-Moment."
+usage = "wenn Katzen, Miauen oder niedliche Cat-Reaktionen passen"
+
+[[emotes]]
+name = "Sainz"
+meaning = "Formel-1-Bezug."
+usage = "wenn Formel 1, Fahrer oder Teams Thema sind"
+
+[[emotes]]
+name = "KKoooona"
+meaning = "KKona-/Amerika- oder Country-Vibe."
+usage = "bei ironischen US-, Country- oder Redneck-Momenten"
+
+[[emotes]]
+name = "MAAAN"
+meaning = "Laengerer Mann/Man-Ausruf."
+usage = "bei Frust oder Erstaunen"
+
+[[emotes]]
+name = "GnoccAir"
+meaning = "Gnocc-Air; lokaler Flug-/Airline-Insider."
+usage = "bei Gnocc oder Flugkontext"
+
+[[emotes]]
+name = "buhssin"
+meaning = "Buh-Insider mit Boss/Vibe."
+usage = "bei lokalem buh-Meme"
+
+[[emotes]]
+name = "GIGATON"
+meaning = "Giga-Ton; massiver Impact."
+usage = "bei sehr grossem Schlag oder Ereignis"
+
+[[emotes]]
+name = "watto"
+meaning = "Watto-/Star-Wars-Meme."
+usage = "bei Star-Wars-Kontext"
+
+[[emotes]]
+name = "CS2"
+meaning = "Gaming oder bestimmtes Spielthema."
+usage = "wenn es direkt um Gaming oder dieses Spiel geht"
+
+[[emotes]]
+name = "IchMussUnbedingtDieSituationÜberwachen."
+meaning = "Muedigkeit oder Ruhebeduerfnis."
+usage = "bei sleepy, spaeter oder erschoepfter Stimmung"
+
+[[emotes]]
+name = "bebop"
+meaning = "Bebop-Charakter/Meme."
+usage = "bei Bebop- oder Deadlock-Kontext"
+
+[[emotes]]
+name = "DEADLOCK"
+meaning = "Gaming oder bestimmtes Spielthema."
+usage = "wenn es direkt um Gaming oder dieses Spiel geht"
+
+[[emotes]]
+name = "bebopstyle"
+meaning = "Bebop-Style."
+usage = "bei Bebop- oder Style-Kontext"
+
+[[emotes]]
+name = "XINEMA"
+meaning = "Cinema mit Xi-/China-Meme."
+usage = "bei dramatischem China- oder Politik-Meme"
+
+[[emotes]]
+name = "OM"
+meaning = "Om; kurze meditative Reaktion."
+usage = "bei ruhiger oder spiritueller Stimmung"
+
+[[emotes]]
+name = "JESUS"
+meaning = "Jesus-/heilige Reaktion."
+usage = "bei ueberraschenden oder heiligen Meme-Momenten"
+
+[[emotes]]
+name = "NOOO"
+meaning = "Nein-Schrei."
+usage = "bei Entsetzen oder Verlust"
+
+[[emotes]]
+name = "nom"
+meaning = "Essen/nommen."
+usage = "bei Snack- oder Essensmomenten"
+
+[[emotes]]
+name = "Smith"
+meaning = "Smith-Name/Charakter-Meme."
+usage = "bei Smith-Kontext"
+
+[[emotes]]
+name = "KOCHEN"
+meaning = "Kochen oder jemand ist am Cooken."
+usage = "wenn jemand eine gute Idee, einen Plan oder echtes Kochen anspricht"
+
+[[emotes]]
+name = "ErmActually"
+meaning = "Big-brain oder nerdige Korrektur."
+usage = "bei schlauen, uebergenauen oder nerdigen Aussagen"
+
+[[emotes]]
+name = "GUBBEL"
+meaning = "Gubbel-Insider."
+usage = "bei lokalem Gubbel-Kontext"
+
+[[emotes]]
+name = "sAAAdge"
+meaning = "Traurigkeit, Enttaeuschung oder Verzweiflung."
+usage = "bei Pech, kleinen Rueckschlaegen oder traurigen Chat-Momenten"
+
+[[emotes]]
+name = "MaggusTime"
+meaning = "Maggus-Zeit."
+usage = "bei Markus-Soeder/Bayern-Kontext"
+
+[[emotes]]
+name = "Magnussy"
+meaning = "Magnus-Insider mit derbem Wortspiel."
+usage = "bei lokalem Magnus-Kontext"
+
+[[emotes]]
+name = "jorkin"
+meaning = "Derber Jorkin-Witz."
+usage = "bei bewusst albernem NSFW-Wortspiel"
+
+[[emotes]]
+name = "Magerquark"
+meaning = "Gym, Kraft oder Bodybuilding."
+usage = "wenn es um Training, Kraft oder Gym-Memes geht"
+
+[[emotes]]
+name = "PauseElefant"
+meaning = "Spannung oder erwartungsvolles Warten."
+usage = "wenn gleich etwas Wichtiges passiert oder ein Ausgang offen ist"
+
+[[emotes]]
+name = "sip"
+meaning = "Getraenk oder Trinkmoment."
+usage = "wenn es um Trinken, Kaffee, Bier oder Hydration geht"
+
+[[emotes]]
+name = "SadKitty"
+meaning = "Traurigkeit, Enttaeuschung oder Verzweiflung."
+usage = "bei Pech, kleinen Rueckschlaegen oder traurigen Chat-Momenten"
+
+[[emotes]]
+name = "Boink"
+meaning = "Boink; kleiner Schlag oder Stups."
+usage = "bei leichtem Hit oder Slapstick"
+
+[[emotes]]
+name = "scheisstag"
+meaning = "Traurigkeit, Enttaeuschung oder Verzweiflung."
+usage = "bei Pech, kleinen Rueckschlaegen oder traurigen Chat-Momenten"
+
+[[emotes]]
+name = "GLOINK"
+meaning = "Gloink; goofy Soundeffekt."
+usage = "bei albernem Impact oder Bewegung"
+
+[[emotes]]
+name = "Zyzzers"
+meaning = "Gym, Kraft oder Bodybuilding."
+usage = "wenn es um Training, Kraft oder Gym-Memes geht"
+
+[[emotes]]
+name = "awakebutatwhatcost"
+meaning = "Erkenntnis; etwas wird unangenehm klar."
+usage = "wenn jemand eine bittere Wahrheit bemerkt oder realisiert"
+
+[[emotes]]
+name = "Elefantastisch"
+meaning = "Elefantastisch; Elefant + fantastisch."
+usage = "bei Elefanten oder guter Laune"
+
+[[emotes]]
+name = "LegExtensions"
+meaning = "Gym, Kraft oder Bodybuilding."
+usage = "wenn es um Training, Kraft oder Gym-Memes geht"
+
+[[emotes]]
+name = "peepoSigh"
+meaning = "Traurigkeit, Enttaeuschung oder Verzweiflung."
+usage = "bei Pech, kleinen Rueckschlaegen oder traurigen Chat-Momenten"
+
+[[emotes]]
+name = "peepoSip"
+meaning = "Getraenk oder Trinkmoment."
+usage = "wenn es um Trinken, Kaffee, Bier oder Hydration geht"
+
+[[emotes]]
+name = "GuidedBirdge"
+meaning = "Vogel-Meme."
+usage = "bei Bird-, Flug- oder Schrei-Momenten"
+
+[[emotes]]
+name = "JOEL"
+meaning = "Joel-Meme."
+usage = "bei Joel-Kontext"
+
+[[emotes]]
+name = "KratosAscent"
+meaning = "Ratten-Meme."
+usage = "bei Rat-, Shake- oder hektischem Meme-Kontext"
+
+[[emotes]]
+name = "pedro"
+meaning = "Musik, Tanz oder Jam."
+usage = "wenn Musik laeuft, etwas groovt oder Party-Stimmung entsteht"
+
+[[emotes]]
+name = "HUH2"
+meaning = "Verwirrung oder Unsicherheit."
+usage = "wenn etwas unklar, seltsam oder schwer einzuordnen ist"
+
+[[emotes]]
+name = "remWave"
+meaning = "Rem winkt."
+usage = "bei Anime-/Rem-Begrüssung"
+
+[[emotes]]
+name = "peepoAachen"
+meaning = "Deutscher Ortsbezug."
+usage = "wenn der konkrete Ort oder die Region Thema ist"
+
+[[emotes]]
+name = "TimeForDeadlock"
+meaning = "Gaming oder bestimmtes Spielthema."
+usage = "wenn es direkt um Gaming oder dieses Spiel geht"
+
+[[emotes]]
+name = "RAGEY"
+meaning = "Wut, Rage oder genervte Stimmung."
+usage = "wenn jemand offensichtlich sauer, getriggert oder am Ranten ist"
+
+[[emotes]]
+name = "factRun"
+meaning = "Fakten rennen los."
+usage = "bei ploetzlich vielen Fakten oder Info-Dump"
+
+[[emotes]]
+name = "Merz"
+meaning = "Friedrich-Merz-/Politik-Meme."
+usage = "bei Merz oder CDU-Kontext"
+
+[[emotes]]
+name = "kokface"
+meaning = "Kok-Face; Channel-Insider."
+usage = "bei lokalem kok-Kontext"
+
+[[emotes]]
+name = "ElNoSabe"
+meaning = "Er weiss es nicht."
+usage = "wenn jemand ahnungslos ist"
+
+[[emotes]]
+name = "yogurt"
+meaning = "Joghurt."
+usage = "bei Essen/Joghurt-Kontext"
+
+[[emotes]]
+name = "MLADY"
+meaning = "M’lady-Meme."
+usage = "bei neckbeard/hoeflichem Meme-Kontext"
+
+[[emotes]]
+name = "Bobbers"
+meaning = "Bobbers; Angeln/Fischen."
+usage = "bei Fishing- oder Bobber-Kontext"
+
+[[emotes]]
+name = "DAYZ"
+meaning = "Gaming oder bestimmtes Spielthema."
+usage = "wenn es direkt um Gaming oder dieses Spiel geht"
+
+[[emotes]]
+name = "OldManYellsAtCloud"
+meaning = "Alter Mann schreit Wolke an."
+usage = "bei boomerigem Meckern"
+
+[[emotes]]
+name = "HUH1"
+meaning = "Verwirrung oder Unsicherheit."
+usage = "wenn etwas unklar, seltsam oder schwer einzuordnen ist"
+
+[[emotes]]
+name = "FLOPPA"
+meaning = "Floppa-Meme."
+usage = "wenn ein Floppa- oder Chad-Floppa-Moment passt"
+
+[[emotes]]
+name = "IDontCareIJustWannaSleep"
+meaning = "Muede, schlaefrig oder Zeit fuers Bett."
+usage = "bei Muedigkeit, spaeter Uhrzeit oder sleepy Stimmung"
+
+[[emotes]]
+name = "Maul"
+meaning = "Maul halten / Mund."
+usage = "bei derber Aufforderung oder Mund-Kontext"
+
+[[emotes]]
+name = "Haram"
+meaning = "Haram; verboten/unrein im Meme-Sinn."
+usage = "bei scherzhaft verbotenem Verhalten"
+
+[[emotes]]
+name = "bup"
+meaning = "Bup; kleiner goofy Ausruf."
+usage = "bei alberner kurzer Reaktion"
+
+[[emotes]]
+name = "PissTime"
+meaning = "Kurze Toilettenpause."
+usage = "wenn jemand kurz aufs Klo muss oder eine Pause macht"
+
+[[emotes]]
+name = "peepoFingerLeave"
+meaning = "Verabschiedung oder Weggehen."
+usage = "wenn jemand geht, offline geht oder gute Nacht sagt"
+
+[[emotes]]
+name = "monkaPTSD"
+meaning = "Nervositaet, Angst oder Alarmstimmung."
+usage = "wenn etwas knapp, riskant oder angespannt ist"
+
+[[emotes]]
+name = "ratdance"
+meaning = "Musik, Tanz oder Jam."
+usage = "wenn Musik laeuft, etwas groovt oder Party-Stimmung entsteht"
+
+[[emotes]]
+name = "ARDA"
+meaning = "Arda-Name/Insider."
+usage = "bei Arda-Kontext"
+
+[[emotes]]
+name = "jabadabadu"
+meaning = "Jabadabadu; freudiger Ausruf."
+usage = "bei alberner Freude"
+
+[[emotes]]
+name = "UM"
+meaning = "Um; Filler/Zoegern."
+usage = "bei unsicherem Ueberlegen"
+
+[[emotes]]
+name = "LIFTOFF"
+meaning = "Hype, Freude oder starke positive Ueberraschung."
+usage = "bei guten News, Plays, Erfolgen oder Vorfreude"
+
+[[emotes]]
+name = "BOOMIES"
+meaning = "Boom/Explosionen."
+usage = "bei lauten Impact- oder Explosionsmomenten"
+
+[[emotes]]
+name = "eepy"
+meaning = "Muede, schlaefrig oder Zeit fuers Bett."
+usage = "bei Muedigkeit, spaeter Uhrzeit oder sleepy Stimmung"
+
+[[emotes]]
+name = "oh"
+meaning = "Traurigkeit, Enttaeuschung oder Verzweiflung."
+usage = "bei Pech, kleinen Rueckschlaegen oder traurigen Chat-Momenten"
+
+[[emotes]]
+name = "RAHHH"
+meaning = "Hype, Freude oder starke positive Ueberraschung."
+usage = "bei guten News, Plays, Erfolgen oder Vorfreude"
+
+[[emotes]]
+name = "cokebert"
+meaning = "Cokebert-Drogenmeme; ueberdrehter Bert-Moment."
+usage = "wenn jemand hektisch, aufgekratzt oder viel zu wach wirkt"
+
+[[emotes]]
+name = "WennTristenInSizilienAnkommt"
+meaning = "Katzen-Meme oder Cat-Reaktion."
+usage = "wenn Katzen oder cat-artige Stimmung passt"
+
+[[emotes]]
+name = "fentbert"
+meaning = "Fentbert-Drogenmeme; benommener Bert-Moment."
+usage = "wenn jemand komplett weggetreten oder kaputt wirkt"
+
+[[emotes]]
+name = "dogkok"
+meaning = "Hund/Doge-Meme."
+usage = "wenn Hund, Doge oder niedlicher Hundemoment passt"
+
+[[emotes]]
+name = "muh"
+meaning = "Katzen-Meme oder Cat-Reaktion."
+usage = "wenn Katzen oder cat-artige Stimmung passt"
+
+[[emotes]]
+name = "auh"
+meaning = "Katzen-Meme oder Cat-Reaktion."
+usage = "wenn Katzen oder cat-artige Stimmung passt"
+
+[[emotes]]
+name = "ratking"
+meaning = "Ratten-Meme."
+usage = "bei rattenbezogenen oder hektischen Meme-Momenten"
