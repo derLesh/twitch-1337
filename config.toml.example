@@ -59,7 +59,6 @@ client_secret = "your_client_secret"
 # instruction_template = "{chat_history}\n{message}" # Use {message} and {chat_history} as placeholders
 # timeout = 30                                        # Optional, AI request timeout in seconds (default: 30)
 # history_length = 10                                # Optional, number of chat messages to keep as context (0 = disabled, max 100)
-# memory_enabled = false                             # Enable persistent AI memory (default: false)
 # max_memories = 50                                  # DEPRECATED: use [ai.memory] max_user instead (kept for back-compat)
 #
 # Optional: Prefill chat history from a log API at startup
@@ -78,7 +77,6 @@ client_secret = "your_client_secret"
 # instruction_template = "{chat_history}\n{message}" # Use {message} and {chat_history} as placeholders
 # timeout = 30                                        # Optional, AI request timeout in seconds (default: 30)
 # history_length = 10                                # Optional, number of chat messages to keep as context (0 = disabled, max 100)
-# memory_enabled = false                             # Enable persistent AI memory (default: false)
 # max_memories = 50                                  # DEPRECATED: use [ai.memory] max_user instead (kept for back-compat)
 #
 # Optional: Prefill chat history from a log API at startup
@@ -106,28 +104,29 @@ client_secret = "your_client_secret"
 # When a scope is full, the lowest-scoring entry (across all users in that
 # scope) is evicted. Score combines confidence × exp-decay × hit-boost.
 # [ai.memory]
-# max_user = 50          # total User-scope entries (all users combined)
+# enabled        = false         # Enable persistent AI memory (default: false)
+# max_user = 50                  # total User-scope entries (all users combined)
 # max_lore = 50
-# max_pref = 50          # total Pref-scope entries (all users combined)
-# half_life_days = 30    # exponential decay; feeds the eviction score
+# max_pref = 50                  # total Pref-scope entries (all users combined)
+# half_life_days = 30            # exponential decay; feeds the eviction score
 
 # Extractor: runs after every !ai turn to propose new memories. Tool-call
 # reliability matters here — a small model that mangles JSON will silently
 # under-perform. Recommend a mid-sized tool-capable model.
 # [ai.extraction]
-# enabled      = true
-# model        = "qwen2.5:14b"   # fallback → [ai].model
-# timeout_secs = 30
-# max_rounds   = 3
+# enabled    = true
+# model      = "qwen2.5:14b"   # fallback → [ai].model
+# timeout    = 30
+# max_rounds = 3
 
 # Consolidator: runs once per day, curates the whole store (merge duplicates,
 # drop contradictions, adjust confidence). Quality matters more than speed,
 # so use the strongest model you can afford here.
 # [ai.consolidation]
-# enabled      = true
-# model        = "gpt-5"         # fallback → [ai.extraction].model → [ai].model
-# run_at       = "04:00"         # HH:MM in Europe/Berlin
-# timeout_secs = 120
+# enabled  = true
+# model    = "gpt-5"           # fallback → [ai.extraction].model → [ai].model
+# run_at   = "04:00"           # HH:MM in Europe/Berlin
+# timeout  = 120
 
 # Optional: Scheduled messages configuration
 # Add [[schedules]] sections to define scheduled messages.

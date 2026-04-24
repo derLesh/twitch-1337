@@ -111,7 +111,7 @@ async fn ai_command_saves_memory_extraction() {
         .with_ai()
         .with_config(|c| {
             if let Some(ai) = c.ai.as_mut() {
-                ai.memory_enabled = true;
+                ai.memory.enabled = true;
             }
         })
         .spawn()

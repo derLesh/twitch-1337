@@ -68,7 +68,6 @@ impl TestBotBuilder {
                 timeout: 30,
                 history_length: 0,
                 history_prefill: None,
-                memory_enabled: false,
                 memory: twitch_1337::config::MemoryConfigSection::default(),
                 extraction: twitch_1337::config::ExtractionConfigSection::default(),
                 consolidation: twitch_1337::config::ConsolidationConfigSection::default(),

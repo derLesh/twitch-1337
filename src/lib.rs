@@ -186,7 +186,7 @@ where
     // model; consolidation falls back to extraction and then to chat.
     let (ai_memory, consolidation_model): (Option<crate::commands::ai::AiMemory>, Option<String>) =
         match (&config.ai, &llm) {
-            (Some(ai), Some(llm_arc)) if ai.memory_enabled => {
+            (Some(ai), Some(llm_arc)) if ai.memory.enabled => {
                 let extraction_model = ai
                     .extraction
                     .model
@@ -237,7 +237,7 @@ where
                                 llm: llm_arc.clone(),
                                 model: extraction_model,
                                 timeout: Duration::from_secs(
-                                    ai.extraction.timeout_secs.unwrap_or(ai.timeout),
+                                    ai.extraction.timeout.unwrap_or(ai.timeout),
                                 ),
                                 max_rounds: ai.extraction.max_rounds,
                             },
@@ -340,7 +340,7 @@ where
             store,
             path,
             run_at,
-            Duration::from_secs(ai.timeout_secs),
+            Duration::from_secs(ai.timeout),
             shutdown_notify.clone(),
         );
         info!(

@@ -23,7 +23,7 @@ async fn adversarial_third_party_save_rejected() {
         .with_ai()
         .with_config(|c| {
             if let Some(ai) = c.ai.as_mut() {
-                ai.memory_enabled = true;
+                ai.memory.enabled = true;
             }
         })
         .spawn()
@@ -110,7 +110,7 @@ async fn prompt_injection_does_not_poison_memory() {
         .with_ai()
         .with_config(|c| {
             if let Some(ai) = c.ai.as_mut() {
-                ai.memory_enabled = true;
+                ai.memory.enabled = true;
             }
         })
         .spawn()
