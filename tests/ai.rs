@@ -122,8 +122,8 @@ async fn ai_command_saves_memory_extraction() {
     // Extraction round 1: one self-scoped save_memory call. user-id 67890 is
     // the default injected by `irc_line::privmsg`, so subject_id must match
     // to pass the self-claim permission check.
-    bot.llm
-        .push_tool(ToolChatCompletionResponse::ToolCalls(vec![ToolCall {
+    bot.llm.push_tool(ToolChatCompletionResponse::ToolCalls {
+        calls: vec![ToolCall {
             id: "call_1".into(),
             name: "save_memory".into(),
             arguments: serde_json::json!({
@@ -133,7 +133,9 @@ async fn ai_command_saves_memory_extraction() {
                 "fact": "alice likes coffee",
             }),
             arguments_parse_error: None,
-        }]));
+        }],
+        reasoning_content: None,
+    });
     // Extraction round 2: plain-text response terminates the loop.
     bot.llm
         .push_tool(ToolChatCompletionResponse::Message(String::new()));

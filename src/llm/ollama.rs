@@ -274,7 +274,10 @@ impl LlmClient for OllamaClient {
                     arguments_parse_error: None,
                 })
                 .collect();
-            return Ok(ToolChatCompletionResponse::ToolCalls(calls));
+            return Ok(ToolChatCompletionResponse::ToolCalls {
+                calls,
+                reasoning_content: None,
+            });
         }
 
         let content = api_response.message.content.unwrap_or_default();
@@ -317,6 +320,7 @@ mod tests {
                         tool_name: "save_memory".to_string(),
                         content: "Saved memory 'k1'".to_string(),
                     }],
+                    reasoning_content: None,
                 },
                 ToolCallRound {
                     calls: vec![ToolCall {
@@ -330,6 +334,7 @@ mod tests {
                         tool_name: "delete_memory".to_string(),
                         content: "Deleted memory 'k2'".to_string(),
                     }],
+                    reasoning_content: None,
                 },
             ],
         };

@@ -166,7 +166,10 @@ pub async fn run_consolidation(
                 .wrap_err("consolidation LLM call failed")?;
             match resp {
                 ToolChatCompletionResponse::Message(_) => break,
-                ToolChatCompletionResponse::ToolCalls(calls) => {
+                ToolChatCompletionResponse::ToolCalls {
+                    calls,
+                    reasoning_content,
+                } => {
                     let mut results = Vec::with_capacity(calls.len());
                     let mut w = store.write().await;
                     // Apply ops in order: drop → merge → edit (sort once).
@@ -193,7 +196,11 @@ pub async fn run_consolidation(
                         });
                     }
                     w.save(&store_path)?;
-                    prior.push(ToolCallRound { calls, results });
+                    prior.push(ToolCallRound {
+                        calls,
+                        results,
+                        reasoning_content,
+                    });
                     if prior.len() > 5 {
                         warn!("consolidation exceeded 5 rounds; breaking");
                         break;
@@ -421,16 +428,19 @@ mod tests {
         fake.next
             .lock()
             .unwrap()
-            .push(ToolChatCompletionResponse::ToolCalls(vec![ToolCall {
-                id: "c".into(),
-                name: "merge_memories".into(),
-                arguments: serde_json::json!({
-                    "keys": ["user:1:a", "user:1:b"],
-                    "new_slug": "tarkov",
-                    "new_fact": "plays Tarkov",
-                }),
-                arguments_parse_error: None,
-            }]));
+            .push(ToolChatCompletionResponse::ToolCalls {
+                calls: vec![ToolCall {
+                    id: "c".into(),
+                    name: "merge_memories".into(),
+                    arguments: serde_json::json!({
+                        "keys": ["user:1:a", "user:1:b"],
+                        "new_slug": "tarkov",
+                        "new_fact": "plays Tarkov",
+                    }),
+                    arguments_parse_error: None,
+                }],
+                reasoning_content: None,
+            });
 
         run_consolidation(
             fake,

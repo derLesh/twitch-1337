@@ -82,6 +82,8 @@ struct ApiToolChoice {
 struct ApiToolResponseMessage {
     content: Option<String>,
     tool_calls: Option<Vec<ApiToolCall>>,
+    #[serde(default)]
+    reasoning_content: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -124,11 +126,15 @@ fn build_openai_messages(request: &ToolChatCompletionRequest) -> Vec<serde_json:
             })
             .collect();
 
-        messages.push(serde_json::json!({
+        let mut assistant_msg = serde_json::json!({
             "role": "assistant",
             "content": null,
             "tool_calls": tool_calls,
-        }));
+        });
+        if let Some(rc) = &round.reasoning_content {
+            assistant_msg["reasoning_content"] = serde_json::Value::String(rc.clone());
+        }
+        messages.push(assistant_msg);
 
         for tr in &round.results {
             messages.push(serde_json::json!({
@@ -348,7 +354,10 @@ impl LlmClient for OpenAiClient {
                     }
                 })
                 .collect();
-            return Ok(ToolChatCompletionResponse::ToolCalls(calls));
+            return Ok(ToolChatCompletionResponse::ToolCalls {
+                calls,
+                reasoning_content: choice.message.reasoning_content,
+            });
         }
 
         let content = choice.message.content.unwrap_or_default();
@@ -403,6 +412,7 @@ mod tests {
                 tool_name: "save_memory".to_string(),
                 content: "Saved memory 'k1'".to_string(),
             }],
+            reasoning_content: None,
         };
         let round2 = ToolCallRound {
             calls: vec![ToolCall {
@@ -416,6 +426,7 @@ mod tests {
                 tool_name: "delete_memory".to_string(),
                 content: "Deleted memory 'k2'".to_string(),
             }],
+            reasoning_content: None,
         };
 
         let msgs = build_openai_messages(&req_with_rounds(vec![round1, round2]));
@@ -453,6 +464,58 @@ mod tests {
         assert_eq!(msgs[5]["role"], "tool");
         assert_eq!(msgs[5]["tool_call_id"], "Y");
         assert_eq!(msgs[5]["content"], "Deleted memory 'k2'");
+    }
+
+    #[test]
+    fn build_messages_reasoning_content_included_in_assistant_turn() {
+        let round = ToolCallRound {
+            calls: vec![ToolCall {
+                id: "Z".to_string(),
+                name: "save_memory".to_string(),
+                arguments: serde_json::json!({"key": "k"}),
+                arguments_parse_error: None,
+            }],
+            results: vec![ToolResultMessage {
+                tool_call_id: "Z".to_string(),
+                tool_name: "save_memory".to_string(),
+                content: "ok".to_string(),
+            }],
+            reasoning_content: Some("I should save this fact.".to_string()),
+        };
+
+        let msgs = build_openai_messages(&req_with_rounds(vec![round]));
+
+        // [0] system, [1] user, [2] assistant, [3] tool
+        assert_eq!(msgs[2]["role"], "assistant");
+        assert_eq!(
+            msgs[2]["reasoning_content"], "I should save this fact.",
+            "reasoning_content must be echoed back in the assistant turn"
+        );
+    }
+
+    #[test]
+    fn build_messages_no_reasoning_content_omits_field() {
+        let round = ToolCallRound {
+            calls: vec![ToolCall {
+                id: "Z".to_string(),
+                name: "save_memory".to_string(),
+                arguments: serde_json::json!({"key": "k"}),
+                arguments_parse_error: None,
+            }],
+            results: vec![ToolResultMessage {
+                tool_call_id: "Z".to_string(),
+                tool_name: "save_memory".to_string(),
+                content: "ok".to_string(),
+            }],
+            reasoning_content: None,
+        };
+
+        let msgs = build_openai_messages(&req_with_rounds(vec![round]));
+
+        assert!(
+            msgs[2].get("reasoning_content").is_none(),
+            "reasoning_content must not be present when None"
+        );
     }
 
     #[test]
