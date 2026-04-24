@@ -2,6 +2,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
+use chrono::Utc;
 use eyre::Result;
 use tracing::{debug, error, instrument};
 use twitch_irc::{login::LoginCredentials, transport::Transport};
@@ -51,7 +52,7 @@ impl NewsCommand {
             buf.iter().cloned().collect::<Vec<_>>()
         };
 
-        if snapshot.last().is_some_and(|(sender, msg)| {
+        if snapshot.last().is_some_and(|(sender, msg, _)| {
             sender.eq_ignore_ascii_case(user) && msg == current_message
         }) {
             snapshot.pop();
@@ -63,12 +64,12 @@ impl NewsCommand {
 
         let start = snapshot
             .iter()
-            .rposition(|(sender, _)| sender.eq_ignore_ascii_case(user))
+            .rposition(|(sender, _, _)| sender.eq_ignore_ascii_case(user))
             .map_or(0, |idx| idx + 1);
 
         let messages = snapshot[start..]
             .iter()
-            .map(|(sender, msg)| format!("{sender}: {msg}"))
+            .map(|(sender, msg, _)| format!("{sender}: {msg}"))
             .collect::<Vec<_>>();
 
         Some(messages)
@@ -171,7 +172,7 @@ where
             if buf.len() >= chat.history_length {
                 buf.pop_front();
             }
-            buf.push_back((chat.bot_username.clone(), response.clone()));
+            buf.push_back((chat.bot_username.clone(), response.clone(), Utc::now()));
         }
 
         if let Err(e) = ctx.client.say_in_reply_to(ctx.privmsg, response).await {
