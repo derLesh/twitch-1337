@@ -208,6 +208,10 @@ fn default_ai_cooldown() -> u64 {
     30
 }
 
+fn default_news_cooldown() -> u64 {
+    60
+}
+
 fn default_up_cooldown() -> u64 {
     30
 }
@@ -220,6 +224,8 @@ fn default_feedback_cooldown() -> u64 {
 pub struct CooldownsConfig {
     #[serde(default = "default_ai_cooldown")]
     pub ai: u64,
+    #[serde(default = "default_news_cooldown")]
+    pub news: u64,
     #[serde(default = "default_up_cooldown")]
     pub up: u64,
     #[serde(default = "default_feedback_cooldown")]
@@ -230,6 +236,7 @@ impl Default for CooldownsConfig {
     fn default() -> Self {
         Self {
             ai: default_ai_cooldown(),
+            news: default_news_cooldown(),
             up: default_up_cooldown(),
             feedback: default_feedback_cooldown(),
         }
