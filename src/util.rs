@@ -9,8 +9,9 @@ pub static APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CAR
 /// Maximum response length for Twitch chat (to stay within limits).
 pub const MAX_RESPONSE_LENGTH: usize = 500;
 
-/// Type alias for the shared chat history buffer (username, message text).
-pub type ChatHistory = Arc<tokio::sync::Mutex<VecDeque<(String, String)>>>;
+/// Type alias for the shared chat history buffer (username, message text, timestamp).
+pub type ChatHistory =
+    Arc<tokio::sync::Mutex<VecDeque<(String, String, chrono::DateTime<chrono::Utc>)>>>;
 
 /// Returns the data directory path, resolved from `$DATA_DIR` env var.
 ///

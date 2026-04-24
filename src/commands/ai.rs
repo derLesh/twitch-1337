@@ -2,6 +2,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
+use chrono::Utc;
 use eyre::Result;
 use tracing::{debug, error, instrument};
 use twitch_irc::{login::LoginCredentials, transport::Transport};
@@ -130,29 +131,36 @@ where
 
         self.cooldown.record(user).await;
 
-        let system_prompt = if let Some(ref mem) = self.memory {
+        let now = Utc::now();
+        let facts = if let Some(ref mem) = self.memory {
             let mut store_guard = mem.config.store.write().await;
-            match store_guard.format_for_prompt(chrono::Utc::now()) {
-                Some(facts) => format!("{}{}", self.prompts.system, facts),
-                None => self.prompts.system.clone(),
-            }
+            store_guard.format_for_prompt(now).unwrap_or_default()
         } else {
-            self.prompts.system.clone()
+            String::new()
         };
+        let system_prompt = format!(
+            "{}{}\n\nCurrent time: {}",
+            self.prompts.system,
+            facts,
+            now.with_timezone(&chrono_tz::Europe::Berlin)
+                .format("%Y-%m-%d %H:%M %Z")
+        );
 
         let user_message = self
             .prompts
             .instruction_template
             .replace("{message}", &instruction);
 
-        // Build chat history string
         let chat_history_text = if let Some(ref chat) = self.chat_ctx {
             let buf = chat.history.lock().await;
             if buf.is_empty() {
                 String::new()
             } else {
                 buf.iter()
-                    .map(|(user, msg)| format!("{user}: {msg}"))
+                    .map(|(user, msg, ts)| {
+                        let ts_berlin = ts.with_timezone(&chrono_tz::Europe::Berlin);
+                        format!("[{}] {user}: {msg}", ts_berlin.format("%H:%M"))
+                    })
                     .collect::<Vec<_>>()
                     .join("\n")
             }
@@ -189,7 +197,7 @@ where
                     if buf.len() >= chat.history_length {
                         buf.pop_front();
                     }
-                    buf.push_back((chat.bot_username.clone(), truncated.clone()));
+                    buf.push_back((chat.bot_username.clone(), truncated.clone(), Utc::now()));
                 }
                 (truncated, true)
             }

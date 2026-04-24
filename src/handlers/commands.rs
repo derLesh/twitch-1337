@@ -7,6 +7,7 @@ use std::{
     sync::Arc,
 };
 
+use chrono::Utc;
 use tokio::{sync::broadcast, time::Duration};
 use tracing::{debug, error, info, instrument};
 use twitch_irc::{
@@ -226,7 +227,11 @@ pub(crate) async fn run_command_dispatcher<T, L>(
                         if buf.len() >= history_length {
                             buf.pop_front();
                         }
-                        buf.push_back((privmsg.sender.login.clone(), privmsg.message_text.clone()));
+                        buf.push_back((
+                            privmsg.sender.login.clone(),
+                            privmsg.message_text.clone(),
+                            Utc::now(),
+                        ));
                     }
                 }
 
