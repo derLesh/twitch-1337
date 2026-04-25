@@ -30,6 +30,8 @@ use crate::{clock::Clock, resolve_berlin_time};
 pub const TARGET_HOUR: u32 = 13;
 pub const TARGET_MINUTE: u32 = 37;
 
+const SLOWEST_CHATTER_MIN_MS: u64 = 50_000;
+
 /// Maximum number of unique users to track (prevents unbounded memory growth)
 pub(crate) const MAX_USERS: usize = 10_000;
 
@@ -452,7 +454,9 @@ pub async fn run_1337_handler<T, L>(
                 .clone()
                 .filter(|(_, ms)| *ms < 1000)
                 .min_by_key(|(_, ms)| *ms);
-            let slowest: Option<(String, u64)> = timed_users.max_by_key(|(_, ms)| *ms);
+            let slowest: Option<(String, u64)> = timed_users
+                .filter(|(_, ms)| *ms >= SLOWEST_CHATTER_MIN_MS)
+                .max_by_key(|(_, ms)| *ms);
 
             (count, user_vec, fastest, slowest)
         };
@@ -481,8 +485,9 @@ pub async fn run_1337_handler<T, L>(
                 slowest_user != *fastest_user || slowest_ms != *fastest_ms
             })
         {
+            let slowest_seconds = slowest_ms / 1000;
             message.push_str(&format!(
-                " | Am langsamsten war {slowest_user} mit {slowest_ms}ms"
+                " | Am langsamsten war {slowest_user} mit {slowest_seconds}s"
             ));
         }
 
