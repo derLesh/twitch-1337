@@ -5,6 +5,10 @@ use std::time::Duration;
 use common::TestBotBuilder;
 use serial_test::serial;
 use twitch_1337::llm::{ToolCall, ToolChatCompletionResponse};
+use wiremock::{
+    Mock, ResponseTemplate,
+    matchers::{method, path},
+};
 
 #[tokio::test]
 #[serial]
@@ -94,6 +98,144 @@ async fn ai_command_injects_chat_history() {
         "history missing user3 line: {}",
         user_msg.content
     );
+
+    bot.shutdown().await;
+}
+
+#[tokio::test]
+#[serial]
+async fn ai_command_injects_7tv_emote_glossary() {
+    let mut bot = TestBotBuilder::new()
+        .with_ai()
+        .with_config(|c| {
+            if let Some(ai) = c.ai.as_mut() {
+                ai.emotes.enabled = true;
+                ai.emotes.include_global = true;
+            }
+        })
+        .spawn()
+        .await;
+
+    tokio::fs::write(
+        bot.data_dir.path().join("7tv_emotes.toml"),
+        r#"
+[[emotes]]
+name = "KEKW"
+meaning = "lachen, etwas ist lustig"
+usage = "bei Witzen oder Fail-Momenten"
+avoid = "bei ernsten Themen"
+
+[[emotes]]
+name = "LocalEmote"
+meaning = "lokaler Channel-Insider"
+usage = "wenn der Chat den Insider anspricht"
+
+[[emotes]]
+name = "MissingEmote"
+meaning = "steht nicht im aktuellen 7TV-Katalog"
+"#,
+    )
+    .await
+    .unwrap();
+
+    Mock::given(method("GET"))
+        .and(path("/emote-sets/global"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "id": "global",
+            "emotes": [
+                {"id": "global-kekw", "name": "KEKW"},
+                {"id": "global-peepo", "name": "peepoHappy"}
+            ]
+        })))
+        .mount(&bot.seventv_mock)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/users/twitch/12345"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "id": "user",
+            "emote_set": {
+                "id": "channel-set",
+                "emotes": [
+                    {"id": "channel-local", "name": "LocalEmote"},
+                    {"id": "channel-kekw", "name": "KEKW"}
+                ]
+            }
+        })))
+        .mount(&bot.seventv_mock)
+        .await;
+
+    bot.llm.push_chat("passt KEKW");
+    bot.send("alice", "!ai sag etwas lustiges").await;
+    let out = bot.expect_say(Duration::from_secs(2)).await;
+    let body = out.strip_prefix(". ").unwrap_or(&out);
+    assert_eq!(body, "passt KEKW");
+
+    let calls = bot.llm.chat_calls();
+    assert_eq!(calls.len(), 1, "expected exactly one chat completion call");
+    let system_msg = calls[0]
+        .messages
+        .iter()
+        .find(|m| m.role == "system")
+        .expect("request has a system message");
+    assert!(system_msg.content.contains("7TV emotes available"));
+    assert!(system_msg.content.contains("KEKW"));
+    assert!(system_msg.content.contains("meaning=lachen"));
+    assert!(system_msg.content.contains("LocalEmote"));
+    assert!(!system_msg.content.contains("MissingEmote"));
+
+    bot.shutdown().await;
+}
+
+#[tokio::test]
+#[serial]
+async fn ai_command_continues_when_7tv_unavailable() {
+    let mut bot = TestBotBuilder::new()
+        .with_ai()
+        .with_config(|c| {
+            if let Some(ai) = c.ai.as_mut() {
+                ai.emotes.enabled = true;
+            }
+        })
+        .spawn()
+        .await;
+
+    tokio::fs::write(
+        bot.data_dir.path().join("7tv_emotes.toml"),
+        r#"
+[[emotes]]
+name = "KEKW"
+meaning = "lachen"
+"#,
+    )
+    .await
+    .unwrap();
+
+    Mock::given(method("GET"))
+        .and(path("/emote-sets/global"))
+        .respond_with(ResponseTemplate::new(500))
+        .mount(&bot.seventv_mock)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/users/twitch/12345"))
+        .respond_with(ResponseTemplate::new(500))
+        .mount(&bot.seventv_mock)
+        .await;
+
+    bot.llm.push_chat("weiter ohne emote");
+    bot.send("alice", "!ai ping").await;
+    let out = bot.expect_say(Duration::from_secs(2)).await;
+    let body = out.strip_prefix(". ").unwrap_or(&out);
+    assert_eq!(body, "weiter ohne emote");
+
+    let calls = bot.llm.chat_calls();
+    assert_eq!(calls.len(), 1, "expected exactly one chat completion call");
+    let system_msg = calls[0]
+        .messages
+        .iter()
+        .find(|m| m.role == "system")
+        .expect("request has a system message");
+    assert!(!system_msg.content.contains("7TV emotes available"));
 
     bot.shutdown().await;
 }

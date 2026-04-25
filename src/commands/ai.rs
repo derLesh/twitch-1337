@@ -10,6 +10,7 @@ use twitch_irc::{login::LoginCredentials, transport::Transport};
 use crate::cooldown::{PerUserCooldown, format_cooldown_remaining};
 use crate::llm::{ChatCompletionRequest, LlmClient, Message};
 use crate::memory;
+use crate::seventv::SevenTvEmoteProvider;
 use crate::util::{ChatHistory, MAX_RESPONSE_LENGTH, truncate_response};
 
 use super::{Command, CommandContext};
@@ -56,26 +57,31 @@ pub struct AiCommand {
     timeout: Duration,
     chat_ctx: Option<ChatContext>,
     memory: Option<AiMemory>,
+    emotes: Option<Arc<SevenTvEmoteProvider>>,
+}
+
+pub struct AiCommandDeps {
+    pub llm_client: Arc<dyn LlmClient>,
+    pub model: String,
+    pub prompts: AiPrompts,
+    pub timeout: Duration,
+    pub cooldown: Duration,
+    pub chat_ctx: Option<ChatContext>,
+    pub memory: Option<AiMemory>,
+    pub emotes: Option<Arc<SevenTvEmoteProvider>>,
 }
 
 impl AiCommand {
-    pub fn new(
-        llm_client: Arc<dyn LlmClient>,
-        model: String,
-        prompts: AiPrompts,
-        timeout: Duration,
-        cooldown: Duration,
-        chat_ctx: Option<ChatContext>,
-        memory: Option<AiMemory>,
-    ) -> Self {
+    pub fn new(deps: AiCommandDeps) -> Self {
         Self {
-            llm_client,
-            model,
-            cooldown: PerUserCooldown::new(cooldown),
-            prompts,
-            timeout,
-            chat_ctx,
-            memory,
+            llm_client: deps.llm_client,
+            model: deps.model,
+            cooldown: PerUserCooldown::new(deps.cooldown),
+            prompts: deps.prompts,
+            timeout: deps.timeout,
+            chat_ctx: deps.chat_ctx,
+            memory: deps.memory,
+            emotes: deps.emotes,
         }
     }
 }
@@ -138,13 +144,19 @@ where
         } else {
             String::new()
         };
-        let system_prompt = format!(
+        let mut system_prompt = format!(
             "{}{}\n\nCurrent time: {}",
             self.prompts.system,
             facts,
             now.with_timezone(&chrono_tz::Europe::Berlin)
                 .format("%Y-%m-%d %H:%M %Z")
         );
+
+        if let Some(ref emotes) = self.emotes
+            && let Some(block) = emotes.prompt_block(&ctx.privmsg.channel_id).await
+        {
+            system_prompt.push_str(&block);
+        }
 
         let user_message = self
             .prompts
