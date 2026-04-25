@@ -112,9 +112,12 @@ client_secret = "your_client_secret"
 #   - AI personality lives in [ai].system_prompt — never written by the store.
 # ────────────────────────────────────────────────────────────────────────────
 
-# Caps are channel-wide totals per scope, NOT per individual user.
-# When a scope is full, the lowest-scoring entry (across all users in that
-# scope) is evicted. Score combines confidence × exp-decay × hit-boost.
+# Caps serve two purposes:
+#   1. Eviction ceiling — when a scope is full, the lowest-scoring entry
+#      (confidence × exp-decay × hit-boost) is evicted to make room.
+#   2. Render breadth — format_for_prompt shows at most cap entries per scope
+#      per turn, sorted by descending confidence, so the system prompt stays
+#      cache-stable across turns (no timestamps or access counters in output).
 # [ai.memory]
 # enabled        = false         # Enable persistent AI memory (default: false)
 # max_user = 50                  # total User-scope entries (all users combined)
