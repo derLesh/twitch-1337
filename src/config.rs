@@ -126,8 +126,9 @@ impl Default for MemoryConfigSection {
     }
 }
 
-/// Knobs for the per-turn memory extractor. `model` / `timeout` fall back
-/// to the main `[ai]` values when omitted. See `[ai.extraction]`.
+/// Knobs for the per-turn memory extractor. `model` / `timeout` /
+/// `reasoning_effort` fall back to the main `[ai]` values when omitted.
+/// See `[ai.extraction]`.
 #[derive(Debug, Clone, Deserialize)]
 pub struct ExtractionConfigSection {
     #[serde(default = "default_true")]
@@ -136,6 +137,8 @@ pub struct ExtractionConfigSection {
     pub model: Option<String>,
     #[serde(default)]
     pub timeout: Option<u64>,
+    #[serde(default)]
+    pub reasoning_effort: Option<String>,
     #[serde(default = "default_max_rounds")]
     pub max_rounds: usize,
 }
@@ -146,18 +149,23 @@ impl Default for ExtractionConfigSection {
             enabled: true,
             model: None,
             timeout: None,
+            reasoning_effort: None,
             max_rounds: default_max_rounds(),
         }
     }
 }
 
-/// Knobs for the daily memory-consolidation pass. See `[ai.consolidation]`.
+/// Knobs for the daily memory-consolidation pass.
+/// `reasoning_effort` falls back to `[ai.extraction]` then `[ai]`.
+/// See `[ai.consolidation]`.
 #[derive(Debug, Clone, Deserialize)]
 pub struct ConsolidationConfigSection {
     #[serde(default = "default_true")]
     pub enabled: bool,
     #[serde(default)]
     pub model: Option<String>,
+    #[serde(default)]
+    pub reasoning_effort: Option<String>,
     #[serde(default = "default_run_at")]
     pub run_at: String,
     #[serde(default = "default_consolidation_timeout")]
@@ -169,6 +177,7 @@ impl Default for ConsolidationConfigSection {
         Self {
             enabled: true,
             model: None,
+            reasoning_effort: None,
             run_at: default_run_at(),
             timeout: default_consolidation_timeout(),
         }
@@ -232,6 +241,9 @@ pub struct AiConfig {
     /// Timeout for AI requests in seconds (default: 30)
     #[serde(default = "default_ai_timeout")]
     pub timeout: u64,
+    /// Optional reasoning effort hint. Values are provider/model-specific.
+    #[serde(default)]
+    pub reasoning_effort: Option<String>,
     /// Number of recent chat messages to keep in the local tool-readable buffer.
     #[serde(default = "default_history_length")]
     pub history_length: u64,
@@ -253,6 +265,15 @@ pub struct AiConfig {
     /// Deprecated: replaced by `memory.max_user`. Logged as a warning if set.
     #[serde(default)]
     pub max_memories: Option<usize>,
+}
+
+fn validate_reasoning_effort(path: &str, value: Option<&str>) -> Result<()> {
+    if let Some(v) = value
+        && v.trim().is_empty()
+    {
+        bail!("{path} cannot be empty when specified");
+    }
+    Ok(())
 }
 
 fn default_cooldown() -> u64 {
@@ -509,6 +530,18 @@ pub fn validate_config(config: &Configuration) -> Result<()> {
         bail!("ai.max_memories must be between 1 and 200 (got {n})");
     }
 
+    if let Some(ref ai) = config.ai {
+        validate_reasoning_effort("ai.reasoning_effort", ai.reasoning_effort.as_deref())?;
+        validate_reasoning_effort(
+            "ai.extraction.reasoning_effort",
+            ai.extraction.reasoning_effort.as_deref(),
+        )?;
+        validate_reasoning_effort(
+            "ai.consolidation.reasoning_effort",
+            ai.consolidation.reasoning_effort.as_deref(),
+        )?;
+    }
+
     // Parsed again at scheduler spawn; bail here so a typo doesn't take the
     // bot down after startup.
     if let Some(ref ai) = config.ai {
@@ -582,6 +615,7 @@ mod tests {
             system_prompt: default_system_prompt(),
             instruction_template: default_instruction_template(),
             timeout: default_ai_timeout(),
+            reasoning_effort: None,
             history_length: default_history_length(),
             history_prefill: None,
             memory: MemoryConfigSection::default(),
@@ -687,6 +721,32 @@ mod tests {
         ai.emotes.glossary_path = "7tv_emotes.toml".into();
         ai.emotes.refresh_interval_secs = 60;
         ai.emotes.max_prompt_emotes = 40;
+        c.ai = Some(ai);
+
+        validate_config(&c).unwrap();
+    }
+
+    #[test]
+    fn validate_rejects_empty_reasoning_effort() {
+        let mut c = Configuration::test_default();
+        let mut ai = ai_with_run_at("04:00");
+        ai.reasoning_effort = Some("   ".into());
+        c.ai = Some(ai);
+
+        let err = validate_config(&c).unwrap_err();
+        assert!(
+            format!("{err:#}").contains("ai.reasoning_effort"),
+            "got: {err:#}"
+        );
+    }
+
+    #[test]
+    fn validate_accepts_non_empty_workflow_reasoning_effort() {
+        let mut c = Configuration::test_default();
+        let mut ai = ai_with_run_at("04:00");
+        ai.reasoning_effort = Some("medium".into());
+        ai.extraction.reasoning_effort = Some("low".into());
+        ai.consolidation.reasoning_effort = Some("high".into());
         c.ai = Some(ai);
 
         validate_config(&c).unwrap();

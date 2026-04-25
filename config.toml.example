@@ -59,6 +59,7 @@ client_secret = "your_client_secret"
 # system_prompt = "You are a helpful Twitch chat bot assistant. Keep responses brief (2-3 sentences max) since they'll appear in chat. Be friendly and casual. Respond in the same language the user writes in (German or English)."
 # instruction_template = "{message}"                  # Use {message} as the instruction placeholder
 # timeout = 30                                        # Optional, AI request timeout in seconds (default: 30)
+# reasoning_effort = "medium"                         # Optional reasoning hint for !ai. Keep provider/model-specific values as-is.
 # history_length = 200                               # Optional, local chat messages available via get_recent_chat (0 = disabled, max 5000)
 # memory_enabled = false                             # Enable persistent AI memory (default: false)
 # history_length = 10                                # Optional, number of chat messages to keep as context (0 = disabled, max 100)
@@ -95,6 +96,7 @@ client_secret = "your_client_secret"
 # system_prompt = "You are a helpful Twitch chat bot assistant. Keep responses brief (2-3 sentences max) since they'll appear in chat. Be friendly and casual. Respond in the same language the user writes in (German or English)."
 # instruction_template = "{message}"                  # Use {message} as the instruction placeholder
 # timeout = 30                                        # Optional, AI request timeout in seconds (default: 30)
+# reasoning_effort = "medium"                         # Optional reasoning hint for !ai. Keep provider/model-specific values as-is.
 # history_length = 200                               # Optional, local chat messages available via get_recent_chat (0 = disabled, max 5000)
 # memory_enabled = false                             # Enable persistent AI memory (default: false)
 # history_length = 10                                # Optional, number of chat messages to keep as context (0 = disabled, max 100)
@@ -136,6 +138,7 @@ client_secret = "your_client_secret"
 # [ai.extraction]
 # enabled    = true
 # model      = "qwen2.5:14b"   # fallback → [ai].model
+# reasoning_effort = "low"     # fallback → [ai].reasoning_effort
 # timeout    = 30
 # max_rounds = 3
 
@@ -145,6 +148,7 @@ client_secret = "your_client_secret"
 # [ai.consolidation]
 # enabled  = true
 # model    = "gpt-5"           # fallback → [ai.extraction].model → [ai].model
+# reasoning_effort = "high"    # fallback → [ai.extraction].reasoning_effort → [ai].reasoning_effort
 # run_at   = "04:00"           # HH:MM in Europe/Berlin
 # timeout  = 120
 

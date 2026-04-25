@@ -22,6 +22,15 @@ struct ApiMessage {
 struct ApiRequest {
     model: String,
     messages: Vec<ApiMessage>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reasoning_effort: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reasoning: Option<ApiReasoning>,
+}
+
+#[derive(Debug, Serialize)]
+struct ApiReasoning {
+    effort: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -59,6 +68,10 @@ struct ApiToolRequest {
     model: String,
     messages: Vec<serde_json::Value>,
     tools: Vec<ApiTool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reasoning_effort: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reasoning: Option<ApiReasoning>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -188,15 +201,25 @@ pub struct OpenAiClient {
     http: reqwest::Client,
     base_url: String,
     model: String,
+    is_openrouter: bool,
 }
 
 const DEFAULT_BASE_URL: &str = "https://openrouter.ai/api/v1";
 
 impl OpenAiClient {
+    fn map_reasoning(&self, effort: Option<String>) -> (Option<String>, Option<ApiReasoning>) {
+        if self.is_openrouter {
+            (None, effort.map(|effort| ApiReasoning { effort }))
+        } else {
+            (effort, None)
+        }
+    }
+
     /// Creates a new OpenAI-compatible API client.
     #[instrument(skip(api_key))]
     pub fn new(api_key: &str, model: &str, base_url: Option<&str>) -> Result<Self> {
         let base_url = base_url.unwrap_or(DEFAULT_BASE_URL).trim_end_matches('/');
+        let is_openrouter = base_url.contains("openrouter.ai");
 
         let mut headers = header::HeaderMap::new();
         headers.insert(
@@ -226,6 +249,7 @@ impl OpenAiClient {
             http,
             base_url: base_url.to_string(),
             model: model.to_string(),
+            is_openrouter,
         })
     }
 }
@@ -236,16 +260,24 @@ impl LlmClient for OpenAiClient {
     async fn chat_completion(&self, request: ChatCompletionRequest) -> Result<String> {
         let url = format!("{}/chat/completions", self.base_url);
 
+        let ChatCompletionRequest {
+            model,
+            messages,
+            reasoning_effort,
+        } = request;
+        let (reasoning_effort, reasoning) = self.map_reasoning(reasoning_effort);
+
         let api_request = ApiRequest {
-            model: request.model,
-            messages: request
-                .messages
+            model,
+            messages: messages
                 .into_iter()
                 .map(|m| ApiMessage {
                     role: m.role,
                     content: m.content,
                 })
                 .collect(),
+            reasoning_effort,
+            reasoning,
         };
 
         debug!(model = %self.model, "Sending request to OpenAI-compatible API");
@@ -297,6 +329,23 @@ impl LlmClient for OpenAiClient {
     ) -> Result<ToolChatCompletionResponse> {
         let url = format!("{}/chat/completions", self.base_url);
 
+        let ToolChatCompletionRequest {
+            model,
+            messages,
+            tools,
+            reasoning_effort,
+            prior_rounds,
+        } = request;
+        let (reasoning_effort, reasoning) = self.map_reasoning(reasoning_effort);
+
+        let request = ToolChatCompletionRequest {
+            model,
+            messages,
+            tools,
+            reasoning_effort: None,
+            prior_rounds,
+        };
+
         let messages = build_openai_messages(&request);
 
         let tools: Vec<ApiTool> = request
@@ -316,6 +365,8 @@ impl LlmClient for OpenAiClient {
             model: request.model,
             messages,
             tools,
+            reasoning_effort,
+            reasoning,
         };
 
         debug!(model = %self.model, "Sending tool request to OpenAI-compatible API");
@@ -391,6 +442,15 @@ mod tests {
         Message, ToolCall, ToolCallRound, ToolChatCompletionRequest, ToolResultMessage,
     };
 
+    fn test_client(is_openrouter: bool) -> OpenAiClient {
+        OpenAiClient {
+            http: reqwest::Client::new(),
+            base_url: "https://example.test".to_string(),
+            model: "test-model".to_string(),
+            is_openrouter,
+        }
+    }
+
     fn req_with_rounds(rounds: Vec<ToolCallRound>) -> ToolChatCompletionRequest {
         ToolChatCompletionRequest {
             model: "test-model".to_string(),
@@ -405,6 +465,7 @@ mod tests {
                 },
             ],
             tools: vec![],
+            reasoning_effort: None,
             prior_rounds: rounds,
         }
     }
@@ -578,5 +639,22 @@ mod tests {
         assert!(err.raw.starts_with(&"x".repeat(512)));
         assert!(err.raw.contains("more chars"));
         assert!(err.raw.chars().count() < raw.chars().count());
+    }
+
+    #[test]
+    fn map_reasoning_openrouter_uses_nested_reasoning_object() {
+        let client = test_client(true);
+        let (reasoning_effort, reasoning) = client.map_reasoning(Some("high".to_string()));
+        assert!(reasoning_effort.is_none());
+        let reasoning = reasoning.expect("reasoning object must be set");
+        assert_eq!(reasoning.effort, "high");
+    }
+
+    #[test]
+    fn map_reasoning_non_openrouter_uses_reasoning_effort_field() {
+        let client = test_client(false);
+        let (reasoning_effort, reasoning) = client.map_reasoning(Some("xhigh".to_string()));
+        assert_eq!(reasoning_effort.as_deref(), Some("xhigh"));
+        assert!(reasoning.is_none());
     }
 }

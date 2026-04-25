@@ -15,6 +15,12 @@ use crate::memory::Memory;
 use crate::memory::store::MemoryStore;
 use crate::memory::tools::consolidator_tools;
 
+#[derive(Clone)]
+pub struct ConsolidationLlmConfig {
+    pub model: String,
+    pub reasoning_effort: Option<String>,
+}
+
 /// Returns a list of `(key, reason)` tuples for memories flagged by the
 /// deterministic pre-filter: confidence below 10 and last access older than
 /// 60 days. Reported by the consolidation pass to the caller before any
@@ -76,7 +82,7 @@ pub fn corroboration_boost(m: &Memory) -> u8 {
 /// consolidated state.
 pub async fn run_consolidation(
     llm: Arc<dyn llm::LlmClient>,
-    model: String,
+    llm_config: ConsolidationLlmConfig,
     store: Arc<RwLock<MemoryStore>>,
     store_path: PathBuf,
     timeout: Duration,
@@ -146,7 +152,7 @@ pub async fn run_consolidation(
         let mut prior: Vec<ToolCallRound> = Vec::new();
         loop {
             let req = ToolChatCompletionRequest {
-                model: model.clone(),
+                model: llm_config.model.clone(),
                 messages: vec![
                     Message {
                         role: "system".into(),
@@ -158,6 +164,7 @@ pub async fn run_consolidation(
                     },
                 ],
                 tools: consolidator_tools(),
+                reasoning_effort: llm_config.reasoning_effort.clone(),
                 prior_rounds: prior.clone(),
             };
             let resp = tokio::time::timeout(timeout, llm.chat_completion_with_tools(req))
@@ -228,7 +235,7 @@ pub async fn run_consolidation(
 /// logged at `warn!` and do not kill the loop.
 pub fn spawn_consolidation(
     llm: Arc<dyn llm::LlmClient>,
-    model: String,
+    llm_config: ConsolidationLlmConfig,
     store: Arc<RwLock<MemoryStore>>,
     store_path: PathBuf,
     run_at: NaiveTime,
@@ -273,7 +280,7 @@ pub fn spawn_consolidation(
                 () = tokio::time::sleep(wait) => {
                     if let Err(e) = run_consolidation(
                         llm.clone(),
-                        model.clone(),
+                        llm_config.clone(),
                         store.clone(),
                         store_path.clone(),
                         timeout,
@@ -444,7 +451,10 @@ mod tests {
 
         run_consolidation(
             fake,
-            "fake-model".into(),
+            ConsolidationLlmConfig {
+                model: "fake-model".into(),
+                reasoning_effort: None,
+            },
             store.clone(),
             path.clone(),
             Duration::from_secs(5),

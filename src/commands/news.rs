@@ -149,6 +149,7 @@ where
                     content: user_message,
                 },
             ],
+            reasoning_effort: None,
         };
 
         let result =

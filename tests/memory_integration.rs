@@ -237,7 +237,10 @@ async fn consolidation_merges_dupes() {
 
     consolidation::run_consolidation(
         fake.clone() as Arc<dyn LlmClient>,
-        "fake-model".into(),
+        consolidation::ConsolidationLlmConfig {
+            model: "fake-model".into(),
+            reasoning_effort: None,
+        },
         store.clone(),
         path.clone(),
         Duration::from_secs(5),

@@ -182,6 +182,7 @@ where
                     instruction_template: cfg.instruction_template,
                 },
                 timeout: Duration::from_secs(cfg.timeout),
+                reasoning_effort: cfg.reasoning_effort.clone(),
                 cooldown: Duration::from_secs(cooldowns.ai),
                 chat_ctx: ai_chat_ctx,
                 memory: ai_memory,

@@ -40,6 +40,7 @@ pub struct AiExtractionDeps {
     pub enabled: bool,
     pub llm: Arc<dyn LlmClient>,
     pub model: String,
+    pub reasoning_effort: Option<String>,
     pub timeout: Duration,
     pub max_rounds: usize,
 }
@@ -58,6 +59,7 @@ pub struct AiCommand {
     cooldown: PerUserCooldown,
     prompts: AiPrompts,
     timeout: Duration,
+    reasoning_effort: Option<String>,
     chat_ctx: Option<ChatContext>,
     memory: Option<AiMemory>,
     emotes: Option<Arc<SevenTvEmoteProvider>>,
@@ -68,6 +70,7 @@ pub struct AiCommandDeps {
     pub model: String,
     pub prompts: AiPrompts,
     pub timeout: Duration,
+    pub reasoning_effort: Option<String>,
     pub cooldown: Duration,
     pub chat_ctx: Option<ChatContext>,
     pub memory: Option<AiMemory>,
@@ -90,6 +93,7 @@ impl AiCommand {
             cooldown: PerUserCooldown::new(deps.cooldown),
             prompts: deps.prompts,
             timeout: deps.timeout,
+            reasoning_effort: deps.reasoning_effort,
             chat_ctx: deps.chat_ctx,
             memory: deps.memory,
             emotes: deps.emotes,
@@ -105,6 +109,7 @@ impl AiCommand {
                 .chat_completion(ChatCompletionRequest {
                     model: self.model.clone(),
                     messages: build_base_messages(system_prompt, user_message),
+                    reasoning_effort: self.reasoning_effort.clone(),
                 })
                 .await
         }
@@ -124,6 +129,7 @@ impl AiCommand {
                 model: self.model.clone(),
                 messages: messages.clone(),
                 tools: tools.clone(),
+                reasoning_effort: self.reasoning_effort.clone(),
                 prior_rounds: prior_rounds.clone(),
             };
 
@@ -398,6 +404,7 @@ where
                 memory::ExtractionDeps {
                     llm: mem.extraction_deps.llm.clone(),
                     model: mem.extraction_deps.model.clone(),
+                    reasoning_effort: mem.extraction_deps.reasoning_effort.clone(),
                     store: mem.config.store.clone(),
                     store_path: mem.config.path.clone(),
                     caps: mem.config.caps.clone(),
