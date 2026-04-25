@@ -44,6 +44,8 @@ pub struct ToolCallRound {
 pub struct ChatCompletionRequest {
     pub model: String,
     pub messages: Vec<Message>,
+    /// Optional reasoning effort hint (provider/model-specific values).
+    pub reasoning_effort: Option<String>,
 }
 
 /// Request for a chat completion with tool support.
@@ -52,6 +54,8 @@ pub struct ToolChatCompletionRequest {
     pub model: String,
     pub messages: Vec<Message>,
     pub tools: Vec<ToolDefinition>,
+    /// Optional reasoning effort hint (provider/model-specific values).
+    pub reasoning_effort: Option<String>,
     /// Prior tool-call rounds, threaded back in order.
     pub prior_rounds: Vec<ToolCallRound>,
 }

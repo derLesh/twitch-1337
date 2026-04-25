@@ -2,10 +2,7 @@
 //! Owns the long-running task that filters PRIVMSGs from the broadcast channel
 //! and routes them to the matching `Command` implementation.
 
-use std::{
-    collections::{HashMap, VecDeque},
-    sync::Arc,
-};
+use std::{collections::HashMap, sync::Arc};
 
 use tokio::{sync::broadcast, time::Duration};
 use tracing::{debug, error, info, instrument};
@@ -14,10 +11,12 @@ use twitch_irc::{
 };
 
 use crate::{
-    ChatHistory, PersonalBest, aviation, commands,
+    ChatHistory, ChatHistoryBuffer, PersonalBest, aviation, commands,
     config::{AiConfig, CooldownsConfig, SuspendConfig},
     flight_tracker, llm, ping, prefill,
+    seventv::SevenTvEmoteProvider,
     suspend::SuspensionManager,
+    web_search,
 };
 
 /// Configuration for the generic command handler.
@@ -102,15 +101,31 @@ where
 
     // Create chat history buffer for AI context (if history_length > 0)
     let chat_history: Option<ChatHistory> = if history_length > 0 {
-        let buf = if let Some(ref prefill_cfg) = prefill_config {
-            prefill::prefill_chat_history(&channel, history_length, prefill_cfg).await
+        let buffer = if let Some(ref prefill_cfg) = prefill_config {
+            let prefilled =
+                prefill::prefill_chat_history(&channel, history_length, prefill_cfg).await;
+            ChatHistoryBuffer::from_prefill(history_length, prefilled)
         } else {
-            VecDeque::with_capacity(history_length)
+            ChatHistoryBuffer::new(history_length)
         };
-        Some(Arc::new(tokio::sync::Mutex::new(buf)))
+        Some(Arc::new(tokio::sync::Mutex::new(buffer)))
     } else {
         None
     };
+
+    let emote_provider = llm_client
+        .as_ref()
+        .and_then(|(_, cfg)| cfg.emotes.enabled.then_some(cfg.emotes.clone()))
+        .and_then(|emotes_cfg| match SevenTvEmoteProvider::new(emotes_cfg, &data_dir) {
+            Ok(provider) => {
+                info!("7TV emote glossary prompt grounding enabled");
+                Some(Arc::new(provider))
+            }
+            Err(e) => {
+                error!(error = ?e, "Failed to initialize 7TV emote provider; AI emotes disabled");
+                None
+            }
+        });
 
     let mut cmd_list: Vec<Box<dyn commands::Command<T, L>>> = vec![
         Box::new(commands::ping_admin::PingAdminCommand::new(
@@ -146,25 +161,59 @@ where
     }
 
     if let Some((llm, cfg)) = llm_client {
+        let web = if cfg.web.enabled {
+            match web_search::SearchClient::new(
+                &cfg.web.base_url,
+                Duration::from_secs(cfg.web.timeout),
+            ) {
+                Ok(client) => Some(commands::ai::AiWeb {
+                    executor: Arc::new(web_search::WebToolExecutor::new(
+                        client,
+                        cfg.web.max_results,
+                        Duration::from_secs(cfg.web.cache_ttl_secs),
+                        cfg.web.cache_capacity,
+                    )),
+                    max_rounds: cfg.web.max_rounds,
+                }),
+                Err(e) => {
+                    error!(error = ?e, "Failed to initialize ai.web client; disabling web tools");
+                    None
+                }
+            }
+        } else {
+            None
+        };
+
         let chat_ctx = chat_history
             .clone()
             .map(|history| commands::ai::ChatContext {
                 history,
-                history_length,
                 bot_username: bot_username.clone(),
             });
 
         cmd_list.push(Box::new(commands::ai::AiCommand::new(
+            commands::ai::AiCommandDeps {
+                llm_client: llm.clone(),
+                model: cfg.model.clone(),
+                prompts: commands::ai::AiPrompts {
+                    system: cfg.system_prompt,
+                    instruction_template: cfg.instruction_template,
+                },
+                timeout: Duration::from_secs(cfg.timeout),
+                reasoning_effort: cfg.reasoning_effort.clone(),
+                cooldown: Duration::from_secs(cooldowns.ai),
+                chat_ctx: chat_ctx.clone(),
+                memory: ai_memory,
+                web,
+                emotes: emote_provider,
+            },
+        )));
+        cmd_list.push(Box::new(commands::news::NewsCommand::new(
             llm,
             cfg.model,
-            commands::ai::AiPrompts {
-                system: cfg.system_prompt,
-                instruction_template: cfg.instruction_template,
-            },
             Duration::from_secs(cfg.timeout),
-            Duration::from_secs(cooldowns.ai),
+            Duration::from_secs(cooldowns.news),
             chat_ctx,
-            ai_memory,
         )));
     }
 
@@ -182,7 +231,6 @@ where
         cmd_list,
         admin_channel,
         chat_history,
-        history_length,
         suspension_manager,
     )
     .await;
@@ -195,7 +243,6 @@ pub(crate) async fn run_command_dispatcher<T, L>(
     commands: Vec<Box<dyn crate::commands::Command<T, L>>>,
     admin_channel: Option<String>,
     chat_history: Option<ChatHistory>,
-    history_length: usize,
     suspension_manager: Arc<SuspensionManager>,
 ) where
     T: Transport,
@@ -222,11 +269,10 @@ pub(crate) async fn run_command_dispatcher<T, L>(
                         .as_ref()
                         .is_some_and(|ch| privmsg.channel_login == *ch);
                     if !is_admin_channel {
-                        let mut buf = history.lock().await;
-                        if buf.len() >= history_length {
-                            buf.pop_front();
-                        }
-                        buf.push_back((privmsg.sender.login.clone(), privmsg.message_text.clone()));
+                        history
+                            .lock()
+                            .await
+                            .push_user(privmsg.sender.login.clone(), privmsg.message_text.clone());
                     }
                 }
 

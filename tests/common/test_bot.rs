@@ -35,6 +35,7 @@ pub struct TestBot {
     pub data_dir: TempDir,
     pub adsb_mock: MockServer,
     pub nominatim_mock: MockServer,
+    pub seventv_mock: MockServer,
     pub llm: Arc<FakeLlm>,
     pub channel: String,
     shutdown: Option<oneshot::Sender<()>>,
@@ -64,13 +65,16 @@ impl TestBotBuilder {
                 base_url: None,
                 model: "test-model".into(),
                 system_prompt: "test prompt".into(),
-                instruction_template: "{chat_history}\n{message}".into(),
+                instruction_template: "{message}".into(),
                 timeout: 30,
-                history_length: 0,
+                reasoning_effort: None,
+                history_length: twitch_1337::DEFAULT_HISTORY_LENGTH,
                 history_prefill: None,
                 memory: twitch_1337::config::MemoryConfigSection::default(),
                 extraction: twitch_1337::config::ExtractionConfigSection::default(),
                 consolidation: twitch_1337::config::ConsolidationConfigSection::default(),
+                emotes: twitch_1337::config::AiEmotesConfigSection::default(),
+                web: twitch_1337::config::AiWebConfigSection::default(),
                 max_memories: None,
             });
         }
@@ -92,7 +96,7 @@ impl TestBotBuilder {
         self
     }
 
-    pub async fn spawn(self) -> TestBot {
+    pub async fn spawn(mut self) -> TestBot {
         let data_dir = TempDir::new().expect("tempdir");
 
         if let Some(entries) = &self.seeded_leaderboard {
@@ -101,7 +105,17 @@ impl TestBotBuilder {
             std::fs::write(&path, contents).expect("write leaderboard.ron");
         }
 
-        let (adsb_mock, nominatim_mock) = tokio::join!(MockServer::start(), MockServer::start());
+        let (adsb_mock, nominatim_mock, seventv_mock) = tokio::join!(
+            MockServer::start(),
+            MockServer::start(),
+            MockServer::start()
+        );
+        if let Some(ai) = self.config.ai.as_mut()
+            && ai.emotes.enabled
+            && ai.emotes.base_url.is_none()
+        {
+            ai.emotes.base_url = Some(seventv_mock.uri());
+        }
         let llm = Arc::new(FakeLlm::new());
         let clock = FakeClock::new(self.now);
         let channel = self.config.twitch.channel.clone();
@@ -154,6 +168,7 @@ impl TestBotBuilder {
             data_dir,
             adsb_mock,
             nominatim_mock,
+            seventv_mock,
             llm,
             channel,
             shutdown: Some(shutdown_tx),

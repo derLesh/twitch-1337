@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 
-use chrono::Datelike;
+use chrono::{DateTime, Datelike, Utc};
 use chrono_tz::Europe::Berlin;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info, warn};
@@ -43,7 +43,7 @@ async fn fetch_messages_for_date(
     channel: &str,
     date: chrono::NaiveDate,
     limit: usize,
-) -> Vec<(String, String)> {
+) -> Vec<(String, String, DateTime<Utc>)> {
     let url = format!(
         "{}/channel/{}/{}/{}/{}?jsonBasic=1&limit={}&reverse=1",
         base_url.trim_end_matches('/'),
@@ -81,12 +81,14 @@ async fn fetch_messages_for_date(
         }
     };
 
-    // API returns newest-first with reverse=1, so reverse to get chronological order
+    // API returns newest-first with reverse=1, so reverse to get chronological order.
+    // Prefilled messages lack exact timestamps; use the fetch time as a proxy.
+    let fetched_at = Utc::now();
     log_response
         .messages
         .into_iter()
         .rev()
-        .map(|msg| (msg.display_name, msg.text))
+        .map(|msg| (msg.display_name, msg.text, fetched_at))
         .collect()
 }
 
@@ -103,7 +105,7 @@ pub async fn prefill_chat_history(
     channel: &str,
     history_length: usize,
     config: &HistoryPrefillConfig,
-) -> VecDeque<(String, String)> {
+) -> VecDeque<(String, String, DateTime<Utc>)> {
     let http = match reqwest::Client::builder().timeout(PREFILL_TIMEOUT).build() {
         Ok(client) => client,
         Err(e) => {

@@ -5,6 +5,7 @@
 //! fake transport, fake clock, and fake LLM against the same handlers.
 
 pub mod aviation;
+pub mod chat_history;
 pub mod clock;
 pub mod commands;
 pub mod config;
@@ -16,12 +17,14 @@ pub mod llm;
 pub mod memory;
 pub mod ping;
 pub mod prefill;
+pub mod seventv;
 pub mod suspend;
 pub mod telemetry;
 pub mod tls;
 pub mod token_storage;
 pub mod twitch_setup;
 pub mod util;
+pub mod web_search;
 
 use std::path::PathBuf;
 use std::sync::{Arc, atomic::AtomicU32};
@@ -60,6 +63,10 @@ pub type AuthenticatedTwitchClient<
     L = RefreshingLoginCredentials<crate::token_storage::FileBasedTokenStorage>,
 > = TwitchIRCClient<T, L>;
 
+pub use chat_history::{
+    ChatHistory, ChatHistoryBuffer, ChatHistoryEntry, ChatHistoryPage, ChatHistoryQuery,
+    ChatHistorySource, DEFAULT_HISTORY_LENGTH, MAX_HISTORY_LENGTH, MAX_TOOL_RESULT_MESSAGES,
+};
 pub use config::{load_configuration, validate_config};
 pub use handlers::tracker_1337::PersonalBest;
 pub use telemetry::install_tracing;
@@ -67,8 +74,8 @@ pub use tls::install_crypto_provider;
 pub use token_storage::FileBasedTokenStorage;
 pub use twitch_setup::{setup_and_verify_twitch_client, setup_twitch_client};
 pub use util::{
-    APP_USER_AGENT, ChatHistory, MAX_RESPONSE_LENGTH, ensure_data_dir, get_config_path,
-    get_data_dir, parse_flight_duration, resolve_berlin_time, truncate_response,
+    APP_USER_AGENT, MAX_RESPONSE_LENGTH, ensure_data_dir, get_config_path, get_data_dir,
+    parse_flight_duration, resolve_berlin_time, truncate_response,
 };
 
 /// Test-overridable services injected into [`run_bot`].
@@ -182,76 +189,96 @@ where
 
     // Build the memory bundle once so both `!ai` (extraction) and the
     // daily consolidation task share the same store handle + path.
-    // Effective model resolution: extraction falls back to the main chat
-    // model; consolidation falls back to extraction and then to chat.
-    let (ai_memory, consolidation_model): (Option<crate::commands::ai::AiMemory>, Option<String>) =
-        match (&config.ai, &llm) {
-            (Some(ai), Some(llm_arc)) if ai.memory.enabled => {
-                let extraction_model = ai
-                    .extraction
-                    .model
-                    .clone()
-                    .unwrap_or_else(|| ai.model.clone());
-                let consolidation_model = ai
-                    .consolidation
-                    .model
-                    .clone()
-                    .or_else(|| ai.extraction.model.clone())
-                    .unwrap_or_else(|| ai.model.clone());
-                match memory::MemoryStore::load(&data_dir) {
-                    Ok((store, path)) => {
-                        // Back-compat: honor the deprecated `ai.max_memories`
-                        // when the user hasn't overridden `[ai.memory].max_user`.
-                        // Either way, emit a warn! so stale configs surface.
-                        let max_user = if let Some(legacy_n) = ai.max_memories {
-                            if ai.memory.max_user == crate::config::default_max_user() {
-                                warn!(
-                                    "ai.max_memories is deprecated; migrating to [ai.memory].max_user = {}. Please update your config.",
-                                    legacy_n
-                                );
+    // Effective fallback resolution:
+    // - model: extraction -> [ai], consolidation -> extraction -> [ai]
+    // - reasoning_effort: extraction -> [ai], consolidation -> extraction -> [ai]
+    let (ai_memory, consolidation_model, consolidation_reasoning_effort): (
+        Option<crate::commands::ai::AiMemory>,
+        Option<String>,
+        Option<String>,
+    ) = match (&config.ai, &llm) {
+        (Some(ai), Some(llm_arc)) if ai.memory.enabled => {
+            let extraction_model = ai
+                .extraction
+                .model
+                .clone()
+                .unwrap_or_else(|| ai.model.clone());
+            let extraction_reasoning_effort = ai
+                .extraction
+                .reasoning_effort
+                .clone()
+                .or_else(|| ai.reasoning_effort.clone());
+            let consolidation_model = ai
+                .consolidation
+                .model
+                .clone()
+                .or_else(|| ai.extraction.model.clone())
+                .unwrap_or_else(|| ai.model.clone());
+            let consolidation_reasoning_effort = ai
+                .consolidation
+                .reasoning_effort
+                .clone()
+                .or_else(|| ai.extraction.reasoning_effort.clone())
+                .or_else(|| ai.reasoning_effort.clone());
+            match memory::MemoryStore::load(&data_dir) {
+                Ok((store, path)) => {
+                    // Back-compat: honor the deprecated `ai.max_memories`
+                    // when the user hasn't overridden `[ai.memory].max_user`.
+                    // Either way, emit a warn! so stale configs surface.
+                    let max_user = if let Some(legacy_n) = ai.max_memories {
+                        if ai.memory.max_user == crate::config::default_max_user() {
+                            warn!(
+                                "ai.max_memories is deprecated; migrating to [ai.memory].max_user = {}. Please update your config.",
                                 legacy_n
-                            } else {
-                                warn!(
-                                    "ai.max_memories={} is deprecated AND ignored because [ai.memory].max_user={} is explicitly set. Remove the deprecated field.",
-                                    legacy_n, ai.memory.max_user
-                                );
-                                ai.memory.max_user
-                            }
+                            );
+                            legacy_n
                         } else {
+                            warn!(
+                                "ai.max_memories={} is deprecated AND ignored because [ai.memory].max_user={} is explicitly set. Remove the deprecated field.",
+                                legacy_n, ai.memory.max_user
+                            );
                             ai.memory.max_user
-                        };
-                        let config = memory::MemoryConfig {
-                            store: Arc::new(tokio::sync::RwLock::new(store)),
-                            path,
-                            caps: memory::Caps {
-                                max_user,
-                                max_lore: ai.memory.max_lore,
-                                max_pref: ai.memory.max_pref,
-                            },
-                            half_life_days: ai.memory.half_life_days,
-                        };
-                        let ai_memory = crate::commands::ai::AiMemory {
-                            config,
-                            extraction_deps: crate::commands::ai::AiExtractionDeps {
-                                enabled: ai.extraction.enabled,
-                                llm: llm_arc.clone(),
-                                model: extraction_model,
-                                timeout: Duration::from_secs(
-                                    ai.extraction.timeout.unwrap_or(ai.timeout),
-                                ),
-                                max_rounds: ai.extraction.max_rounds,
-                            },
-                        };
-                        (Some(ai_memory), Some(consolidation_model))
-                    }
-                    Err(e) => {
-                        error!(error = ?e, "Failed to load AI memory store, memory disabled");
-                        (None, None)
-                    }
+                        }
+                    } else {
+                        ai.memory.max_user
+                    };
+                    let config = memory::MemoryConfig {
+                        store: Arc::new(tokio::sync::RwLock::new(store)),
+                        path,
+                        caps: memory::Caps {
+                            max_user,
+                            max_lore: ai.memory.max_lore,
+                            max_pref: ai.memory.max_pref,
+                        },
+                        half_life_days: ai.memory.half_life_days,
+                    };
+                    let ai_memory = crate::commands::ai::AiMemory {
+                        config,
+                        extraction_deps: crate::commands::ai::AiExtractionDeps {
+                            enabled: ai.extraction.enabled,
+                            llm: llm_arc.clone(),
+                            model: extraction_model,
+                            reasoning_effort: extraction_reasoning_effort,
+                            timeout: Duration::from_secs(
+                                ai.extraction.timeout.unwrap_or(ai.timeout),
+                            ),
+                            max_rounds: ai.extraction.max_rounds,
+                        },
+                    };
+                    (
+                        Some(ai_memory),
+                        Some(consolidation_model),
+                        consolidation_reasoning_effort,
+                    )
+                }
+                Err(e) => {
+                    error!(error = ?e, "Failed to load AI memory store, memory disabled");
+                    (None, None, None)
                 }
             }
-            _ => (None, None),
-        };
+        }
+        _ => (None, None, None),
+    };
 
     let latency = Arc::new(AtomicU32::new(config.twitch.expected_latency));
 
@@ -336,7 +363,10 @@ where
             .expect("ai.consolidation.run_at is validated at config load");
         memory::spawn_consolidation(
             llm_client,
-            model,
+            memory::consolidation::ConsolidationLlmConfig {
+                model,
+                reasoning_effort: consolidation_reasoning_effort,
+            },
             store,
             path,
             run_at,

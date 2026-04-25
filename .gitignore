@@ -6,11 +6,12 @@
 .env.local
 
 # Data directory (persistence history) - allow static generated files
-!/data/
 /data/*
 !/data/plz.csv
 !/data/airports.csv
 !/data/airlines.csv
+!/data/7tv_emotes.toml
+
 
 # Editor files
 *.swp
@@ -41,6 +42,9 @@ Thumbs.db
 
 # Claude Code
 .claude/
+
+# Codex
+/.codex
 
 token.ron
 schedule_cache.ron
