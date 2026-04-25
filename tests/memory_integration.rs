@@ -29,7 +29,8 @@ async fn adversarial_third_party_save_rejected() {
         .spawn()
         .await;
 
-    bot.llm.push_chat("nice");
+    bot.llm
+        .push_tool(ToolChatCompletionResponse::Message("nice".into()));
     bot.llm.push_tool(ToolChatCompletionResponse::ToolCalls {
         calls: vec![
             ToolCall {
@@ -87,12 +88,14 @@ async fn adversarial_third_party_save_rejected() {
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
 
-    // Sanity: the extractor request was made and the rejection string was
-    // surfaced to the model (visible in the recorded prior round's tool
-    // result).
+    // Sanity: the extractor request was made. The first tool-capable call is
+    // the user-facing `!ai` response with get_recent_chat; extraction uses the
+    // save_memory tool surface after that.
     let tool_calls = bot.llm.tool_calls();
     assert!(
-        !tool_calls.is_empty(),
+        tool_calls
+            .iter()
+            .any(|req| req.tools.iter().any(|tool| tool.name == "save_memory")),
         "expected at least one extractor request"
     );
 
@@ -116,7 +119,8 @@ async fn prompt_injection_does_not_poison_memory() {
         .spawn()
         .await;
 
-    bot.llm.push_chat("ok");
+    bot.llm
+        .push_tool(ToolChatCompletionResponse::Message("ok".into()));
     bot.llm.push_tool(ToolChatCompletionResponse::ToolCalls {
         calls: vec![ToolCall {
             id: "s1".into(),

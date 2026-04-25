@@ -42,11 +42,15 @@ fn default_system_prompt() -> String {
 }
 
 fn default_instruction_template() -> String {
-    "{chat_history}\n{message}".to_string()
+    "{message}".to_string()
 }
 
 fn default_ai_timeout() -> u64 {
     30
+}
+
+fn default_history_length() -> u64 {
+    crate::chat_history::DEFAULT_HISTORY_LENGTH
 }
 
 fn default_emote_glossary_path() -> String {
@@ -222,14 +226,14 @@ pub struct AiConfig {
     /// System prompt sent to the model
     #[serde(default = "default_system_prompt")]
     pub system_prompt: String,
-    /// Template for the user message. Use `{message}` and `{chat_history}` as placeholders.
+    /// Template for the user message. Use `{message}` as the instruction placeholder.
     #[serde(default = "default_instruction_template")]
     pub instruction_template: String,
     /// Timeout for AI requests in seconds (default: 30)
     #[serde(default = "default_ai_timeout")]
     pub timeout: u64,
-    /// Number of recent chat messages to include as context (0 = disabled, max 100)
-    #[serde(default)]
+    /// Number of recent chat messages to keep in the local tool-readable buffer.
+    #[serde(default = "default_history_length")]
     pub history_length: u64,
     /// Optional: Prefill chat history from a rustlog-compatible API at startup
     #[serde(default)]
@@ -467,10 +471,11 @@ pub fn validate_config(config: &Configuration) -> Result<()> {
     }
 
     if let Some(ref ai) = config.ai
-        && ai.history_length > 100
+        && ai.history_length > crate::chat_history::MAX_HISTORY_LENGTH
     {
         bail!(
-            "ai.history_length must be <= 100 (got {})",
+            "ai.history_length must be <= {} (got {})",
+            crate::chat_history::MAX_HISTORY_LENGTH,
             ai.history_length
         );
     }
@@ -577,7 +582,7 @@ mod tests {
             system_prompt: default_system_prompt(),
             instruction_template: default_instruction_template(),
             timeout: default_ai_timeout(),
-            history_length: 0,
+            history_length: default_history_length(),
             history_prefill: None,
             memory: MemoryConfigSection::default(),
             extraction: ExtractionConfigSection::default(),
@@ -605,6 +610,47 @@ mod tests {
     fn validate_accepts_well_formed_run_at() {
         let mut c = Configuration::test_default();
         c.ai = Some(ai_with_run_at("04:00"));
+        validate_config(&c).unwrap();
+    }
+
+    #[test]
+    fn ai_defaults_keep_tool_history_enabled_without_inline_template() {
+        let ai: AiConfig = toml::from_str(
+            r#"
+            backend = "ollama"
+            model = "x"
+            "#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            ai.history_length,
+            crate::chat_history::DEFAULT_HISTORY_LENGTH
+        );
+        assert_eq!(ai.instruction_template, "{message}");
+    }
+
+    #[test]
+    fn validate_rejects_history_length_above_max() {
+        let mut c = Configuration::test_default();
+        let mut ai = ai_with_run_at("04:00");
+        ai.history_length = crate::chat_history::MAX_HISTORY_LENGTH + 1;
+        c.ai = Some(ai);
+
+        let err = validate_config(&c).unwrap_err();
+        assert!(
+            format!("{err:#}").contains("ai.history_length"),
+            "got: {err:#}"
+        );
+    }
+
+    #[test]
+    fn validate_accepts_history_length_200() {
+        let mut c = Configuration::test_default();
+        let mut ai = ai_with_run_at("04:00");
+        ai.history_length = 200;
+        c.ai = Some(ai);
+
         validate_config(&c).unwrap();
     }
 

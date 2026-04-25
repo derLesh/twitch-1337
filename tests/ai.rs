@@ -14,7 +14,8 @@ use wiremock::{
 #[serial]
 async fn ai_command_returns_fake_response() {
     let bot = TestBotBuilder::new().with_ai().spawn().await;
-    bot.llm.push_chat("pong");
+    bot.llm
+        .push_tool(ToolChatCompletionResponse::Message("pong".into()));
 
     let mut bot = bot;
     bot.send("alice", "!ai ping").await;
@@ -23,8 +24,38 @@ async fn ai_command_returns_fake_response() {
     let body = out.strip_prefix(". ").unwrap_or(&out);
     assert_eq!(body, "pong");
 
-    let calls = bot.llm.chat_calls();
+    assert!(
+        bot.llm.chat_calls().is_empty(),
+        "history-enabled AI should use tool-capable completions"
+    );
+    let calls = bot.llm.tool_calls();
     assert_eq!(calls.len(), 1, "expected exactly one LLM call");
+
+    bot.shutdown().await;
+}
+
+#[tokio::test]
+#[serial]
+async fn ai_command_uses_plain_chat_completion_when_history_disabled() {
+    let bot = TestBotBuilder::new()
+        .with_ai()
+        .with_config(|c| {
+            if let Some(ai) = c.ai.as_mut() {
+                ai.history_length = 0;
+            }
+        })
+        .spawn()
+        .await;
+    bot.llm.push_chat("pong");
+
+    let mut bot = bot;
+    bot.send("alice", "!ai ping").await;
+    let out = bot.expect_say(Duration::from_secs(2)).await;
+    let body = out.strip_prefix(". ").unwrap_or(&out);
+    assert_eq!(body, "pong");
+
+    assert_eq!(bot.llm.chat_calls().len(), 1);
+    assert!(bot.llm.tool_calls().is_empty());
 
     bot.shutdown().await;
 }
@@ -39,15 +70,23 @@ async fn ai_command_empty_shows_usage() {
     assert!(out.contains("Benutzung: !ai"), "usage reply: {out}");
 
     // No LLM call made.
-    let calls = bot.llm.chat_calls();
-    assert!(calls.is_empty(), "no LLM call expected, got: {calls:?}");
+    let chat_calls = bot.llm.chat_calls();
+    let tool_calls = bot.llm.tool_calls();
+    assert!(
+        chat_calls.is_empty(),
+        "no chat call expected, got: {chat_calls:?}"
+    );
+    assert!(
+        tool_calls.is_empty(),
+        "no tool call expected, got: {tool_calls:?}"
+    );
 
     bot.shutdown().await;
 }
 
 #[tokio::test]
 #[serial]
-async fn ai_command_injects_chat_history() {
+async fn ai_command_does_not_inline_chat_history() {
     let mut bot = TestBotBuilder::new()
         .with_ai()
         .with_config(|c| {
@@ -69,14 +108,19 @@ async fn ai_command_injects_chat_history() {
     // Give the dispatcher time to observe and record each message.
     tokio::time::sleep(Duration::from_millis(100)).await;
 
-    bot.llm.push_chat("acknowledged");
+    bot.llm
+        .push_tool(ToolChatCompletionResponse::Message("acknowledged".into()));
     bot.send("alice", "!ai what did people say?").await;
     let out = bot.expect_say(Duration::from_secs(2)).await;
     let body = out.strip_prefix(". ").unwrap_or(&out);
     assert_eq!(body, "acknowledged");
 
-    let calls = bot.llm.chat_calls();
-    assert_eq!(calls.len(), 1, "expected exactly one chat completion call");
+    assert!(
+        bot.llm.chat_calls().is_empty(),
+        "history-enabled AI should not use plain chat completion"
+    );
+    let calls = bot.llm.tool_calls();
+    assert_eq!(calls.len(), 1, "expected exactly one tool completion call");
     let call = &calls[0];
     let user_msg = call
         .messages
@@ -84,20 +128,88 @@ async fn ai_command_injects_chat_history() {
         .find(|m| m.role == "user")
         .expect("request has a user message");
     assert!(
-        user_msg.content.contains("hello there"),
-        "history missing user1 line: {}",
+        !user_msg.content.contains("hello there"),
+        "history should not be inlined in user prompt: {}",
         user_msg.content
     );
     assert!(
-        user_msg.content.contains("hi back"),
-        "history missing user2 line: {}",
+        !user_msg.content.contains("hi back"),
+        "history should not be inlined in user prompt: {}",
         user_msg.content
     );
     assert!(
-        user_msg.content.contains("good morning"),
-        "history missing user3 line: {}",
+        !user_msg.content.contains("good morning"),
+        "history should not be inlined in user prompt: {}",
         user_msg.content
     );
+
+    bot.shutdown().await;
+}
+
+#[tokio::test]
+#[serial]
+async fn ai_command_get_recent_chat_tool_returns_history() {
+    let mut bot = TestBotBuilder::new()
+        .with_ai()
+        .with_config(|c| {
+            if let Some(ai) = c.ai.as_mut() {
+                ai.history_length = 10;
+            }
+        })
+        .spawn()
+        .await;
+
+    bot.send("user1", "hello there").await;
+    bot.send("user2", "hi back").await;
+    bot.send("user3", "good morning").await;
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    bot.llm.push_tool(ToolChatCompletionResponse::ToolCalls {
+        calls: vec![ToolCall {
+            id: "history_1".into(),
+            name: "get_recent_chat".into(),
+            arguments: serde_json::json!({ "limit": 4 }),
+            arguments_parse_error: None,
+        }],
+        reasoning_content: None,
+    });
+    bot.llm
+        .push_tool(ToolChatCompletionResponse::Message("I checked chat".into()));
+
+    bot.send("alice", "!ai what did people say?").await;
+    let out = bot.expect_say(Duration::from_secs(2)).await;
+    let body = out.strip_prefix(". ").unwrap_or(&out);
+    assert_eq!(body, "I checked chat");
+
+    let calls = bot.llm.tool_calls();
+    assert_eq!(calls.len(), 2, "tool call round plus final response round");
+    let prior_round = calls[1]
+        .prior_rounds
+        .first()
+        .expect("second request should include prior tool result");
+    let result = prior_round
+        .results
+        .first()
+        .expect("history tool should produce a result");
+    let json: serde_json::Value =
+        serde_json::from_str(&result.content).expect("history result should be JSON");
+    let messages = json["messages"].as_array().expect("messages array");
+
+    assert_eq!(
+        messages
+            .iter()
+            .map(|msg| msg["username"].as_str().unwrap())
+            .collect::<Vec<_>>(),
+        vec!["user1", "user2", "user3", "alice"]
+    );
+    assert_eq!(messages[0]["text"].as_str(), Some("hello there"));
+    assert_eq!(
+        messages[3]["text"].as_str(),
+        Some("!ai what did people say?")
+    );
+    assert_eq!(messages[0]["source"].as_str(), Some("user"));
+    assert!(messages[0]["timestamp"].as_str().is_some());
+    assert_eq!(json["messages_are_untrusted"].as_bool(), Some(true));
 
     bot.shutdown().await;
 }
@@ -109,6 +221,7 @@ async fn ai_command_injects_7tv_emote_glossary() {
         .with_ai()
         .with_config(|c| {
             if let Some(ai) = c.ai.as_mut() {
+                ai.history_length = 0;
                 ai.emotes.enabled = true;
                 ai.emotes.include_global = true;
             }
@@ -194,6 +307,7 @@ async fn ai_command_continues_when_7tv_unavailable() {
         .with_ai()
         .with_config(|c| {
             if let Some(ai) = c.ai.as_mut() {
+                ai.history_length = 0;
                 ai.emotes.enabled = true;
             }
         })
@@ -260,7 +374,9 @@ async fn ai_command_saves_memory_extraction() {
         .await;
 
     // Main chat response.
-    bot.llm.push_chat("nice to meet you Alice");
+    bot.llm.push_tool(ToolChatCompletionResponse::Message(
+        "nice to meet you Alice".into(),
+    ));
     // Extraction round 1: one self-scoped save_memory call. user-id 67890 is
     // the default injected by `irc_line::privmsg`, so subject_id must match
     // to pass the self-claim permission check.

@@ -129,7 +129,7 @@ User feedback. Appends the message to `data/feedback.txt` with a timestamp. Per-
 AI-powered responses via any OpenAI-compatible API (OpenRouter, OpenAI, etc.) or a local Ollama server. Responses are kept brief (2-3 sentences) and match the language of the instruction. Disabled unless `[ai]` is present in `config.toml`.
 
 Optional behaviors:
-- **Chat history context** (`history_length`) -- recent main-channel messages are injected into the prompt via the `{chat_history}` placeholder.
+- **Chat history access** (`history_length`) -- recent main-channel messages are kept locally and exposed to the model through the `get_recent_chat` tool only when needed.
 - **Startup prefill** (`[ai.history_prefill]`) -- seeds the buffer from a rustlog-compatible log API so the bot has context right after restart.
 - **Persistent memory** (`memory_enabled`) -- the model itself decides what to remember across conversations via tool calls; facts stored in `data/ai_memory.ron`.
 - **7TV emote grounding** (`[ai.emotes]`) -- loads the current channel + optional global 7TV catalog, intersects it with a manual glossary, and injects only known emotes into the prompt.

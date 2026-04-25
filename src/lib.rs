@@ -5,6 +5,7 @@
 //! fake transport, fake clock, and fake LLM against the same handlers.
 
 pub mod aviation;
+pub mod chat_history;
 pub mod clock;
 pub mod commands;
 pub mod config;
@@ -61,6 +62,10 @@ pub type AuthenticatedTwitchClient<
     L = RefreshingLoginCredentials<crate::token_storage::FileBasedTokenStorage>,
 > = TwitchIRCClient<T, L>;
 
+pub use chat_history::{
+    ChatHistory, ChatHistoryBuffer, ChatHistoryEntry, ChatHistoryPage, ChatHistoryQuery,
+    ChatHistorySource, DEFAULT_HISTORY_LENGTH, MAX_HISTORY_LENGTH, MAX_TOOL_RESULT_MESSAGES,
+};
 pub use config::{load_configuration, validate_config};
 pub use handlers::tracker_1337::PersonalBest;
 pub use telemetry::install_tracing;
@@ -68,8 +73,8 @@ pub use tls::install_crypto_provider;
 pub use token_storage::FileBasedTokenStorage;
 pub use twitch_setup::{setup_and_verify_twitch_client, setup_twitch_client};
 pub use util::{
-    APP_USER_AGENT, ChatHistory, MAX_RESPONSE_LENGTH, ensure_data_dir, get_config_path,
-    get_data_dir, parse_flight_duration, resolve_berlin_time, truncate_response,
+    APP_USER_AGENT, MAX_RESPONSE_LENGTH, ensure_data_dir, get_config_path, get_data_dir,
+    parse_flight_duration, resolve_berlin_time, truncate_response,
 };
 
 /// Test-overridable services injected into [`run_bot`].

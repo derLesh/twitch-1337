@@ -2,12 +2,8 @@
 //! Owns the long-running task that filters PRIVMSGs from the broadcast channel
 //! and routes them to the matching `Command` implementation.
 
-use std::{
-    collections::{HashMap, VecDeque},
-    sync::Arc,
-};
+use std::{collections::HashMap, sync::Arc};
 
-use chrono::Utc;
 use tokio::{sync::broadcast, time::Duration};
 use tracing::{debug, error, info, instrument};
 use twitch_irc::{
@@ -15,7 +11,7 @@ use twitch_irc::{
 };
 
 use crate::{
-    ChatHistory, PersonalBest, aviation, commands,
+    ChatHistory, ChatHistoryBuffer, PersonalBest, aviation, commands,
     config::{AiConfig, CooldownsConfig, SuspendConfig},
     flight_tracker, llm, ping, prefill,
     seventv::SevenTvEmoteProvider,
@@ -104,12 +100,14 @@ where
 
     // Create chat history buffer for AI context (if history_length > 0)
     let chat_history: Option<ChatHistory> = if history_length > 0 {
-        let buf = if let Some(ref prefill_cfg) = prefill_config {
-            prefill::prefill_chat_history(&channel, history_length, prefill_cfg).await
+        let buffer = if let Some(ref prefill_cfg) = prefill_config {
+            let prefilled =
+                prefill::prefill_chat_history(&channel, history_length, prefill_cfg).await;
+            ChatHistoryBuffer::from_prefill(history_length, prefilled)
         } else {
-            VecDeque::with_capacity(history_length)
+            ChatHistoryBuffer::new(history_length)
         };
-        Some(Arc::new(tokio::sync::Mutex::new(buf)))
+        Some(Arc::new(tokio::sync::Mutex::new(buffer)))
     } else {
         None
     };
@@ -166,14 +164,12 @@ where
             .clone()
             .map(|history| commands::ai::ChatContext {
                 history,
-                history_length,
                 bot_username: bot_username.clone(),
             });
         let news_chat_ctx = chat_history
             .clone()
             .map(|history| commands::ai::ChatContext {
                 history,
-                history_length,
                 bot_username: bot_username.clone(),
             });
 
@@ -215,7 +211,6 @@ where
         cmd_list,
         admin_channel,
         chat_history,
-        history_length,
         suspension_manager,
     )
     .await;
@@ -228,7 +223,6 @@ pub(crate) async fn run_command_dispatcher<T, L>(
     commands: Vec<Box<dyn crate::commands::Command<T, L>>>,
     admin_channel: Option<String>,
     chat_history: Option<ChatHistory>,
-    history_length: usize,
     suspension_manager: Arc<SuspensionManager>,
 ) where
     T: Transport,
@@ -255,15 +249,10 @@ pub(crate) async fn run_command_dispatcher<T, L>(
                         .as_ref()
                         .is_some_and(|ch| privmsg.channel_login == *ch);
                     if !is_admin_channel {
-                        let mut buf = history.lock().await;
-                        if buf.len() >= history_length {
-                            buf.pop_front();
-                        }
-                        buf.push_back((
-                            privmsg.sender.login.clone(),
-                            privmsg.message_text.clone(),
-                            Utc::now(),
-                        ));
+                        history
+                            .lock()
+                            .await
+                            .push_user(privmsg.sender.login.clone(), privmsg.message_text.clone());
                     }
                 }
 

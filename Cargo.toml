@@ -9,7 +9,7 @@ testing = []
 
 [dependencies]
 async-trait = "0.1.89"
-chrono = "0.4.44"
+chrono = { version = "0.4.44", features = ["serde"] }
 chrono-tz = { version = "0.10.4", features = ["filter-by-regex"] }
 color-eyre = "0.6"
 rand = "0.10.1"
