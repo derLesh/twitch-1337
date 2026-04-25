@@ -42,11 +42,15 @@ fn default_system_prompt() -> String {
 }
 
 fn default_instruction_template() -> String {
-    "{chat_history}\n{message}".to_string()
+    "{message}".to_string()
 }
 
 fn default_ai_timeout() -> u64 {
     30
+}
+
+fn default_history_length() -> u64 {
+    crate::chat_history::DEFAULT_HISTORY_LENGTH
 }
 
 fn default_emote_glossary_path() -> String {
@@ -93,6 +97,26 @@ fn default_consolidation_timeout() -> u64 {
     120
 }
 
+fn default_web_timeout() -> u64 {
+    15
+}
+
+fn default_web_max_results() -> usize {
+    5
+}
+
+fn default_web_cache_ttl_secs() -> u64 {
+    300
+}
+
+fn default_web_cache_capacity() -> usize {
+    100
+}
+
+fn default_web_base_url() -> String {
+    "http://localhost:8080/search".to_string()
+}
+
 /// Per-scope caps + decay policy for the AI memory store. See
 /// `[ai.memory]` in `config.toml.example`.
 #[derive(Debug, Clone, Deserialize)]
@@ -122,8 +146,9 @@ impl Default for MemoryConfigSection {
     }
 }
 
-/// Knobs for the per-turn memory extractor. `model` / `timeout` fall back
-/// to the main `[ai]` values when omitted. See `[ai.extraction]`.
+/// Knobs for the per-turn memory extractor. `model` / `timeout` /
+/// `reasoning_effort` fall back to the main `[ai]` values when omitted.
+/// See `[ai.extraction]`.
 #[derive(Debug, Clone, Deserialize)]
 pub struct ExtractionConfigSection {
     #[serde(default = "default_true")]
@@ -132,6 +157,8 @@ pub struct ExtractionConfigSection {
     pub model: Option<String>,
     #[serde(default)]
     pub timeout: Option<u64>,
+    #[serde(default)]
+    pub reasoning_effort: Option<String>,
     #[serde(default = "default_max_rounds")]
     pub max_rounds: usize,
 }
@@ -142,18 +169,23 @@ impl Default for ExtractionConfigSection {
             enabled: true,
             model: None,
             timeout: None,
+            reasoning_effort: None,
             max_rounds: default_max_rounds(),
         }
     }
 }
 
-/// Knobs for the daily memory-consolidation pass. See `[ai.consolidation]`.
+/// Knobs for the daily memory-consolidation pass.
+/// `reasoning_effort` falls back to `[ai.extraction]` then `[ai]`.
+/// See `[ai.consolidation]`.
 #[derive(Debug, Clone, Deserialize)]
 pub struct ConsolidationConfigSection {
     #[serde(default = "default_true")]
     pub enabled: bool,
     #[serde(default)]
     pub model: Option<String>,
+    #[serde(default)]
+    pub reasoning_effort: Option<String>,
     #[serde(default = "default_run_at")]
     pub run_at: String,
     #[serde(default = "default_consolidation_timeout")]
@@ -165,6 +197,7 @@ impl Default for ConsolidationConfigSection {
         Self {
             enabled: true,
             model: None,
+            reasoning_effort: None,
             run_at: default_run_at(),
             timeout: default_consolidation_timeout(),
         }
@@ -207,6 +240,39 @@ impl Default for AiEmotesConfigSection {
     }
 }
 
+/// Tool-calling web access for `!ai` (`web_search` and `fetch_url`).
+#[derive(Debug, Clone, Deserialize)]
+pub struct AiWebConfigSection {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default = "default_web_base_url")]
+    pub base_url: String,
+    #[serde(default = "default_web_timeout")]
+    pub timeout: u64,
+    #[serde(default = "default_web_max_results")]
+    pub max_results: usize,
+    #[serde(default = "default_max_rounds")]
+    pub max_rounds: usize,
+    #[serde(default = "default_web_cache_ttl_secs")]
+    pub cache_ttl_secs: u64,
+    #[serde(default = "default_web_cache_capacity")]
+    pub cache_capacity: usize,
+}
+
+impl Default for AiWebConfigSection {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            base_url: default_web_base_url(),
+            timeout: default_web_timeout(),
+            max_results: default_web_max_results(),
+            max_rounds: default_max_rounds(),
+            cache_ttl_secs: default_web_cache_ttl_secs(),
+            cache_capacity: default_web_cache_capacity(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct AiConfig {
     /// Backend type: "openai" or "ollama"
@@ -222,14 +288,17 @@ pub struct AiConfig {
     /// System prompt sent to the model
     #[serde(default = "default_system_prompt")]
     pub system_prompt: String,
-    /// Template for the user message. Use `{message}` and `{chat_history}` as placeholders.
+    /// Template for the user message. Use `{message}` as the instruction placeholder.
     #[serde(default = "default_instruction_template")]
     pub instruction_template: String,
     /// Timeout for AI requests in seconds (default: 30)
     #[serde(default = "default_ai_timeout")]
     pub timeout: u64,
-    /// Number of recent chat messages to include as context (0 = disabled, max 100)
+    /// Optional reasoning effort hint. Values are provider/model-specific.
     #[serde(default)]
+    pub reasoning_effort: Option<String>,
+    /// Number of recent chat messages to keep in the local tool-readable buffer.
+    #[serde(default = "default_history_length")]
     pub history_length: u64,
     /// Optional: Prefill chat history from a rustlog-compatible API at startup
     #[serde(default)]
@@ -246,9 +315,21 @@ pub struct AiConfig {
     /// Optional 7TV emote glossary prompt grounding.
     #[serde(default)]
     pub emotes: AiEmotesConfigSection,
+    /// Optional web tool surface for `!ai` (`web_search`, `fetch_url`).
+    #[serde(default)]
+    pub web: AiWebConfigSection,
     /// Deprecated: replaced by `memory.max_user`. Logged as a warning if set.
     #[serde(default)]
     pub max_memories: Option<usize>,
+}
+
+fn validate_reasoning_effort(path: &str, value: Option<&str>) -> Result<()> {
+    if let Some(v) = value
+        && v.trim().is_empty()
+    {
+        bail!("{path} cannot be empty when specified");
+    }
+    Ok(())
 }
 
 fn default_cooldown() -> u64 {
@@ -467,10 +548,11 @@ pub fn validate_config(config: &Configuration) -> Result<()> {
     }
 
     if let Some(ref ai) = config.ai
-        && ai.history_length > 100
+        && ai.history_length > crate::chat_history::MAX_HISTORY_LENGTH
     {
         bail!(
-            "ai.history_length must be <= 100 (got {})",
+            "ai.history_length must be <= {} (got {})",
+            crate::chat_history::MAX_HISTORY_LENGTH,
             ai.history_length
         );
     }
@@ -504,6 +586,41 @@ pub fn validate_config(config: &Configuration) -> Result<()> {
         bail!("ai.max_memories must be between 1 and 200 (got {n})");
     }
 
+    if let Some(ref ai) = config.ai {
+        validate_reasoning_effort("ai.reasoning_effort", ai.reasoning_effort.as_deref())?;
+        validate_reasoning_effort(
+            "ai.extraction.reasoning_effort",
+            ai.extraction.reasoning_effort.as_deref(),
+        )?;
+        validate_reasoning_effort(
+            "ai.consolidation.reasoning_effort",
+            ai.consolidation.reasoning_effort.as_deref(),
+        )?;
+        if ai.web.base_url.trim().is_empty() {
+            bail!("ai.web.base_url cannot be empty");
+        }
+        reqwest::Url::parse(&ai.web.base_url).wrap_err_with(|| {
+            format!(
+                "ai.web.base_url must be a valid URL (got {:?})",
+                ai.web.base_url
+            )
+        })?;
+        if !(1..=10).contains(&ai.web.max_results) {
+            bail!(
+                "ai.web.max_results must be between 1 and 10 (got {})",
+                ai.web.max_results
+            );
+        }
+        if !(1..=6).contains(&ai.web.max_rounds) {
+            bail!(
+                "ai.web.max_rounds must be between 1 and 6 (got {})",
+                ai.web.max_rounds
+            );
+        }
+        if ai.web.cache_capacity == 0 {
+            bail!("ai.web.cache_capacity must be > 0");
+        }
+    }
     // Parsed again at scheduler spawn; bail here so a typo doesn't take the
     // bot down after startup.
     if let Some(ref ai) = config.ai {
@@ -577,7 +694,8 @@ mod tests {
             system_prompt: default_system_prompt(),
             instruction_template: default_instruction_template(),
             timeout: default_ai_timeout(),
-            history_length: 0,
+            reasoning_effort: None,
+            history_length: default_history_length(),
             history_prefill: None,
             memory: MemoryConfigSection::default(),
             extraction: ExtractionConfigSection::default(),
@@ -586,6 +704,7 @@ mod tests {
                 ..ConsolidationConfigSection::default()
             },
             emotes: AiEmotesConfigSection::default(),
+            web: AiWebConfigSection::default(),
             max_memories: None,
         }
     }
@@ -605,6 +724,47 @@ mod tests {
     fn validate_accepts_well_formed_run_at() {
         let mut c = Configuration::test_default();
         c.ai = Some(ai_with_run_at("04:00"));
+        validate_config(&c).unwrap();
+    }
+
+    #[test]
+    fn ai_defaults_keep_tool_history_enabled_without_inline_template() {
+        let ai: AiConfig = toml::from_str(
+            r#"
+            backend = "ollama"
+            model = "x"
+            "#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            ai.history_length,
+            crate::chat_history::DEFAULT_HISTORY_LENGTH
+        );
+        assert_eq!(ai.instruction_template, "{message}");
+    }
+
+    #[test]
+    fn validate_rejects_history_length_above_max() {
+        let mut c = Configuration::test_default();
+        let mut ai = ai_with_run_at("04:00");
+        ai.history_length = crate::chat_history::MAX_HISTORY_LENGTH + 1;
+        c.ai = Some(ai);
+
+        let err = validate_config(&c).unwrap_err();
+        assert!(
+            format!("{err:#}").contains("ai.history_length"),
+            "got: {err:#}"
+        );
+    }
+
+    #[test]
+    fn validate_accepts_history_length_200() {
+        let mut c = Configuration::test_default();
+        let mut ai = ai_with_run_at("04:00");
+        ai.history_length = 200;
+        c.ai = Some(ai);
+
         validate_config(&c).unwrap();
     }
 
@@ -644,5 +804,51 @@ mod tests {
         c.ai = Some(ai);
 
         validate_config(&c).unwrap();
+    }
+
+    #[test]
+    fn validate_rejects_empty_reasoning_effort() {
+        let mut c = Configuration::test_default();
+        let mut ai = ai_with_run_at("04:00");
+        ai.reasoning_effort = Some("   ".into());
+        c.ai = Some(ai);
+
+        let err = validate_config(&c).unwrap_err();
+        assert!(
+            format!("{err:#}").contains("ai.reasoning_effort"),
+            "got: {err:#}"
+        );
+    }
+
+    #[test]
+    fn validate_accepts_non_empty_workflow_reasoning_effort() {
+        let mut c = Configuration::test_default();
+        let mut ai = ai_with_run_at("04:00");
+        ai.reasoning_effort = Some("medium".into());
+        ai.extraction.reasoning_effort = Some("low".into());
+        ai.consolidation.reasoning_effort = Some("high".into());
+        c.ai = Some(ai);
+
+        validate_config(&c).unwrap();
+    }
+
+    #[test]
+    fn validate_rejects_web_max_results_out_of_range() {
+        let mut c = Configuration::test_default();
+        let mut ai = ai_with_run_at("04:00");
+        ai.web.max_results = 0;
+        c.ai = Some(ai);
+        let err = validate_config(&c).unwrap_err();
+        assert!(format!("{err:#}").contains("ai.web.max_results"));
+    }
+
+    #[test]
+    fn validate_rejects_web_invalid_base_url() {
+        let mut c = Configuration::test_default();
+        let mut ai = ai_with_run_at("04:00");
+        ai.web.base_url = "not a url".into();
+        c.ai = Some(ai);
+        let err = validate_config(&c).unwrap_err();
+        assert!(format!("{err:#}").contains("ai.web.base_url"));
     }
 }

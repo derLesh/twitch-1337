@@ -307,6 +307,7 @@ mod tests {
                 },
             ],
             tools: vec![],
+            reasoning_effort: None,
             prior_rounds: vec![
                 ToolCallRound {
                     calls: vec![ToolCall {

@@ -117,7 +117,15 @@ async fn news_command_uses_full_history_without_previous_user_message() {
 #[tokio::test]
 #[serial]
 async fn news_command_without_history_does_not_call_llm() {
-    let mut bot = TestBotBuilder::new().with_ai().spawn().await;
+    let mut bot = TestBotBuilder::new()
+        .with_ai()
+        .with_config(|c| {
+            if let Some(ai) = c.ai.as_mut() {
+                ai.history_length = 0;
+            }
+        })
+        .spawn()
+        .await;
 
     bot.send("bob", "this will not be recorded").await;
     tokio::time::sleep(Duration::from_millis(100)).await;

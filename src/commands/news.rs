@@ -2,7 +2,6 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
-use chrono::Utc;
 use eyre::Result;
 use tracing::{debug, error, instrument};
 use twitch_irc::{login::LoginCredentials, transport::Transport};
@@ -49,11 +48,11 @@ impl NewsCommand {
         let chat = self.chat_ctx.as_ref()?;
         let mut snapshot = {
             let buf = chat.history.lock().await;
-            buf.iter().cloned().collect::<Vec<_>>()
+            buf.snapshot()
         };
 
-        if snapshot.last().is_some_and(|(sender, msg, _)| {
-            sender.eq_ignore_ascii_case(user) && msg == current_message
+        if snapshot.last().is_some_and(|entry| {
+            entry.username.eq_ignore_ascii_case(user) && entry.text == current_message
         }) {
             snapshot.pop();
         }
@@ -64,12 +63,12 @@ impl NewsCommand {
 
         let start = snapshot
             .iter()
-            .rposition(|(sender, _, _)| sender.eq_ignore_ascii_case(user))
+            .rposition(|entry| entry.username.eq_ignore_ascii_case(user))
             .map_or(0, |idx| idx + 1);
 
         let messages = snapshot[start..]
             .iter()
-            .map(|(sender, msg, _)| format!("{sender}: {msg}"))
+            .map(|entry| format!("{}: {}", entry.username, entry.text))
             .collect::<Vec<_>>();
 
         Some(messages)
@@ -150,6 +149,7 @@ where
                     content: user_message,
                 },
             ],
+            reasoning_effort: None,
         };
 
         let result =
@@ -168,11 +168,10 @@ where
         };
 
         if let (true, Some(chat)) = (success, &self.chat_ctx) {
-            let mut buf = chat.history.lock().await;
-            if buf.len() >= chat.history_length {
-                buf.pop_front();
-            }
-            buf.push_back((chat.bot_username.clone(), response.clone(), Utc::now()));
+            chat.history
+                .lock()
+                .await
+                .push_bot(chat.bot_username.clone(), response.clone());
         }
 
         if let Err(e) = ctx.client.say_in_reply_to(ctx.privmsg, response).await {

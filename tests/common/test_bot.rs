@@ -65,14 +65,16 @@ impl TestBotBuilder {
                 base_url: None,
                 model: "test-model".into(),
                 system_prompt: "test prompt".into(),
-                instruction_template: "{chat_history}\n{message}".into(),
+                instruction_template: "{message}".into(),
                 timeout: 30,
-                history_length: 0,
+                reasoning_effort: None,
+                history_length: twitch_1337::DEFAULT_HISTORY_LENGTH,
                 history_prefill: None,
                 memory: twitch_1337::config::MemoryConfigSection::default(),
                 extraction: twitch_1337::config::ExtractionConfigSection::default(),
                 consolidation: twitch_1337::config::ConsolidationConfigSection::default(),
                 emotes: twitch_1337::config::AiEmotesConfigSection::default(),
+                web: twitch_1337::config::AiWebConfigSection::default(),
                 max_memories: None,
             });
         }

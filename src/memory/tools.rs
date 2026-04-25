@@ -115,6 +115,8 @@ mod tests {
         assert!(!names.iter().any(|n| n == "merge_memories"));
         assert!(!names.iter().any(|n| n == "edit_memory"));
         assert!(!names.iter().any(|n| n == "drop_memory"));
+        assert!(!names.iter().any(|n| n == "web_search"));
+        assert!(!names.iter().any(|n| n == "fetch_url"));
     }
 
     #[test]
@@ -125,6 +127,8 @@ mod tests {
             vec!["merge_memories", "drop_memory", "edit_memory", "get_memory"]
         );
         assert!(!names.iter().any(|n| n == "save_memory"));
+        assert!(!names.iter().any(|n| n == "web_search"));
+        assert!(!names.iter().any(|n| n == "fetch_url"));
     }
 
     #[test]

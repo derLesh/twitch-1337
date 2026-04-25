@@ -4,7 +4,7 @@
 //! Tests push expected responses with [`FakeLlm::push_chat`] or
 //! [`FakeLlm::push_tool`] before invoking the command under test. After the
 //! command runs, inspect [`FakeLlm::chat_calls`] / [`FakeLlm::tool_calls`] to
-//! assert request shape (history injection, tool definitions, etc.).
+//! assert request shape (tool definitions, tool results, etc.).
 
 use std::collections::VecDeque;
 use std::sync::Mutex;

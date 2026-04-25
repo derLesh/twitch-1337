@@ -40,6 +40,7 @@ pub struct ExtractionContext {
 pub struct ExtractionDeps {
     pub llm: Arc<dyn llm::LlmClient>,
     pub model: String,
+    pub reasoning_effort: Option<String>,
     pub store: Arc<RwLock<MemoryStore>>,
     pub store_path: PathBuf,
     pub caps: Caps,
@@ -123,6 +124,7 @@ pub async fn run_memory_extraction(deps: ExtractionDeps, ctx: ExtractionContext)
             model: deps.model.clone(),
             messages: messages.clone(),
             tools: tools.clone(),
+            reasoning_effort: deps.reasoning_effort.clone(),
             prior_rounds: prior_rounds.clone(),
         };
         let resp = tokio::time::timeout(deps.timeout, deps.llm.chat_completion_with_tools(req))
