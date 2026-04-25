@@ -227,7 +227,7 @@ where
 
     run_command_dispatcher(
         broadcast_rx,
-        client,
+#        client,
         cmd_list,
         admin_channel,
         chat_history,

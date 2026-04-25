@@ -6,6 +6,7 @@ use eyre::Result;
 use tracing::{debug, error, instrument};
 use twitch_irc::{login::LoginCredentials, transport::Transport};
 
+use crate::ChatHistorySource;
 use crate::commands::ai::ChatContext;
 use crate::cooldown::{PerUserCooldown, format_cooldown_remaining};
 use crate::llm::{ChatCompletionRequest, LlmClient, Message};
@@ -13,7 +14,8 @@ use crate::util::{MAX_RESPONSE_LENGTH, truncate_response};
 
 use super::{Command, CommandContext};
 
-const NEWS_SYSTEM_PROMPT: &str = "Du fasst Twitch-Chat-Verlaeufe knapp und hilfreich zusammen. Antworte auf Deutsch, erfinde keine Details und konzentriere dich auf Themen, Highlights und wichtige Antworten. Halte die Antwort kurz genug fuer eine einzelne Twitch-Chatnachricht.";
+const NEWS_PREFIX: &str = "ICYMI:";
+const NEWS_SYSTEM_PROMPT: &str = "Du fasst Twitch-Chat-Verlaeufe knapp und hilfreich zusammen. Antworte auf Deutsch, erfinde keine Details und konzentriere dich auf Themen, Highlights und wichtige Antworten. Beginne die Antwort mit \"ICYMI:\". Wenn du mehrere Themen auflistest, trenne sie mit \" | \". Halte die Antwort kurz genug fuer eine einzelne Twitch-Chatnachricht.";
 const EMPTY_HISTORY_MESSAGE: &str =
     "Ich habe noch keine Chat-Historie für eine Zusammenfassung FDM";
 const NO_NEW_MESSAGES_MESSAGE: &str =
@@ -61,10 +63,19 @@ impl NewsCommand {
             return None;
         }
 
-        let start = snapshot
+        let previous_user_message = snapshot
             .iter()
             .rposition(|entry| entry.username.eq_ignore_ascii_case(user))
-            .map_or(0, |idx| idx + 1);
+            .map(|idx| idx + 1);
+        let previous_news_response = snapshot
+            .iter()
+            .rposition(|entry| self.is_news_response(entry))
+            .map(|idx| idx + 1);
+        let start = previous_user_message
+            .into_iter()
+            .chain(previous_news_response)
+            .max()
+            .unwrap_or(0);
 
         let messages = snapshot[start..]
             .iter()
@@ -73,6 +84,29 @@ impl NewsCommand {
 
         Some(messages)
     }
+
+    fn is_news_response(&self, entry: &crate::ChatHistoryEntry) -> bool {
+        let Some(chat) = self.chat_ctx.as_ref() else {
+            return false;
+        };
+        entry.source == ChatHistorySource::Bot
+            && entry.username.eq_ignore_ascii_case(&chat.bot_username)
+            && entry.text.trim_start().starts_with(NEWS_PREFIX)
+    }
+}
+
+fn format_news_response(text: &str) -> String {
+    let trimmed = text.trim();
+    let prefixed = if trimmed
+        .get(..NEWS_PREFIX.len())
+        .is_some_and(|prefix| prefix.eq_ignore_ascii_case(NEWS_PREFIX))
+    {
+        trimmed.to_string()
+    } else {
+        format!("{NEWS_PREFIX} {trimmed}")
+    };
+
+    truncate_response(&prefixed, MAX_RESPONSE_LENGTH)
 }
 
 #[async_trait]
@@ -133,7 +167,7 @@ where
         self.cooldown.record(user).await;
 
         let user_message = format!(
-            "Fasse diesen Twitch-Chat seit der letzten Nachricht von {user} zusammen:\n{}",
+            "Fasse diesen Twitch-Chat seit der letzten Nachricht von {user} oder seit der letzten News-Zusammenfassung zusammen. Beginne mit \"ICYMI:\". Trenne mehrere Themen mit \" | \":\n{}",
             history_lines.join("\n")
         );
 
@@ -156,7 +190,7 @@ where
             tokio::time::timeout(self.timeout, self.llm_client.chat_completion(request)).await;
 
         let (response, success) = match result {
-            Ok(Ok(text)) => (truncate_response(&text, MAX_RESPONSE_LENGTH), true),
+            Ok(Ok(text)) => (format_news_response(&text), true),
             Ok(Err(e)) => {
                 error!(error = ?e, "News AI execution failed");
                 ("Da ist was schiefgelaufen FDM".to_string(), false)
