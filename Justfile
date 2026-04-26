@@ -26,3 +26,7 @@ logs:
 
 # Deploy image and restart pod
 deploy: build push restart
+
+# Run locally with data dir in current directory and debug logging
+dev:
+    DATA_DIR=./data RUST_LOG=info,twitch_1337=debug cargo run

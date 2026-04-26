@@ -175,6 +175,19 @@ cargo run
 
 Configuration is entirely via `config.toml` - see `config.toml.example` for all available options.
 
+### Rotating credentials
+
+To replace the OAuth refresh token (e.g. after revoking the old one):
+
+1. Obtain a new refresh token via the Twitch OAuth flow for your client ID/secret.
+2. Update `refresh_token` in `config.toml`.
+3. Restart the bot.
+
+On startup, `FileBasedTokenStorage` compares the token stored in `$DATA_DIR/token.ron`
+against the value in config. When they differ it discards the stored access token, substitutes
+the new refresh token, and marks the credentials as expired — forcing an immediate re-auth
+before the IRC connection is opened. No manual deletion of `token.ron` is required.
+
 ### Docker
 
 ```bash

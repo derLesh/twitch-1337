@@ -5,14 +5,14 @@
 
 use std::collections::HashSet;
 
-use eyre::{Result, bail};
+use eyre::{Context as _, Result, bail};
 use secrecy::ExposeSecret as _;
 use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::time::Duration;
 use tracing::{error, info, instrument, trace};
 use twitch_irc::{
     ClientConfig, SecureTCPTransport, TwitchIRCClient,
-    login::RefreshingLoginCredentials,
+    login::{LoginCredentials as _, RefreshingLoginCredentials},
     message::{NoticeMessage, ServerMessage},
 };
 
@@ -20,19 +20,24 @@ use crate::{AuthenticatedTwitchClient, FileBasedTokenStorage, config::Configurat
 
 /// Create the Twitch IRC client and message receiver without connecting.
 #[instrument(skip(config))]
-pub fn setup_twitch_client(
+pub async fn setup_twitch_client(
     config: &Configuration,
-) -> (UnboundedReceiver<ServerMessage>, AuthenticatedTwitchClient) {
+) -> Result<(UnboundedReceiver<ServerMessage>, AuthenticatedTwitchClient)> {
     let credentials = RefreshingLoginCredentials::init_with_username(
         Some(config.twitch.username.clone()),
         config.twitch.client_id.expose_secret().to_string(),
         config.twitch.client_secret.expose_secret().to_string(),
         FileBasedTokenStorage::new(config.twitch.refresh_token.clone()),
     );
+    credentials
+        .get_credentials()
+        .await
+        .wrap_err("Failed to obtain initial credentials")?;
     let twitch_config = ClientConfig::new_simple(credentials);
-    TwitchIRCClient::<SecureTCPTransport, RefreshingLoginCredentials<FileBasedTokenStorage>>::new(
-        twitch_config,
-    )
+    Ok(TwitchIRCClient::<
+        SecureTCPTransport,
+        RefreshingLoginCredentials<FileBasedTokenStorage>,
+    >::new(twitch_config))
 }
 
 /// Connect, join channel(s), and verify authentication via `GlobalUserState`.
@@ -44,7 +49,7 @@ pub async fn setup_and_verify_twitch_client(
 ) -> Result<(UnboundedReceiver<ServerMessage>, AuthenticatedTwitchClient)> {
     info!("Setting up and verifying Twitch connection");
 
-    let (mut incoming_messages, client) = setup_twitch_client(config);
+    let (mut incoming_messages, client) = setup_twitch_client(config).await?;
 
     info!("Connecting to Twitch IRC");
     client.connect().await;
