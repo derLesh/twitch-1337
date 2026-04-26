@@ -85,7 +85,9 @@ pub async fn run_memory_extraction(deps: ExtractionDeps, ctx: ExtractionContext)
     {
         let mut w = deps.store.write().await;
         if w.upsert_identity(&ctx.speaker_id, &ctx.speaker_username, Utc::now()) {
-            w.save(&deps.store_path)?;
+            let save_snapshot = w.clone();
+            drop(w);
+            save_snapshot.save(&deps.store_path)?;
         }
     }
 
@@ -146,25 +148,28 @@ pub async fn run_memory_extraction(deps: ExtractionDeps, ctx: ExtractionContext)
                     "Memory extraction: processing tool calls"
                 );
                 let mut results: Vec<ToolResultMessage> = Vec::with_capacity(calls.len());
-                let mut w = deps.store.write().await;
-                for call in &calls {
-                    let dctx = DispatchContext {
-                        speaker_id: &ctx.speaker_id,
-                        speaker_username: &ctx.speaker_username,
-                        speaker_role: ctx.speaker_role,
-                        caps: deps.caps.clone(),
-                        half_life_days: deps.half_life_days,
-                        now: Utc::now(),
-                    };
-                    let result = w.execute_tool_call(call, &dctx);
-                    info!(tool = %call.name, result = %result, "extraction tool executed");
-                    results.push(ToolResultMessage {
-                        tool_call_id: call.id.clone(),
-                        tool_name: call.name.clone(),
-                        content: result,
-                    });
-                }
-                w.save(&deps.store_path)?;
+                let save_snapshot = {
+                    let mut w = deps.store.write().await;
+                    for call in &calls {
+                        let dctx = DispatchContext {
+                            speaker_id: &ctx.speaker_id,
+                            speaker_username: &ctx.speaker_username,
+                            speaker_role: ctx.speaker_role,
+                            caps: deps.caps.clone(),
+                            half_life_days: deps.half_life_days,
+                            now: Utc::now(),
+                        };
+                        let result = w.execute_tool_call(call, &dctx);
+                        info!(tool = %call.name, result = %result, "extraction tool executed");
+                        results.push(ToolResultMessage {
+                            tool_call_id: call.id.clone(),
+                            tool_name: call.name.clone(),
+                            content: result,
+                        });
+                    }
+                    w.clone()
+                };
+                save_snapshot.save(&deps.store_path)?;
                 prior_rounds.push(ToolCallRound {
                     calls,
                     results,

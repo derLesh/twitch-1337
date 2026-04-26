@@ -95,24 +95,21 @@ pub async fn run_consolidation(
         r.clone()
     };
 
-    // 2. Pre-filter hard-drops (deterministic, no LLM)
+    // 2+3. Hard-drops + corroboration boost (both deterministic; single write lock)
     let hard_drops = hard_drop_candidates(&snapshot, now);
-    if !hard_drops.is_empty() {
-        let mut w = store.write().await;
-        for (k, reason) in &hard_drops {
-            w.memories.remove(k);
-            debug!(%k, %reason, "pre-filter hard-drop");
-        }
-        w.save(&store_path)?;
-    }
-
-    // 3. Corroboration boost (deterministic)
     {
-        let mut w = store.write().await;
-        for m in w.memories.values_mut() {
-            m.confidence = corroboration_boost(m);
-        }
-        w.save(&store_path)?;
+        let save_snapshot = {
+            let mut w = store.write().await;
+            for (k, reason) in &hard_drops {
+                w.memories.remove(k);
+                debug!(%k, %reason, "pre-filter hard-drop");
+            }
+            for m in w.memories.values_mut() {
+                m.confidence = corroboration_boost(m);
+            }
+            w.clone()
+        };
+        save_snapshot.save(&store_path)?;
     }
 
     // 4. LLM pass per scope (user, lore, pref)
@@ -178,31 +175,34 @@ pub async fn run_consolidation(
                     reasoning_content,
                 } => {
                     let mut results = Vec::with_capacity(calls.len());
-                    let mut w = store.write().await;
-                    // Apply ops in order: drop → merge → edit (sort once).
-                    let mut sorted = calls.clone();
-                    sorted.sort_by_key(|c| match c.name.as_str() {
-                        "drop_memory" => 0,
-                        "merge_memories" => 1,
-                        "edit_memory" => 2,
-                        _ => 3,
-                    });
-                    for call in &sorted {
-                        let out = w.execute_consolidator_tool(call, now);
-                        match call.name.as_str() {
-                            "merge_memories" if out.starts_with("Merged") => merged += 1,
-                            "drop_memory" if out.starts_with("Dropped") => dropped += 1,
-                            "edit_memory" if out.starts_with("Edited") => edited += 1,
-                            _ => {}
-                        }
-                        info!(tool = %call.name, result = %out, "consolidation tool executed");
-                        results.push(ToolResultMessage {
-                            tool_call_id: call.id.clone(),
-                            tool_name: call.name.clone(),
-                            content: out,
+                    let save_snapshot = {
+                        let mut w = store.write().await;
+                        // Apply ops in order: drop → merge → edit (sort once).
+                        let mut sorted = calls.clone();
+                        sorted.sort_by_key(|c| match c.name.as_str() {
+                            "drop_memory" => 0,
+                            "merge_memories" => 1,
+                            "edit_memory" => 2,
+                            _ => 3,
                         });
-                    }
-                    w.save(&store_path)?;
+                        for call in &sorted {
+                            let out = w.execute_consolidator_tool(call, now);
+                            match call.name.as_str() {
+                                "merge_memories" if out.starts_with("Merged") => merged += 1,
+                                "drop_memory" if out.starts_with("Dropped") => dropped += 1,
+                                "edit_memory" if out.starts_with("Edited") => edited += 1,
+                                _ => {}
+                            }
+                            info!(tool = %call.name, result = %out, "consolidation tool executed");
+                            results.push(ToolResultMessage {
+                                tool_call_id: call.id.clone(),
+                                tool_name: call.name.clone(),
+                                content: out,
+                            });
+                        }
+                        w.clone()
+                    };
+                    save_snapshot.save(&store_path)?;
                     prior.push(ToolCallRound {
                         calls,
                         results,

@@ -146,6 +146,7 @@ pub async fn run_config_watcher_service(cache: Arc<tokio::sync::RwLock<database:
     let mut watcher_handle = tokio::task::spawn_blocking(move || {
         let tx = tx;
         let config_path = watcher_config_path;
+        let filter_path = config_path.clone();
 
         // Create debouncer with 2 second timeout
         let mut debouncer = match new_debouncer(
@@ -157,6 +158,10 @@ pub async fn run_config_watcher_service(cache: Arc<tokio::sync::RwLock<database:
                 match res {
                     Ok(events) => {
                         for event in events {
+                            // Only forward events for config.toml; ignore token.ron etc.
+                            if event.path != filter_path {
+                                continue;
+                            }
                             debug!(path = ?event.path, "File change event received");
                             // Use blocking_send since we're in a sync context
                             if tx.blocking_send(()).is_err() {
@@ -193,10 +198,25 @@ pub async fn run_config_watcher_service(cache: Arc<tokio::sync::RwLock<database:
         let _ = shutdown_rx.blocking_recv();
     });
 
+    // Track mtime to skip spurious events (notify 8.x subscribes to IN_OPEN, so reading
+    // config.toml in the reload handler triggers another event 2s later without this guard).
+    let mut last_config_mtime: Option<std::time::SystemTime> = None;
+
     // Main loop: handle file change events
     loop {
         tokio::select! {
             Some(()) = rx.recv() => {
+                let current_mtime = tokio::fs::metadata(&config_path)
+                    .await
+                    .and_then(|m| m.modified())
+                    .ok();
+
+                if current_mtime.is_some() && current_mtime == last_config_mtime {
+                    debug!("Config event ignored: mtime unchanged (spurious IN_OPEN/IN_ATTRIB)");
+                    continue;
+                }
+                last_config_mtime = current_mtime;
+
                 info!("Config file changed, reloading schedules");
 
                 if let Some(schedules) = reload_schedules_from_config() {
