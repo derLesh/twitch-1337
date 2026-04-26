@@ -268,7 +268,7 @@ impl PingManager {
         let rendered = ping
             .template
             .replace("{mentions}", &mentions)
-            .replace("{sender}", sender);
+            .replace("{sender}", &format!("@{sender}"));
         Some(rendered)
     }
 }
@@ -415,6 +415,24 @@ mod tests {
         let result = mgr.render_template("test", "alice").unwrap();
         assert!(!result.contains("@alice"), "should exclude sender");
         assert!(result.contains("@bob"));
+    }
+
+    #[test]
+    fn render_template_prefixes_sender_with_at() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut mgr = empty_manager(dir.path());
+        mgr.create_ping(
+            "test".into(),
+            "{mentions} {sender}".into(),
+            "admin".into(),
+            None,
+        )
+        .unwrap();
+        mgr.add_member("test", "alice").unwrap();
+        mgr.add_member("test", "bob").unwrap();
+
+        let result = mgr.render_template("test", "alice").unwrap();
+        assert!(result.contains("@alice"), "sender should have @ prefix");
     }
 
     #[test]
