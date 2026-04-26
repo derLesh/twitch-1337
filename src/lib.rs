@@ -25,6 +25,7 @@ pub mod token_storage;
 pub mod twitch_setup;
 pub mod util;
 pub mod web_search;
+pub mod whisper;
 
 use std::path::PathBuf;
 use std::sync::{Arc, atomic::AtomicU32};
@@ -54,13 +55,17 @@ use crate::{
         tracker_1337::{TARGET_HOUR, TARGET_MINUTE, load_leaderboard, run_1337_handler},
     },
     llm::LlmClient,
+    whisper::WhisperSender,
 };
+
+pub type AuthenticatedLoginCredentials =
+    RefreshingLoginCredentials<crate::token_storage::FileBasedTokenStorage>;
 
 /// Generic alias for any authenticated Twitch IRC client. The production
 /// default is `SecureTCPTransport` + file-backed refreshing credentials.
 pub type AuthenticatedTwitchClient<
     T = twitch_irc::SecureTCPTransport,
-    L = RefreshingLoginCredentials<crate::token_storage::FileBasedTokenStorage>,
+    L = AuthenticatedLoginCredentials,
 > = TwitchIRCClient<T, L>;
 
 pub use chat_history::{
@@ -85,6 +90,7 @@ pub struct Services {
     pub clock: Arc<dyn Clock>,
     pub llm: Option<Arc<dyn LlmClient>>,
     pub aviation: Option<AviationClient>,
+    pub whisper: Option<Arc<dyn WhisperSender>>,
     pub data_dir: PathBuf,
 }
 
@@ -108,6 +114,7 @@ where
         clock,
         llm,
         aviation,
+        whisper,
         data_dir,
     } = services;
 
@@ -338,6 +345,7 @@ where
                 cooldowns: config.cooldowns.clone(),
                 tracker_tx,
                 aviation_client: aviation_for_commands,
+                whisper,
                 admin_channel: config.twitch.admin_channel.clone(),
                 bot_username: config.twitch.username.clone(),
                 channel: config.twitch.channel.clone(),
