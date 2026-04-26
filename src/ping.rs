@@ -255,10 +255,11 @@ impl PingManager {
     /// (i.e., all members are the sender).
     pub fn render_template(&self, ping_name: &str, sender: &str) -> Option<String> {
         let ping = self.store.pings.get(ping_name)?;
+        let sender_in_template = ping.template.contains("{sender}");
         let mentions = ping
             .members
             .iter()
-            .filter(|m| m.as_str() != sender)
+            .filter(|m| !sender_in_template || m.as_str() != sender)
             .map(|m| format!("@{m}"))
             .collect::<Vec<_>>()
             .join(" ");
@@ -377,7 +378,7 @@ mod tests {
     }
 
     #[test]
-    fn render_template_excludes_sender() {
+    fn render_template_includes_sender_when_no_sender_placeholder_two_members() {
         let dir = tempfile::tempdir().unwrap();
         let mut mgr = test_manager(dir.path());
         mgr.add_member("test", "alice").unwrap();
@@ -386,34 +387,33 @@ mod tests {
         let result = mgr.render_template("test", "alice").unwrap();
         assert!(result.contains("@bob"), "should mention bob");
         assert!(
-            !result.contains("@alice"),
-            "should not mention sender alice"
+            result.contains("@alice"),
+            "sender should appear when no {{sender}} in template"
         );
     }
 
     #[test]
-    fn render_template_returns_none_when_sender_is_only_member() {
+    fn render_template_fires_when_sender_is_only_member_and_no_sender_in_template() {
         let dir = tempfile::tempdir().unwrap();
         let mut mgr = test_manager(dir.path());
         mgr.add_member("test", "alice").unwrap();
 
         let result = mgr.render_template("test", "alice");
         assert!(
-            result.is_none(),
-            "should return None when only member is sender"
+            result.is_some(),
+            "should not skip when sole member and template has no {{sender}}"
         );
     }
 
     #[test]
-    fn render_template_excludes_sender_lowercase() {
+    fn render_template_sender_included_in_mentions_when_no_sender_placeholder() {
         let dir = tempfile::tempdir().unwrap();
         let mut mgr = test_manager(dir.path());
         mgr.add_member("test", "alice").unwrap();
         mgr.add_member("test", "bob").unwrap();
 
-        // Twitch IRC sender.login is always lowercase
         let result = mgr.render_template("test", "alice").unwrap();
-        assert!(!result.contains("@alice"), "should exclude sender");
+        assert!(result.contains("@alice"), "sender should be in mentions");
         assert!(result.contains("@bob"));
     }
 
@@ -479,11 +479,12 @@ mod tests {
         mgr.add_member("test", "bob").unwrap();
 
         // First call: should fire and record the trigger.
+        // Template "Hey {mentions}!" has no {sender}, so bob appears in mentions too.
         let first = mgr.try_record_trigger("test", "bob", Duration::from_secs(300), false);
         match first {
             TriggerDecision::Fire(rendered) => {
                 assert!(rendered.contains("@alice"));
-                assert!(!rendered.contains("@bob"));
+                assert!(rendered.contains("@bob"));
             }
             other => panic!("expected Fire on first call, got {other:?}"),
         }
@@ -509,11 +510,13 @@ mod tests {
         let decision = mgr.try_record_trigger("test", "stranger", Duration::from_secs(300), false);
         assert!(matches!(decision, TriggerDecision::Skip));
 
-        // Alice is the sole member, so render_template produces no mentions → Skip.
-        // The important invariant: the previous rejection did not record a trigger,
-        // so we don't get OnCooldown here.
+        // Alice is the sole member; template "Hey {mentions}!" has no {sender},
+        // so alice appears in mentions → Fire.
         let decision = mgr.try_record_trigger("test", "alice", Duration::from_secs(300), false);
-        assert!(matches!(decision, TriggerDecision::Skip));
+        assert!(
+            matches!(decision, TriggerDecision::Fire(_)),
+            "sole member with no {{sender}} in template should fire, got {decision:?}"
+        );
     }
 
     #[test]
@@ -526,6 +529,81 @@ mod tests {
         assert!(
             matches!(decision, TriggerDecision::Fire(_)),
             "public=true should allow non-members to fire, got {decision:?}"
+        );
+    }
+
+    #[test]
+    fn render_template_includes_sender_when_no_sender_placeholder() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut mgr = empty_manager(dir.path());
+        mgr.create_ping("grp".into(), "{mentions}".into(), "admin".into(), None)
+            .unwrap();
+        mgr.add_member("grp", "alice").unwrap();
+        mgr.add_member("grp", "bob").unwrap();
+
+        let result = mgr.render_template("grp", "alice").unwrap();
+        assert!(
+            result.contains("@alice"),
+            "sender should be in mentions when template has no {{sender}}"
+        );
+        assert!(result.contains("@bob"));
+    }
+
+    #[test]
+    fn render_template_excludes_sender_when_template_has_sender_placeholder() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut mgr = empty_manager(dir.path());
+        mgr.create_ping(
+            "grp".into(),
+            "{sender} pinged {mentions}".into(),
+            "admin".into(),
+            None,
+        )
+        .unwrap();
+        mgr.add_member("grp", "alice").unwrap();
+        mgr.add_member("grp", "bob").unwrap();
+
+        let result = mgr.render_template("grp", "alice").unwrap();
+        assert!(
+            !result.contains("@alice @") && result.starts_with("@alice pinged"),
+            "sender should not be in mentions when already in {{sender}}: {result}"
+        );
+        assert!(result.contains("@bob"));
+    }
+
+    #[test]
+    fn render_template_fires_when_sender_is_sole_member_and_no_sender_placeholder() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut mgr = empty_manager(dir.path());
+        mgr.create_ping("grp".into(), "{mentions}".into(), "admin".into(), None)
+            .unwrap();
+        mgr.add_member("grp", "alice").unwrap();
+
+        let result = mgr.render_template("grp", "alice");
+        assert!(
+            result.is_some(),
+            "should not skip when sender is only member and template has no {{sender}}"
+        );
+        assert!(result.unwrap().contains("@alice"));
+    }
+
+    #[test]
+    fn render_template_skips_when_sender_is_sole_member_and_template_has_sender_placeholder() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut mgr = empty_manager(dir.path());
+        mgr.create_ping(
+            "grp".into(),
+            "{sender} pinged {mentions}".into(),
+            "admin".into(),
+            None,
+        )
+        .unwrap();
+        mgr.add_member("grp", "alice").unwrap();
+
+        let result = mgr.render_template("grp", "alice");
+        assert!(
+            result.is_none(),
+            "should skip when sender is sole member and template uses {{sender}}"
         );
     }
 }
