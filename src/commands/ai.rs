@@ -411,18 +411,14 @@ where
 
         let now = Utc::now();
         let facts = if let Some(ref mem) = self.memory {
-            let mut store_guard = mem.config.store.write().await;
-            store_guard.format_for_prompt(now).unwrap_or_default()
+            let store_guard = mem.config.store.read().await;
+            store_guard
+                .format_for_prompt(&mem.config.caps)
+                .unwrap_or_default()
         } else {
             String::new()
         };
-        let mut system_prompt = format!(
-            "{}{}\n\nCurrent time: {}",
-            self.prompts.system,
-            facts,
-            now.with_timezone(&chrono_tz::Europe::Berlin)
-                .format("%Y-%m-%d %H:%M %Z")
-        );
+        let mut system_prompt = format!("{}{}", self.prompts.system, facts);
 
         if let Some(ref emotes) = self.emotes
             && let Some(block) = emotes.prompt_block(&ctx.privmsg.channel_id).await
@@ -433,11 +429,6 @@ where
         if self.chat_ctx.is_some() {
             system_prompt.push_str(CHAT_HISTORY_SYSTEM_APPENDIX);
         }
-
-        let user_message = self
-            .prompts
-            .instruction_template
-            .replace("{message}", &instruction);
 
         let chat_history_text = if let Some(ref chat) = self.chat_ctx {
             let buf = chat.history.lock().await;
@@ -462,7 +453,17 @@ where
             String::new()
         };
 
-        let user_message = user_message.replace("{chat_history}", &chat_history_text);
+        // User message: all volatile per-turn context lives here. Time first
+        // so the model anchors before reading history/instruction.
+        let now_berlin = now
+            .with_timezone(&chrono_tz::Europe::Berlin)
+            .format("%Y-%m-%d %H:%M %Z");
+        let instruction_rendered = self
+            .prompts
+            .instruction_template
+            .replace("{message}", &instruction)
+            .replace("{chat_history}", &chat_history_text);
+        let user_message = format!("Current time: {now_berlin}\n\n{instruction_rendered}");
 
         let result = if let Some(ref web) = self.web {
             self.chat_with_web_tools(system_prompt, user_message, web)

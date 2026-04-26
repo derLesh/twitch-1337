@@ -20,7 +20,7 @@ async fn setup_hi_ping(bot: &mut TestBot) {
 }
 
 /// Create a ping as broadcaster, have two users join, then verify the trigger
-/// renders mentions correctly (sender excluded, other members included).
+/// renders mentions correctly (template has no {sender}, so sender is included).
 #[tokio::test]
 #[serial]
 async fn ping_trigger_renders_template_with_mentions() {
@@ -28,7 +28,8 @@ async fn ping_trigger_renders_template_with_mentions() {
 
     setup_hi_ping(&mut bot).await;
 
-    // Alice triggers !hi. Bob should be mentioned; alice (sender) excluded.
+    // Alice triggers !hi. Template "yo {mentions}" has no {sender},
+    // so both alice and bob appear in mentions.
     bot.send("alice", "!hi").await;
     let out = bot.expect_say(Duration::from_secs(2)).await;
     assert!(
@@ -36,8 +37,8 @@ async fn ping_trigger_renders_template_with_mentions() {
         "expected @bob in trigger output: {out}"
     );
     assert!(
-        !out.contains("@alice"),
-        "sender alice should be excluded: {out}"
+        out.contains("@alice"),
+        "sender alice should be included when template has no {{sender}}: {out}"
     );
 
     bot.shutdown().await;
