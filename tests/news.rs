@@ -29,7 +29,7 @@ async fn news_command_summarizes_since_previous_user_message() {
     bot.send("alice", "!news").await;
     let out = bot.expect_say(Duration::from_secs(2)).await;
     let body = out.strip_prefix(". ").unwrap_or(&out);
-    assert_eq!(body, "carol und dave haben Updates gepostet");
+    assert_eq!(body, "ICYMI: carol und dave haben Updates gepostet");
 
     let calls = bot.llm.chat_calls();
     assert_eq!(calls.len(), 1, "expected exactly one chat completion call");
@@ -59,6 +59,21 @@ async fn news_command_summarizes_since_previous_user_message() {
         "included triggering command: {}",
         user_msg.content
     );
+    assert!(
+        !user_msg.content.contains("Trenne mehrere Themen"),
+        "duplicated format instruction in user prompt: {}",
+        user_msg.content
+    );
+    let system_msg = calls[0]
+        .messages
+        .iter()
+        .find(|m| m.role == "system")
+        .expect("request has a system message");
+    assert!(
+        system_msg.content.contains("trenne sie mit \" | \""),
+        "missing topic separator instruction: {}",
+        system_msg.content
+    );
 
     bot.shutdown().await;
 }
@@ -85,7 +100,7 @@ async fn news_command_uses_full_history_without_previous_user_message() {
     bot.send("alice", "!news").await;
     let out = bot.expect_say(Duration::from_secs(2)).await;
     let body = out.strip_prefix(". ").unwrap_or(&out);
-    assert_eq!(body, "der ganze Verlauf wurde zusammengefasst");
+    assert_eq!(body, "ICYMI: der ganze Verlauf wurde zusammengefasst");
 
     let calls = bot.llm.chat_calls();
     assert_eq!(calls.len(), 1, "expected exactly one chat completion call");
@@ -108,6 +123,65 @@ async fn news_command_uses_full_history_without_previous_user_message() {
     assert!(
         !user_msg.content.contains("!news"),
         "included triggering command: {}",
+        user_msg.content
+    );
+
+    bot.shutdown().await;
+}
+
+#[tokio::test]
+#[serial]
+async fn news_command_starts_after_previous_news_response() {
+    let mut bot = TestBotBuilder::new()
+        .with_ai()
+        .with_config(|c| {
+            if let Some(ai) = c.ai.as_mut() {
+                ai.history_length = 10;
+            }
+            c.cooldowns.news = 0;
+        })
+        .spawn()
+        .await;
+
+    bot.send("bob", "old topic").await;
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    bot.llm.push_chat("icymi: old topic summary");
+    bot.send("alice", "!news").await;
+    let first = bot.expect_say(Duration::from_secs(2)).await;
+    let first_body = first.strip_prefix(". ").unwrap_or(&first);
+    assert_eq!(first_body, "ICYMI: old topic summary");
+
+    bot.send("carol", "fresh topic").await;
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    bot.llm.push_chat("fresh topic summary");
+    bot.send("dave", "!news").await;
+    let out = bot.expect_say(Duration::from_secs(2)).await;
+    let body = out.strip_prefix(". ").unwrap_or(&out);
+    assert_eq!(body, "ICYMI: fresh topic summary");
+
+    let calls = bot.llm.chat_calls();
+    assert_eq!(calls.len(), 2, "expected two chat completion calls");
+    let user_msg = calls[1]
+        .messages
+        .iter()
+        .find(|m| m.role == "user")
+        .expect("request has a user message");
+
+    assert!(
+        user_msg.content.contains("carol: fresh topic"),
+        "missing fresh topic: {}",
+        user_msg.content
+    );
+    assert!(
+        !user_msg.content.contains("bob: old topic"),
+        "included message before previous news response: {}",
+        user_msg.content
+    );
+    assert!(
+        !user_msg.content.contains("ICYMI: old topic summary"),
+        "included previous news response: {}",
         user_msg.content
     );
 
