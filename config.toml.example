@@ -36,6 +36,7 @@ client_secret = "your_client_secret"
 # [cooldowns]
 # ai = 30        # !ai command (default: 30)
 # news = 60      # !news command (default: 60)
+# grok = 30      # @grok reply command (default: 30)
 # up = 30        # !up command (default: 30)
 # feedback = 300 # !fb command (default: 300)
 

@@ -56,6 +56,7 @@ pub struct AiMemory {
 }
 
 /// Optional web tool-call dependencies for main `!ai` responses.
+#[derive(Clone)]
 pub struct AiWeb {
     pub executor: Arc<web_search::WebToolExecutor>,
     pub max_rounds: usize,
@@ -287,10 +288,74 @@ fn recent_chat_tool_definition() -> ToolDefinition {
     }
 }
 
-enum AiResult {
+pub(crate) enum AiResult {
     Ok(String),
     Timeout,
     Error(eyre::Report),
+}
+
+pub(crate) async fn chat_with_web_tools(
+    llm_client: &Arc<dyn LlmClient>,
+    model: &str,
+    reasoning_effort: Option<String>,
+    timeout: Duration,
+    system_prompt: String,
+    user_message: String,
+    web: &AiWeb,
+) -> AiResult {
+    let messages = vec![
+        Message {
+            role: "system".to_string(),
+            content: system_prompt,
+        },
+        Message {
+            role: "user".to_string(),
+            content: user_message,
+        },
+    ];
+
+    let tools = web_search::ai_tools();
+    let mut prior_rounds: Vec<ToolCallRound> = Vec::new();
+
+    for round in 0..web.max_rounds {
+        let request = ToolChatCompletionRequest {
+            model: model.to_string(),
+            messages: messages.clone(),
+            tools: tools.clone(),
+            reasoning_effort: reasoning_effort.clone(),
+            prior_rounds: prior_rounds.clone(),
+        };
+
+        let response =
+            match tokio::time::timeout(timeout, llm_client.chat_completion_with_tools(request))
+                .await
+            {
+                Ok(Ok(resp)) => resp,
+                Ok(Err(e)) => return AiResult::Error(e),
+                Err(_) => return AiResult::Timeout,
+            };
+
+        match response {
+            ToolChatCompletionResponse::Message(content) => return AiResult::Ok(content),
+            ToolChatCompletionResponse::ToolCalls {
+                calls,
+                reasoning_content,
+            } => {
+                let mut results = Vec::with_capacity(calls.len());
+                for call in &calls {
+                    results.push(web.executor.execute_tool_call(call).await);
+                }
+                prior_rounds.push(ToolCallRound {
+                    calls,
+                    results,
+                    reasoning_content,
+                });
+                debug!(round, "Processed web tool-call round");
+            }
+        }
+    }
+
+    AiResult::Error(eyre::eyre!("AI web-tool round limit reached"))
 }
 
 impl AiCommand {
@@ -300,61 +365,16 @@ impl AiCommand {
         user_message: String,
         web: &AiWeb,
     ) -> AiResult {
-        let messages = vec![
-            Message {
-                role: "system".to_string(),
-                content: system_prompt,
-            },
-            Message {
-                role: "user".to_string(),
-                content: user_message,
-            },
-        ];
-
-        let tools = web_search::ai_tools();
-        let mut prior_rounds: Vec<ToolCallRound> = Vec::new();
-
-        for round in 0..web.max_rounds {
-            let request = ToolChatCompletionRequest {
-                model: self.model.clone(),
-                messages: messages.clone(),
-                tools: tools.clone(),
-                reasoning_effort: self.reasoning_effort.clone(),
-                prior_rounds: prior_rounds.clone(),
-            };
-
-            let response = match tokio::time::timeout(
-                self.timeout,
-                self.llm_client.chat_completion_with_tools(request),
-            )
-            .await
-            {
-                Ok(Ok(resp)) => resp,
-                Ok(Err(e)) => return AiResult::Error(e),
-                Err(_) => return AiResult::Timeout,
-            };
-
-            match response {
-                ToolChatCompletionResponse::Message(content) => return AiResult::Ok(content),
-                ToolChatCompletionResponse::ToolCalls {
-                    calls,
-                    reasoning_content,
-                } => {
-                    let mut results = Vec::with_capacity(calls.len());
-                    for call in &calls {
-                        results.push(web.executor.execute_tool_call(call).await);
-                    }
-                    prior_rounds.push(ToolCallRound {
-                        calls,
-                        results,
-                        reasoning_content,
-                    });
-                    debug!(round, "Processed web tool-call round");
-                }
-            }
-        }
-
-        AiResult::Error(eyre::eyre!("AI web-tool round limit reached"))
+        chat_with_web_tools(
+            &self.llm_client,
+            &self.model,
+            self.reasoning_effort.clone(),
+            self.timeout,
+            system_prompt,
+            user_message,
+            web,
+        )
+        .await
     }
 }
 

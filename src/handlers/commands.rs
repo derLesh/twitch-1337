@@ -207,9 +207,17 @@ where
                 cooldown: Duration::from_secs(cooldowns.ai),
                 chat_ctx: chat_ctx.clone(),
                 memory: ai_memory,
-                web,
+                web: web.clone(),
                 emotes: emote_provider,
             },
+        )));
+        cmd_list.push(Box::new(commands::grok::GrokCommand::new(
+            llm.clone(),
+            cfg.model.clone(),
+            Duration::from_secs(cfg.timeout),
+            Duration::from_secs(cooldowns.grok),
+            cfg.reasoning_effort.clone(),
+            web,
         )));
         cmd_list.push(Box::new(commands::news::NewsCommand::new(
             llm,

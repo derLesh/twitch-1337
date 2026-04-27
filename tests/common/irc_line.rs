@@ -6,6 +6,39 @@ pub fn privmsg(channel: &str, user: &str, text: &str) -> String {
     privmsg_with(channel, user, text, &[])
 }
 
+pub fn reply_privmsg(
+    channel: &str,
+    user: &str,
+    text: &str,
+    parent_user: &str,
+    parent_text: &str,
+) -> String {
+    privmsg_with(
+        channel,
+        user,
+        text,
+        &[
+            (
+                "reply-parent-msg-id",
+                "11111111-1111-1111-1111-111111111111",
+            ),
+            ("reply-parent-user-id", "22222"),
+            ("reply-parent-user-login", parent_user),
+            ("reply-parent-display-name", parent_user),
+            ("reply-parent-msg-body", &escape_tag_value(parent_text)),
+        ],
+    )
+}
+
+fn escape_tag_value(value: &str) -> String {
+    value
+        .replace('\\', "\\\\")
+        .replace(' ', "\\s")
+        .replace(';', "\\:")
+        .replace('\r', "\\r")
+        .replace('\n', "\\n")
+}
+
 /// Build a PRIVMSG line with extra tags. Entries in `extra_tags` whose key
 /// matches a default override the default value; new keys are appended.
 pub fn privmsg_with(channel: &str, user: &str, text: &str, extra_tags: &[(&str, &str)]) -> String {

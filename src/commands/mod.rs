@@ -10,6 +10,7 @@ pub mod ai;
 pub mod feedback;
 pub mod flights;
 pub mod flights_above;
+pub mod grok;
 pub mod leaderboard;
 pub mod news;
 pub mod ping_admin;
