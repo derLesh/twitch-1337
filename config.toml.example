@@ -40,6 +40,17 @@ client_secret = "your_client_secret"
 # up = 30        # !up command (default: 30)
 # feedback = 300 # !fb command (default: 300)
 
+# Optional: Aviationstack metadata enrichment for !track.
+# The bot uses this at most once per newly tracked flight to fetch route and
+# actual departure time. Live tracking still uses ADSB.lol.
+# Free Aviationstack accounts have a small monthly request quota, so keep this
+# disabled unless you have configured an API key.
+# [aviationstack]
+# enabled = false
+# api_key = "your_aviationstack_api_key_here"
+# base_url = "https://api.aviationstack.com/v1"
+# timeout_secs = 5
+
 # Optional: Suspend configuration
 # Controls the default suspend duration applied when no explicit duration is given.
 # Must be between 1 second and 604800 seconds (7 days).

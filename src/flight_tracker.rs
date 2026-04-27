@@ -11,7 +11,9 @@ use twitch_irc::{
     TwitchIRCClient, login::LoginCredentials, message::PrivmsgMessage, transport::Transport,
 };
 
-use crate::aviation::{AltBaro, AviationClient, NearbyAircraft, iata_to_coords};
+use crate::aviation::{
+    AltBaro, AviationClient, AviationstackFlightMetadata, NearbyAircraft, iata_to_coords,
+};
 use crate::clock::Clock;
 
 const FLIGHTS_FILENAME: &str = "flights.ron";
@@ -158,6 +160,10 @@ pub struct TrackedFlight {
     pub last_seen: Option<DateTime<Utc>>,
     pub last_phase_change: Option<DateTime<Utc>>,
     pub polls_since_change: u32,
+    #[serde(default)]
+    pub takeoff_at: Option<DateTime<Utc>>,
+    #[serde(default)]
+    pub aviationstack_checked: bool,
 
     // Divert detection
     #[serde(default)]
@@ -272,6 +278,17 @@ pub(crate) fn altitude_ft(ac: &NearbyAircraft) -> Option<i64> {
 
 pub(crate) fn vertical_rate(ac: &NearbyAircraft) -> Option<i64> {
     ac.baro_rate.or(ac.geom_rate)
+}
+
+fn is_airborne_phase(phase: FlightPhase) -> bool {
+    matches!(
+        phase,
+        FlightPhase::Takeoff
+            | FlightPhase::Climb
+            | FlightPhase::Cruise
+            | FlightPhase::Descent
+            | FlightPhase::Approach
+    )
 }
 
 /// Determines the new flight phase based on current ADS-B data and previous state.
@@ -399,6 +416,47 @@ fn format_route(route: &Option<(String, String)>) -> String {
     }
 }
 
+fn set_route_from_iata(flight: &mut TrackedFlight, origin: &str, dest: &str) {
+    let origin = origin.trim().to_uppercase();
+    let dest = dest.trim().to_uppercase();
+    if origin.is_empty() || dest.is_empty() {
+        return;
+    }
+
+    if let Some((lat, lon, _)) = iata_to_coords(&dest) {
+        flight.dest_lat = Some(lat);
+        flight.dest_lon = Some(lon);
+    }
+    flight.route = Some((origin, dest));
+}
+
+fn apply_aviationstack_metadata(flight: &mut TrackedFlight, metadata: AviationstackFlightMetadata) {
+    let takeoff_at = metadata.takeoff_time();
+
+    if let (Some(origin), Some(dest)) = (
+        metadata.departure_iata.as_deref(),
+        metadata.arrival_iata.as_deref(),
+    ) {
+        set_route_from_iata(flight, origin, dest);
+    }
+
+    if flight.hex.is_none()
+        && let Some(hex) = metadata.aircraft_icao24
+    {
+        flight.hex = Some(hex.to_uppercase());
+    }
+
+    if flight.aircraft_type.is_none()
+        && let Some(aircraft_type) = metadata.aircraft_icao
+    {
+        flight.aircraft_type = Some(aircraft_type.to_uppercase());
+    }
+
+    if let Some(takeoff_at) = takeoff_at {
+        flight.takeoff_at = Some(takeoff_at);
+    }
+}
+
 /// Formats the flight prefix: "DLH123 (A320) FRA->MUC" with graceful degradation.
 fn format_flight_prefix(flight: &TrackedFlight) -> String {
     let name = flight
@@ -439,12 +497,20 @@ pub(crate) fn msg_approach(flight: &TrackedFlight) -> String {
 }
 
 pub(crate) fn msg_landing(flight: &TrackedFlight, now: DateTime<Utc>) -> String {
-    let duration = now.signed_duration_since(flight.tracked_at);
-    format!(
-        "{} ist gelandet! Flugzeit: {}",
-        format_flight_prefix(flight),
-        format_duration_hm(duration)
-    )
+    match flight.takeoff_at {
+        Some(takeoff_at) => {
+            let duration = now.signed_duration_since(takeoff_at);
+            format!(
+                "{} ist gelandet! Flugzeit: {}",
+                format_flight_prefix(flight),
+                format_duration_hm(duration)
+            )
+        }
+        None => format!(
+            "{} ist gelandet! Flugzeit: unbekannt (Takeoff nicht beobachtet)",
+            format_flight_prefix(flight)
+        ),
+    }
 }
 
 pub(crate) fn msg_squawk_emergency(flight: &TrackedFlight, code: &str, meaning: &str) -> String {
@@ -805,6 +871,8 @@ async fn handle_track<T, L>(
         last_seen: Some(now),
         last_phase_change: None,
         polls_since_change: 0,
+        takeoff_at: None,
+        aviationstack_checked: false,
         divert_consecutive_polls: 0,
         dest_lat: None,
         dest_lon: None,
@@ -813,21 +881,34 @@ async fn handle_track<T, L>(
     // Detect initial phase
     flight.phase = detect_phase(&flight, &ac);
 
-    // Fetch route if we have a callsign
-    if let Some(cs) = &callsign {
+    if aviation_client.aviationstack_enabled() {
+        flight.aviationstack_checked = true;
+        match aviation_client
+            .get_aviationstack_flight_metadata(&identifier, callsign.as_deref())
+            .await
+        {
+            Ok(Some(metadata)) => {
+                apply_aviationstack_metadata(&mut flight, metadata);
+            }
+            Ok(None) => {
+                debug!(identifier = %identifier, "No aviationstack metadata found for flight");
+            }
+            Err(e) => {
+                warn!(error = ?e, identifier = %identifier, "Aviationstack metadata lookup failed");
+            }
+        }
+    }
+
+    // Fetch route if we have a callsign and aviationstack did not provide one.
+    if flight.route.is_none()
+        && let Some(cs) = &callsign
+    {
         match tokio::time::timeout(ROUTE_FETCH_TIMEOUT, aviation_client.get_flight_route(cs)).await
         {
             Ok(Ok(Some(route))) => {
                 let origin = route.origin.iata_code.clone();
                 let dest = route.destination.iata_code.clone();
-
-                // Resolve destination coordinates for divert detection
-                if let Some((lat, lon, _)) = iata_to_coords(&dest) {
-                    flight.dest_lat = Some(lat);
-                    flight.dest_lon = Some(lon);
-                }
-
-                flight.route = Some((origin, dest));
+                set_route_from_iata(&mut flight, &origin, &dest);
             }
             Ok(Ok(None)) => {
                 debug!(callsign = %cs, "No route found for flight");
@@ -1099,6 +1180,13 @@ async fn poll_all_flights<T, L>(
             flight.polls_since_change = 0;
             changed = true;
 
+            if old_phase == FlightPhase::Ground
+                && is_airborne_phase(new_phase)
+                && flight.takeoff_at.is_none()
+            {
+                flight.takeoff_at = Some(now);
+            }
+
             // Post phase change messages
             match new_phase {
                 FlightPhase::Takeoff => messages.push(msg_takeoff(flight)),
@@ -1112,6 +1200,7 @@ async fn poll_all_flights<T, L>(
             // Landing transitions to Ground after posting
             if new_phase == FlightPhase::Landing {
                 flight.phase = FlightPhase::Ground;
+                flight.takeoff_at = None;
             }
         } else {
             flight.polls_since_change += 1;
@@ -1177,5 +1266,118 @@ async fn poll_all_flights<T, L>(
     // Persist if any state changed
     if changed {
         save_tracker_state(data_dir, state).await;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn dt(value: &str) -> DateTime<Utc> {
+        DateTime::parse_from_rfc3339(value)
+            .unwrap()
+            .with_timezone(&Utc)
+    }
+
+    fn tracked_flight() -> TrackedFlight {
+        TrackedFlight {
+            identifier: FlightIdentifier::Callsign("DLH1234".to_string()),
+            callsign: Some("DLH1234".to_string()),
+            hex: None,
+            phase: FlightPhase::Landing,
+            route: None,
+            aircraft_type: None,
+            altitude_ft: None,
+            vertical_rate_fpm: None,
+            ground_speed_kts: None,
+            lat: None,
+            lon: None,
+            squawk: None,
+            tracked_by: "alice".to_string(),
+            tracked_at: dt("2026-04-18T10:00:00Z"),
+            last_seen: None,
+            last_phase_change: None,
+            polls_since_change: 0,
+            takeoff_at: None,
+            aviationstack_checked: false,
+            divert_consecutive_polls: 0,
+            dest_lat: None,
+            dest_lon: None,
+        }
+    }
+
+    fn metadata() -> AviationstackFlightMetadata {
+        AviationstackFlightMetadata {
+            flight_iata: None,
+            flight_icao: None,
+            flight_number: None,
+            airline_iata: None,
+            airline_icao: None,
+            airline_name: None,
+            departure_iata: None,
+            departure_icao: None,
+            departure_scheduled: None,
+            departure_actual: None,
+            departure_actual_runway: None,
+            arrival_iata: None,
+            arrival_icao: None,
+            arrival_estimated: None,
+            arrival_actual: None,
+            aircraft_icao24: None,
+            aircraft_icao: None,
+        }
+    }
+
+    #[test]
+    fn landing_uses_takeoff_time_not_tracking_time() {
+        let mut flight = tracked_flight();
+        flight.takeoff_at = Some(dt("2026-04-18T10:30:00Z"));
+
+        let msg = msg_landing(&flight, dt("2026-04-18T12:00:00Z"));
+
+        assert!(msg.contains("Flugzeit: 1h30m"), "got: {msg}");
+        assert!(!msg.contains("2h00m"), "got: {msg}");
+    }
+
+    #[test]
+    fn landing_reports_unknown_duration_without_takeoff_time() {
+        let flight = tracked_flight();
+
+        let msg = msg_landing(&flight, dt("2026-04-18T12:00:00Z"));
+
+        assert!(
+            msg.contains("Flugzeit: unbekannt (Takeoff nicht beobachtet)"),
+            "got: {msg}"
+        );
+    }
+
+    #[test]
+    fn aviationstack_metadata_sets_route_and_actual_runway_takeoff() {
+        let mut flight = tracked_flight();
+        let mut metadata = metadata();
+        metadata.departure_iata = Some("fra".to_string());
+        metadata.arrival_iata = Some("muc".to_string());
+        metadata.departure_actual = Some(dt("2026-04-18T10:00:00Z"));
+        metadata.departure_actual_runway = Some(dt("2026-04-18T10:05:00Z"));
+        metadata.aircraft_icao24 = Some("3c6589".to_string());
+        metadata.aircraft_icao = Some("a320".to_string());
+
+        apply_aviationstack_metadata(&mut flight, metadata);
+
+        assert_eq!(flight.route, Some(("FRA".to_string(), "MUC".to_string())));
+        assert_eq!(flight.takeoff_at, Some(dt("2026-04-18T10:05:00Z")));
+        assert_eq!(flight.hex.as_deref(), Some("3C6589"));
+        assert_eq!(flight.aircraft_type.as_deref(), Some("A320"));
+    }
+
+    #[test]
+    fn aviationstack_metadata_falls_back_to_actual_departure() {
+        let mut flight = tracked_flight();
+        let mut metadata = metadata();
+        metadata.departure_actual = Some(dt("2026-04-18T10:00:00Z"));
+
+        apply_aviationstack_metadata(&mut flight, metadata);
+
+        assert_eq!(flight.takeoff_at, Some(dt("2026-04-18T10:00:00Z")));
     }
 }

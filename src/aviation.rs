@@ -1,4 +1,6 @@
+use chrono::{DateTime, Utc};
 use eyre::{Result, WrapErr};
+use secrecy::ExposeSecret as _;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -9,7 +11,9 @@ use twitch_irc::{
     TwitchIRCClient, login::LoginCredentials, message::PrivmsgMessage, transport::Transport,
 };
 
+use crate::config::AviationstackConfig;
 use crate::cooldown::format_cooldown_remaining;
+use crate::flight_tracker::FlightIdentifier;
 use crate::util::{APP_USER_AGENT, MAX_RESPONSE_LENGTH, truncate_response};
 
 const ADSBDB_BASE_URL: &str = "https://api.adsbdb.com/v0";
@@ -153,6 +157,16 @@ fn is_iata_flight_number(s: &str) -> bool {
         && bytes[2..].iter().all(u8::is_ascii_digit)
 }
 
+fn is_icao_flight_number(s: &str) -> bool {
+    let bytes = s.as_bytes();
+    if bytes.len() < 4 || bytes.len() > 7 {
+        return false;
+    }
+    bytes[..3].iter().all(u8::is_ascii_uppercase)
+        && bytes[..3].iter().all(u8::is_ascii_alphabetic)
+        && bytes[3..].iter().all(u8::is_ascii_digit)
+}
+
 fn is_icao_pattern(s: &str) -> bool {
     s.len() == 4 && s.chars().all(|c| c.is_ascii_alphabetic())
 }
@@ -259,6 +273,145 @@ struct AdsbDbAirline {
     icao: String,
 }
 
+// --- aviationstack types ---
+
+#[derive(Debug, Deserialize)]
+struct AviationstackFlightsResponse {
+    #[serde(default)]
+    data: Vec<AviationstackFlight>,
+}
+
+#[derive(Debug, Deserialize)]
+struct AviationstackFlight {
+    #[serde(default)]
+    flight: Option<AviationstackFlightIdentity>,
+    #[serde(default)]
+    airline: Option<AviationstackAirline>,
+    #[serde(default)]
+    departure: Option<AviationstackDeparture>,
+    #[serde(default)]
+    arrival: Option<AviationstackArrival>,
+    #[serde(default)]
+    aircraft: Option<AviationstackAircraft>,
+}
+
+#[derive(Debug, Deserialize)]
+struct AviationstackFlightIdentity {
+    number: Option<String>,
+    iata: Option<String>,
+    icao: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct AviationstackAirline {
+    name: Option<String>,
+    iata: Option<String>,
+    icao: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct AviationstackDeparture {
+    iata: Option<String>,
+    icao: Option<String>,
+    scheduled: Option<String>,
+    actual: Option<String>,
+    actual_runway: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct AviationstackArrival {
+    iata: Option<String>,
+    icao: Option<String>,
+    estimated: Option<String>,
+    actual: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct AviationstackAircraft {
+    icao24: Option<String>,
+    icao: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AviationstackFlightMetadata {
+    pub flight_iata: Option<String>,
+    pub flight_icao: Option<String>,
+    pub flight_number: Option<String>,
+    pub airline_iata: Option<String>,
+    pub airline_icao: Option<String>,
+    pub airline_name: Option<String>,
+    pub departure_iata: Option<String>,
+    pub departure_icao: Option<String>,
+    pub departure_scheduled: Option<DateTime<Utc>>,
+    pub departure_actual: Option<DateTime<Utc>>,
+    pub departure_actual_runway: Option<DateTime<Utc>>,
+    pub arrival_iata: Option<String>,
+    pub arrival_icao: Option<String>,
+    pub arrival_estimated: Option<DateTime<Utc>>,
+    pub arrival_actual: Option<DateTime<Utc>>,
+    pub aircraft_icao24: Option<String>,
+    pub aircraft_icao: Option<String>,
+}
+
+impl AviationstackFlightMetadata {
+    pub fn takeoff_time(&self) -> Option<DateTime<Utc>> {
+        self.departure_actual_runway
+            .as_ref()
+            .cloned()
+            .or_else(|| self.departure_actual.as_ref().cloned())
+    }
+}
+
+impl From<AviationstackFlight> for AviationstackFlightMetadata {
+    fn from(value: AviationstackFlight) -> Self {
+        let flight = value.flight;
+        let airline = value.airline;
+        let departure = value.departure;
+        let arrival = value.arrival;
+        let aircraft = value.aircraft;
+
+        Self {
+            flight_iata: flight.as_ref().and_then(|f| f.iata.clone()),
+            flight_icao: flight.as_ref().and_then(|f| f.icao.clone()),
+            flight_number: flight.as_ref().and_then(|f| f.number.clone()),
+            airline_iata: airline.as_ref().and_then(|a| a.iata.clone()),
+            airline_icao: airline.as_ref().and_then(|a| a.icao.clone()),
+            airline_name: airline.as_ref().and_then(|a| a.name.clone()),
+            departure_iata: departure.as_ref().and_then(|d| d.iata.clone()),
+            departure_icao: departure.as_ref().and_then(|d| d.icao.clone()),
+            departure_scheduled: departure
+                .as_ref()
+                .and_then(|d| parse_aviationstack_datetime(d.scheduled.as_deref())),
+            departure_actual: departure
+                .as_ref()
+                .and_then(|d| parse_aviationstack_datetime(d.actual.as_deref())),
+            departure_actual_runway: departure
+                .as_ref()
+                .and_then(|d| parse_aviationstack_datetime(d.actual_runway.as_deref())),
+            arrival_iata: arrival.as_ref().and_then(|a| a.iata.clone()),
+            arrival_icao: arrival.as_ref().and_then(|a| a.icao.clone()),
+            arrival_estimated: arrival
+                .as_ref()
+                .and_then(|a| parse_aviationstack_datetime(a.estimated.as_deref())),
+            arrival_actual: arrival
+                .as_ref()
+                .and_then(|a| parse_aviationstack_datetime(a.actual.as_deref())),
+            aircraft_icao24: aircraft.as_ref().and_then(|a| a.icao24.clone()),
+            aircraft_icao: aircraft.as_ref().and_then(|a| a.icao.clone()),
+        }
+    }
+}
+
+fn parse_aviationstack_datetime(value: Option<&str>) -> Option<DateTime<Utc>> {
+    let value = value?.trim();
+    if value.is_empty() {
+        return None;
+    }
+    DateTime::parse_from_rfc3339(value)
+        .ok()
+        .map(|dt| dt.with_timezone(&Utc))
+}
+
 // --- Nominatim types ---
 
 #[derive(Debug, Deserialize)]
@@ -276,6 +429,7 @@ pub struct AviationClient {
     adsblol_base_url: String,
     adsbdb_base_url: String,
     nominatim_base_url: String,
+    aviationstack: Option<AviationstackConfig>,
 }
 
 impl AviationClient {
@@ -303,7 +457,17 @@ impl AviationClient {
             adsblol_base_url,
             adsbdb_base_url,
             nominatim_base_url,
+            aviationstack: None,
         }
+    }
+
+    pub fn with_aviationstack_config(mut self, aviationstack: Option<AviationstackConfig>) -> Self {
+        self.aviationstack = aviationstack.filter(|cfg| cfg.enabled);
+        self
+    }
+
+    pub fn aviationstack_enabled(&self) -> bool {
+        self.aviationstack.is_some()
     }
 
     async fn get_aircraft_nearby(
@@ -390,6 +554,52 @@ impl AviationClient {
             .wrap_err("Failed to parse adsbdb response")?;
 
         Ok(body.response.flightroute)
+    }
+
+    pub async fn get_aviationstack_flight_metadata(
+        &self,
+        identifier: &FlightIdentifier,
+        callsign: Option<&str>,
+    ) -> Result<Option<AviationstackFlightMetadata>> {
+        let Some(config) = &self.aviationstack else {
+            return Ok(None);
+        };
+        let Some((query_key, query_value)) = aviationstack_query(identifier, callsign) else {
+            debug!(identifier = %identifier, "Skipping aviationstack lookup: no callsign query");
+            return Ok(None);
+        };
+
+        let url = format!("{}/flights", config.base_url.trim_end_matches('/'));
+        debug!(
+            query_key,
+            query_value = %query_value,
+            "Fetching flight metadata from aviationstack"
+        );
+
+        let timeout = Duration::from_secs(config.timeout_secs);
+        let resp: AviationstackFlightsResponse = self
+            .http
+            .get(&url)
+            .query(&[
+                ("access_key", config.api_key.expose_secret()),
+                (query_key, query_value.as_str()),
+                ("limit", "1"),
+            ])
+            .timeout(timeout)
+            .send()
+            .await
+            .wrap_err("Failed to send request to aviationstack")?
+            .error_for_status()
+            .wrap_err("aviationstack returned error status")?
+            .json()
+            .await
+            .wrap_err("Failed to parse aviationstack response")?;
+
+        Ok(resp
+            .data
+            .into_iter()
+            .next()
+            .map(AviationstackFlightMetadata::from))
     }
 
     /// Resolve a potential IATA flight number to an ICAO callsign.
@@ -503,6 +713,33 @@ impl AviationClient {
             lon,
             display_name,
         }))
+    }
+}
+
+fn aviationstack_query(
+    identifier: &FlightIdentifier,
+    callsign: Option<&str>,
+) -> Option<(&'static str, String)> {
+    let candidate = match identifier {
+        FlightIdentifier::Callsign(value) => value.as_str(),
+        FlightIdentifier::Hex(_) => callsign?,
+    }
+    .trim();
+
+    if candidate.is_empty() {
+        return None;
+    }
+
+    let candidate = candidate.to_uppercase();
+    if is_iata_flight_number(&candidate) {
+        Some(("flight_iata", candidate))
+    } else if is_icao_flight_number(&candidate)
+        || !matches!(identifier, FlightIdentifier::Hex(_))
+        || callsign.is_some()
+    {
+        Some(("flight_icao", candidate))
+    } else {
+        None
     }
 }
 

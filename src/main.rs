@@ -37,7 +37,9 @@ pub async fn main() -> Result<()> {
 
     let llm_client = llm::build_llm_client(config.ai.as_ref())?;
 
-    let aviation_client = match aviation::AviationClient::new() {
+    let aviation_client = match aviation::AviationClient::new()
+        .map(|client| client.with_aviationstack_config(config.aviationstack.clone()))
+    {
         Ok(c) => Some(c),
         Err(e) => {
             tracing::error!(

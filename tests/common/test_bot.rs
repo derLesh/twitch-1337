@@ -121,6 +121,12 @@ impl TestBotBuilder {
             MockServer::start(),
             MockServer::start()
         );
+        if let Some(aviationstack) = self.config.aviationstack.as_mut()
+            && aviationstack.enabled
+            && aviationstack.base_url == "https://api.aviationstack.com/v1"
+        {
+            aviationstack.base_url = adsb_mock.uri();
+        }
         if let Some(ai) = self.config.ai.as_mut()
             && ai.emotes.enabled
             && ai.emotes.base_url.is_none()
@@ -149,7 +155,8 @@ impl TestBotBuilder {
             adsb_mock.uri(),      // adsbdb shares the same mock server in tests
             nominatim_mock.uri(), // nominatim
             http,
-        );
+        )
+        .with_aviationstack_config(self.config.aviationstack.clone());
 
         let services = Services {
             clock: clock.clone(),

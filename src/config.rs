@@ -4,7 +4,7 @@
 //! tests) can reference them without going through the binary entry point.
 
 use eyre::{Result, WrapErr, bail};
-use secrecy::SecretString;
+use secrecy::{ExposeSecret as _, SecretString};
 use serde::Deserialize;
 use tracing::info;
 
@@ -115,6 +115,25 @@ fn default_web_cache_capacity() -> usize {
 
 fn default_web_base_url() -> String {
     "http://localhost:8080/search".to_string()
+}
+
+fn default_aviationstack_base_url() -> String {
+    "https://api.aviationstack.com/v1".to_string()
+}
+
+fn default_aviationstack_timeout_secs() -> u64 {
+    5
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct AviationstackConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    pub api_key: SecretString,
+    #[serde(default = "default_aviationstack_base_url")]
+    pub base_url: String,
+    #[serde(default = "default_aviationstack_timeout_secs")]
+    pub timeout_secs: u64,
 }
 
 /// Per-scope caps + decay policy for the AI memory store. See
@@ -449,6 +468,8 @@ pub struct ScheduleConfig {
 pub struct Configuration {
     pub twitch: TwitchConfiguration,
     #[serde(default)]
+    pub aviationstack: Option<AviationstackConfig>,
+    #[serde(default)]
     pub pings: PingsConfig,
     #[serde(default)]
     pub cooldowns: CooldownsConfig,
@@ -477,6 +498,7 @@ impl Configuration {
                 hidden_admins: Vec::new(),
                 admin_channel: None,
             },
+            aviationstack: None,
             pings: PingsConfig::default(),
             cooldowns: CooldownsConfig::default(),
             suspend: SuspendConfig::default(),
@@ -545,6 +567,24 @@ pub fn validate_config(config: &Configuration) -> Result<()> {
             "suspend.default_duration_secs must be between 1 and 604800 (7 days) (got {})",
             config.suspend.default_duration_secs
         );
+    }
+
+    if let Some(ref aviationstack) = config.aviationstack {
+        if aviationstack.enabled && aviationstack.api_key.expose_secret().trim().is_empty() {
+            bail!("aviationstack.api_key cannot be empty when aviationstack is enabled");
+        }
+        if aviationstack.base_url.trim().is_empty() {
+            bail!("aviationstack.base_url cannot be empty");
+        }
+        reqwest::Url::parse(&aviationstack.base_url).wrap_err_with(|| {
+            format!(
+                "aviationstack.base_url must be a valid URL (got {:?})",
+                aviationstack.base_url
+            )
+        })?;
+        if aviationstack.timeout_secs == 0 {
+            bail!("aviationstack.timeout_secs must be > 0");
+        }
     }
 
     if let Some(ref ai) = config.ai
