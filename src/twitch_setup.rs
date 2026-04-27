@@ -16,13 +16,20 @@ use twitch_irc::{
     message::{NoticeMessage, ServerMessage},
 };
 
-use crate::{AuthenticatedTwitchClient, FileBasedTokenStorage, config::Configuration};
+use crate::{
+    AuthenticatedLoginCredentials, AuthenticatedTwitchClient, FileBasedTokenStorage,
+    config::Configuration,
+};
 
 /// Create the Twitch IRC client and message receiver without connecting.
 #[instrument(skip(config))]
 pub async fn setup_twitch_client(
     config: &Configuration,
-) -> Result<(UnboundedReceiver<ServerMessage>, AuthenticatedTwitchClient)> {
+) -> Result<(
+    UnboundedReceiver<ServerMessage>,
+    AuthenticatedTwitchClient,
+    AuthenticatedLoginCredentials,
+)> {
     let credentials = RefreshingLoginCredentials::init_with_username(
         Some(config.twitch.username.clone()),
         config.twitch.client_id.expose_secret().to_string(),
@@ -33,11 +40,12 @@ pub async fn setup_twitch_client(
         .get_credentials()
         .await
         .wrap_err("Failed to obtain initial credentials")?;
-    let twitch_config = ClientConfig::new_simple(credentials);
-    Ok(TwitchIRCClient::<
+    let twitch_config = ClientConfig::new_simple(credentials.clone());
+    let (incoming, client) = TwitchIRCClient::<
         SecureTCPTransport,
         RefreshingLoginCredentials<FileBasedTokenStorage>,
-    >::new(twitch_config))
+    >::new(twitch_config);
+    Ok((incoming, client, credentials))
 }
 
 /// Connect, join channel(s), and verify authentication via `GlobalUserState`.
@@ -46,10 +54,15 @@ pub async fn setup_twitch_client(
 #[instrument(skip(config))]
 pub async fn setup_and_verify_twitch_client(
     config: &Configuration,
-) -> Result<(UnboundedReceiver<ServerMessage>, AuthenticatedTwitchClient)> {
+) -> Result<(
+    UnboundedReceiver<ServerMessage>,
+    AuthenticatedTwitchClient,
+    AuthenticatedLoginCredentials,
+    String,
+)> {
     info!("Setting up and verifying Twitch connection");
 
-    let (mut incoming_messages, client) = setup_twitch_client(config).await?;
+    let (mut incoming_messages, client, credentials) = setup_twitch_client(config).await?;
 
     info!("Connecting to Twitch IRC");
     client.connect().await;
@@ -90,9 +103,9 @@ pub async fn setup_and_verify_twitch_client(
                         Check your TWITCH_ACCESS_TOKEN and TWITCH_REFRESH_TOKEN."
                     );
                 }
-                ServerMessage::GlobalUserState(_) => {
+                ServerMessage::GlobalUserState(state) => {
                     info!("Connection verified and authenticated");
-                    return Ok(());
+                    return Ok(state.user_id);
                 }
                 _ => {}
             }
@@ -100,7 +113,7 @@ pub async fn setup_and_verify_twitch_client(
         bail!("Connection closed during verification")
     };
 
-    match tokio::time::timeout(Duration::from_secs(30), verification).await {
+    let bot_user_id = match tokio::time::timeout(Duration::from_secs(30), verification).await {
         Err(_) => {
             error!("Connection to Twitch IRC Server timed out");
             bail!("Connection to Twitch timed out")
@@ -108,5 +121,5 @@ pub async fn setup_and_verify_twitch_client(
         Ok(result) => result?,
     };
 
-    Ok((incoming_messages, client))
+    Ok((incoming_messages, client, credentials, bot_user_id))
 }

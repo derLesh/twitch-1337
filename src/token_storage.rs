@@ -14,7 +14,7 @@ use crate::util::get_data_dir;
 /// Token storage implementation that persists tokens to disk.
 ///
 /// Falls back to initial refresh token from config on first load if no token file exists.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FileBasedTokenStorage {
     path: std::path::PathBuf,
     initial_refresh_token: SecretString,

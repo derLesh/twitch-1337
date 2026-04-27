@@ -44,17 +44,36 @@ pub fn resolve_berlin_time(naive: chrono::NaiveDateTime) -> chrono::DateTime<chr
 /// Truncates a string to the maximum number of characters at a word boundary.
 pub fn truncate_response(text: &str, max_chars: usize) -> String {
     let collapsed = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    if max_chars == 0 {
+        return String::new();
+    }
+
+    let suffix = "...";
+    let suffix_len = suffix.chars().count();
+    let content_limit = max_chars.saturating_sub(suffix_len);
+    if content_limit == 0 {
+        return collapsed.chars().take(max_chars).collect();
+    }
 
     let byte_limit = match collapsed.char_indices().nth(max_chars) {
         Some((byte_idx, _)) => byte_idx,
         None => return collapsed,
     };
 
-    let truncated = &collapsed[..byte_limit];
+    let content_byte_limit = collapsed
+        .char_indices()
+        .nth(content_limit)
+        .map_or(collapsed.len(), |(byte_idx, _)| byte_idx);
+    let truncated = &collapsed[..content_byte_limit.min(byte_limit)];
     if let Some(last_space) = truncated.rfind(' ') {
-        format!("{}...", &truncated[..last_space])
+        let prefix = &truncated[..last_space];
+        if prefix.is_empty() {
+            format!("{truncated}{suffix}")
+        } else {
+            format!("{prefix}{suffix}")
+        }
     } else {
-        format!("{}...", truncated)
+        format!("{truncated}{suffix}")
     }
 }
 

@@ -1,14 +1,15 @@
 //! One-stop integration test fixture. Assembles FakeTransport + FakeClock +
 //! FakeLlm + wiremock + tempdir into a live bot running behind `run_bot`.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 use std::time::Duration;
 
+use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use eyre::Result;
+use eyre::Result as EyreResult;
 use tempfile::TempDir;
-use tokio::sync::oneshot;
+use tokio::sync::{Mutex, Notify, oneshot};
 use tokio::task::JoinHandle;
 use wiremock::MockServer;
 
@@ -18,6 +19,7 @@ use twitch_1337::{
     config::{AiConfig, Configuration},
     llm::LlmClient,
     run_bot,
+    whisper::{self, WhisperError, WhisperSender},
 };
 use twitch_irc::login::StaticLoginCredentials;
 use twitch_irc::{ClientConfig, TwitchIRCClient};
@@ -37,15 +39,17 @@ pub struct TestBot {
     pub nominatim_mock: MockServer,
     pub seventv_mock: MockServer,
     pub llm: Arc<FakeLlm>,
+    whisper: Arc<FakeWhisperSender>,
     pub channel: String,
     shutdown: Option<oneshot::Sender<()>>,
-    bot_task: Option<JoinHandle<Result<()>>>,
+    bot_task: Option<JoinHandle<EyreResult<()>>>,
 }
 
 pub struct TestBotBuilder {
     config: Configuration,
     now: DateTime<Utc>,
     seeded_leaderboard: Option<HashMap<String, PersonalBest>>,
+    whisper_failure: bool,
 }
 
 impl TestBotBuilder {
@@ -54,6 +58,7 @@ impl TestBotBuilder {
             config: Configuration::test_default(),
             now: "2026-04-18T11:00:00Z".parse().unwrap(),
             seeded_leaderboard: None,
+            whisper_failure: false,
         }
     }
 
@@ -96,6 +101,11 @@ impl TestBotBuilder {
         self
     }
 
+    pub fn with_failing_whispers(mut self) -> Self {
+        self.whisper_failure = true;
+        self
+    }
+
     pub async fn spawn(mut self) -> TestBot {
         let data_dir = TempDir::new().expect("tempdir");
 
@@ -117,6 +127,7 @@ impl TestBotBuilder {
             ai.emotes.base_url = Some(seventv_mock.uri());
         }
         let llm = Arc::new(FakeLlm::new());
+        let whisper = Arc::new(FakeWhisperSender::new(self.whisper_failure));
         let clock = FakeClock::new(self.now);
         let channel = self.config.twitch.channel.clone();
 
@@ -147,6 +158,7 @@ impl TestBotBuilder {
                 .is_some()
                 .then(|| llm.clone() as Arc<dyn LlmClient>),
             aviation: Some(aviation),
+            whisper: Some(whisper.clone() as Arc<dyn WhisperSender>),
             data_dir: data_dir.path().to_path_buf(),
         };
 
@@ -170,6 +182,7 @@ impl TestBotBuilder {
             nominatim_mock,
             seventv_mock,
             llm,
+            whisper,
             channel,
             shutdown: Some(shutdown_tx),
             bot_task: Some(bot_task),
@@ -220,6 +233,10 @@ impl TestBot {
         }
     }
 
+    pub async fn expect_whisper(&self, timeout: Duration) -> WhisperRecord {
+        self.whisper.expect(timeout).await
+    }
+
     pub async fn expect_silent(&mut self, dur: Duration) {
         let deadline = tokio::time::Instant::now() + dur;
         while tokio::time::Instant::now() < deadline {
@@ -253,5 +270,74 @@ impl TestBot {
                 Err(_) => panic!("bot shutdown timed out"),
             }
         }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct WhisperRecord {
+    pub to_user_id: String,
+    pub message: String,
+}
+
+#[derive(Default)]
+struct FakeWhisperState {
+    known_recipients: HashSet<String>,
+    records: VecDeque<WhisperRecord>,
+}
+
+pub struct FakeWhisperSender {
+    state: Mutex<FakeWhisperState>,
+    notify: Notify,
+    fail: bool,
+}
+
+impl FakeWhisperSender {
+    fn new(fail: bool) -> Self {
+        Self {
+            state: Mutex::new(FakeWhisperState::default()),
+            notify: Notify::new(),
+            fail,
+        }
+    }
+
+    async fn expect(&self, timeout: Duration) -> WhisperRecord {
+        let deadline = tokio::time::Instant::now() + timeout;
+        loop {
+            if let Some(record) = self.state.lock().await.records.pop_front() {
+                return record;
+            }
+
+            let now = tokio::time::Instant::now();
+            assert!(now < deadline, "timed out waiting for whisper");
+            tokio::time::timeout(deadline - now, self.notify.notified())
+                .await
+                .expect("timed out waiting for whisper");
+        }
+    }
+}
+
+#[async_trait]
+impl WhisperSender for FakeWhisperSender {
+    async fn send_whisper(
+        &self,
+        to_user_id: &str,
+        message: &str,
+    ) -> std::result::Result<String, WhisperError> {
+        if self.fail {
+            return Err(WhisperError::unavailable(
+                "test whisper sender is not authenticated",
+            ));
+        }
+
+        let mut state = self.state.lock().await;
+        let known_recipient = state.known_recipients.contains(to_user_id);
+        let message = whisper::truncate_whisper_message(message, known_recipient);
+        state.known_recipients.insert(to_user_id.to_owned());
+        state.records.push_back(WhisperRecord {
+            to_user_id: to_user_id.to_owned(),
+            message: message.clone(),
+        });
+        self.notify.notify_waiters();
+        Ok(message)
     }
 }

@@ -17,6 +17,7 @@ use crate::{
     seventv::SevenTvEmoteProvider,
     suspend::SuspensionManager,
     web_search,
+    whisper::WhisperSender,
 };
 
 /// Configuration for the generic command handler.
@@ -40,6 +41,7 @@ pub struct CommandHandlerConfig<T: Transport, L: LoginCredentials> {
     pub cooldowns: CooldownsConfig,
     pub tracker_tx: Option<tokio::sync::mpsc::Sender<flight_tracker::TrackerCommand>>,
     pub aviation_client: Option<aviation::AviationClient>,
+    pub whisper: Option<Arc<dyn WhisperSender>>,
     pub admin_channel: Option<String>,
     pub bot_username: String,
     pub channel: String,
@@ -71,6 +73,7 @@ where
         cooldowns,
         tracker_tx,
         aviation_client,
+        whisper,
         admin_channel,
         bot_username,
         channel,
@@ -214,6 +217,7 @@ where
             Duration::from_secs(cfg.timeout),
             Duration::from_secs(cooldowns.news),
             chat_ctx,
+            whisper,
         )));
     }
 
