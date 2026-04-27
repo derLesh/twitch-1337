@@ -17,13 +17,13 @@ use super::{Command, CommandContext};
 
 const NEWS_PREFIX: &str = "ICYMI:";
 const NEWS_SYSTEM_PROMPT: &str = "Du fasst Twitch-Chat-Verläufe hilfreich zusammen. Antworte auf Deutsch, erfinde keine Details und konzentriere dich auf Themen, Highlights und wichtige Antworten. Beginne die Antwort mit \"ICYMI:\". Wenn du mehrere Themen auflistest, trenne sie mit \" | \". Bleibe kompakt, aber du musst dich nicht auf eine einzelne Twitch-Chatnachricht beschränken.";
-const TLDR_SYSTEM_PROMPT: &str = "Du erstellst ein hilfreiches TLDR der letzten verfügbaren 24 Stunden eines Twitch-Chats. Antworte auf Deutsch, erfinde keine Details und strukturiere die wichtigsten Themen, Highlights, Fragen/Antworten, Running Gags und offenen Punkte knapp. Beginne die Antwort mit \"ICYMI:\".";
+const TLDR_SYSTEM_PROMPT: &str = "Du erstellst ein hilfreiches TLDR der letzten verfügbaren 24 Stunden eines Twitch-Chats. Antworte auf Deutsch, erfinde keine Details und strukturiere die wichtigsten Themen, Highlights, Fragen/Antworten, Running Gags und offenen Punkte knapp. Beginne die Antwort mit \"In den letzten 24h:\".";
 const EMPTY_HISTORY_MESSAGE: &str =
     "Ich habe noch keine Chat-Historie für eine Zusammenfassung FDM";
 const NO_NEW_MESSAGES_MESSAGE: &str =
     "Seit deiner letzten Nachricht ist noch nichts Neues passiert FDM";
 const NO_TLDR_MESSAGES_MESSAGE: &str =
-    "In den verfügbaren letzten 24h habe ich keine Chat-Historie für ein TLDR FDM";
+    "chat dead no tldr Deadge";
 const RECENT_USER_CONTEXT_MESSAGES: usize = 20;
 const TLDR_WINDOW_HOURS: i64 = 24;
 
