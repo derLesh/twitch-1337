@@ -190,12 +190,8 @@ impl MemoryStore {
 
     /// Write current state to disk using write+rename for atomicity.
     pub fn save(&self, path: &Path) -> Result<()> {
-        let tmp_path = path.with_extension("ron.tmp");
-        let data = ron::ser::to_string_pretty(self, ron::ser::PrettyConfig::default())
-            .wrap_err("Failed to serialize AI memories")?;
-        std::fs::write(&tmp_path, &data).wrap_err("Failed to write ai_memory.ron.tmp")?;
-        std::fs::rename(&tmp_path, path)
-            .wrap_err("Failed to rename ai_memory.ron.tmp to ai_memory.ron")?;
+        crate::util::persist::atomic_save_ron(self, path)
+            .wrap_err("Failed to save ai_memory.ron")?;
         debug!("Saved AI memories to disk");
         Ok(())
     }

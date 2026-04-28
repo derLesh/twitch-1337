@@ -1,4 +1,5 @@
 pub mod clock;
+pub mod persist;
 pub mod telemetry;
 
 use std::path::PathBuf;

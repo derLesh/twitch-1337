@@ -1,11 +1,8 @@
 use async_trait::async_trait;
 use chrono::Utc;
-use color_eyre::eyre::{self, Result};
+use color_eyre::eyre::{self, Result, WrapErr as _};
 use secrecy::{ExposeSecret, SecretString};
-use tokio::{
-    fs::{self, File},
-    io::AsyncWriteExt,
-};
+use tokio::fs;
 use tracing::{debug, instrument, warn};
 use twitch_irc::login::{TokenStorage, UserAccessToken};
 
@@ -71,11 +68,9 @@ impl TokenStorage for FileBasedTokenStorage {
     #[instrument(skip(self, token))]
     async fn update_token(&mut self, token: &UserAccessToken) -> Result<(), Self::UpdateError> {
         debug!(path = %self.path.display(), "Updating token in file");
-        let buffer = ron::to_string(token)?.into_bytes();
-        let tmp_path = self.path.with_extension("ron.tmp");
-        File::create(&tmp_path).await?.write_all(&buffer).await?;
-        fs::rename(&tmp_path, &self.path).await?;
-        Ok(())
+        crate::util::persist::atomic_save_ron_async(token, &self.path)
+            .await
+            .wrap_err("Failed to save token")
     }
 }
 

@@ -77,12 +77,8 @@ impl PingManager {
 
     /// Write current state to disk using write+rename for atomicity.
     fn save(&self) -> Result<()> {
-        let tmp_path = self.path.with_extension("ron.tmp");
-        let data = ron::ser::to_string_pretty(&self.store, ron::ser::PrettyConfig::default())
-            .wrap_err("Failed to serialize pings")?;
-        std::fs::write(&tmp_path, &data).wrap_err("Failed to write pings.ron.tmp")?;
-        std::fs::rename(&tmp_path, &self.path)
-            .wrap_err("Failed to rename pings.ron.tmp to pings.ron")?;
+        crate::util::persist::atomic_save_ron(&self.store, &self.path)
+            .wrap_err("Failed to save pings.ron")?;
         debug!("Saved pings to disk");
         Ok(())
     }
