@@ -302,24 +302,13 @@ pub(crate) async fn save_leaderboard(
     data_dir: &std::path::Path,
 ) {
     let path = data_dir.join(LEADERBOARD_FILENAME);
-    let tmp_path = path.with_extension("ron.tmp");
-    match ron::to_string(leaderboard) {
-        Ok(serialized) => {
-            if let Err(e) = fs::write(&tmp_path, serialized.as_bytes()).await {
-                error!(error = ?e, "Failed to write leaderboard tmp file");
-            } else if let Err(e) = fs::rename(&tmp_path, &path).await {
-                error!(error = ?e, "Failed to rename leaderboard file");
-            } else {
-                info!(
-                    entries = leaderboard.len(),
-                    "Saved leaderboard to {}",
-                    path.display()
-                );
-            }
-        }
-        Err(e) => {
-            error!(error = ?e, "Failed to serialize leaderboard");
-        }
+    match crate::util::persist::atomic_save_ron_async(leaderboard, &path).await {
+        Ok(()) => info!(
+            entries = leaderboard.len(),
+            "Saved leaderboard to {}",
+            path.display()
+        ),
+        Err(e) => error!(error = ?e, "Failed to save leaderboard"),
     }
 }
 

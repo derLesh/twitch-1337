@@ -4,7 +4,7 @@ use std::time::Duration;
 use async_trait::async_trait;
 use chrono::Utc;
 use eyre::{Result, eyre};
-use tracing::{debug, error, instrument};
+use tracing::{debug, error, instrument, warn};
 use twitch_irc::{login::LoginCredentials, transport::Transport};
 
 use crate::ai::chat_history::{ChatHistory, ChatHistoryQuery, MAX_TOOL_RESULT_MESSAGES};
@@ -641,5 +641,117 @@ where
         }
 
         Ok(())
+    }
+}
+
+/// Outcome of attempting to build the AI memory bundle from config + an LLM
+/// handle. All three fields are `None` when AI is disabled or memory load
+/// failed; otherwise they are populated and ready to feed into the command
+/// handler + the daily consolidation task.
+pub struct AiMemoryBundle {
+    pub ai_memory: Option<AiMemory>,
+    pub consolidation_model: Option<String>,
+    pub consolidation_reasoning_effort: Option<String>,
+}
+
+/// Construct the optional AI memory bundle from config + an LLM handle.
+///
+/// Returns an empty bundle when AI is disabled, no LLM is wired, or
+/// `[ai.memory].enabled = false`. Logs (warn!) on deprecated fields and
+/// (error!) on store load failure.
+pub fn build_ai_memory(
+    ai: Option<&crate::config::AiConfig>,
+    llm: Option<&Arc<dyn LlmClient>>,
+    data_dir: &std::path::Path,
+) -> AiMemoryBundle {
+    let empty = || AiMemoryBundle {
+        ai_memory: None,
+        consolidation_model: None,
+        consolidation_reasoning_effort: None,
+    };
+
+    let (Some(ai), Some(llm_arc)) = (ai, llm) else {
+        return empty();
+    };
+    if !ai.memory.enabled {
+        return empty();
+    }
+
+    let extraction_model = ai
+        .extraction
+        .model
+        .clone()
+        .unwrap_or_else(|| ai.model.clone());
+    let extraction_reasoning_effort = ai
+        .extraction
+        .reasoning_effort
+        .clone()
+        .or_else(|| ai.reasoning_effort.clone());
+    let consolidation_model = ai
+        .consolidation
+        .model
+        .clone()
+        .or_else(|| ai.extraction.model.clone())
+        .unwrap_or_else(|| ai.model.clone());
+    let consolidation_reasoning_effort = ai
+        .consolidation
+        .reasoning_effort
+        .clone()
+        .or_else(|| ai.extraction.reasoning_effort.clone())
+        .or_else(|| ai.reasoning_effort.clone());
+
+    match memory::MemoryStore::load(data_dir) {
+        Ok((store, path)) => {
+            // Back-compat: honor the deprecated `ai.max_memories` when the
+            // user hasn't overridden `[ai.memory].max_user`. Either way,
+            // emit a warn! so stale configs surface.
+            let max_user = if let Some(legacy_n) = ai.max_memories {
+                if ai.memory.max_user == crate::config::default_max_user() {
+                    warn!(
+                        "ai.max_memories is deprecated; migrating to [ai.memory].max_user = {legacy_n}. Please update your config."
+                    );
+                    legacy_n
+                } else {
+                    warn!(
+                        "ai.max_memories={} is deprecated AND ignored because [ai.memory].max_user={} is explicitly set. Remove the deprecated field.",
+                        legacy_n, ai.memory.max_user
+                    );
+                    ai.memory.max_user
+                }
+            } else {
+                ai.memory.max_user
+            };
+
+            let config = memory::MemoryConfig {
+                store: Arc::new(tokio::sync::RwLock::new(store)),
+                path,
+                caps: memory::Caps {
+                    max_user,
+                    max_lore: ai.memory.max_lore,
+                    max_pref: ai.memory.max_pref,
+                },
+                half_life_days: ai.memory.half_life_days,
+            };
+            let ai_memory = AiMemory {
+                config,
+                extraction_deps: AiExtractionDeps {
+                    enabled: ai.extraction.enabled,
+                    llm: llm_arc.clone(),
+                    model: extraction_model,
+                    reasoning_effort: extraction_reasoning_effort,
+                    timeout: Duration::from_secs(ai.extraction.timeout.unwrap_or(ai.timeout)),
+                    max_rounds: ai.extraction.max_rounds,
+                },
+            };
+            AiMemoryBundle {
+                ai_memory: Some(ai_memory),
+                consolidation_model: Some(consolidation_model),
+                consolidation_reasoning_effort,
+            }
+        }
+        Err(e) => {
+            error!(error = ?e, "Failed to load AI memory store, memory disabled");
+            empty()
+        }
     }
 }

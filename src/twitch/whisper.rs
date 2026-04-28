@@ -9,11 +9,7 @@ use async_trait::async_trait;
 use eyre::{Result, WrapErr as _};
 use reqwest::StatusCode;
 use serde_json::json;
-use tokio::{
-    fs::{self, File},
-    io::AsyncWriteExt,
-    sync::Mutex,
-};
+use tokio::{fs, sync::Mutex};
 use tracing::warn;
 use twitch_irc::login::LoginCredentials;
 
@@ -188,9 +184,7 @@ async fn load_known_recipients(path: &Path) -> Result<HashSet<String>> {
 }
 
 async fn save_known_recipients(path: &Path, recipients: &HashSet<String>) -> Result<()> {
-    let buffer = ron::to_string(recipients)?.into_bytes();
-    let tmp_path = path.with_extension("ron.tmp");
-    File::create(&tmp_path).await?.write_all(&buffer).await?;
-    fs::rename(&tmp_path, path).await?;
-    Ok(())
+    crate::util::persist::atomic_save_ron_async(recipients, path)
+        .await
+        .wrap_err("Failed to save whisper recipients")
 }
