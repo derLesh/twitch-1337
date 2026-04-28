@@ -11,13 +11,11 @@ use twitch_irc::{
 };
 
 use crate::{
-    ChatHistory, ChatHistoryBuffer, PersonalBest, aviation, commands,
+    ChatHistory, ChatHistoryBuffer, PersonalBest, ai, aviation, commands,
     config::{AiConfig, CooldownsConfig, SuspendConfig},
-    flight_tracker, llm, ping, prefill,
-    seventv::SevenTvEmoteProvider,
+    ping,
     suspend::SuspensionManager,
-    web_search,
-    whisper::WhisperSender,
+    twitch::{seventv::SevenTvEmoteProvider, whisper::WhisperSender},
 };
 
 /// Configuration for the generic command handler.
@@ -27,19 +25,19 @@ pub struct CommandHandlerConfig<T: Transport, L: LoginCredentials> {
     /// Full AI config (system prompt, history, memory settings). `None` disables `!ai`.
     pub ai_config: Option<AiConfig>,
     /// Pre-built LLM client. When `None`, `!ai` is disabled regardless of `ai_config`.
-    /// Injected so tests can supply a fake and production can call [`llm::build_llm_client`].
-    pub llm: Option<Arc<dyn llm::LlmClient>>,
+    /// Injected so tests can supply a fake and production can call [`ai::llm::build_llm_client`].
+    pub llm: Option<Arc<dyn ai::llm::LlmClient>>,
     /// Pre-built memory bundle (store handle + extractor deps). Built in
     /// `run_bot` so the consolidation task in `lib.rs` can share the same
     /// `store` handle and `path`. `None` disables memory for `!ai`.
-    pub ai_memory: Option<commands::ai::AiMemory>,
+    pub ai_memory: Option<ai::command::AiMemory>,
     pub leaderboard: Arc<tokio::sync::RwLock<HashMap<String, PersonalBest>>>,
     pub ping_manager: Arc<tokio::sync::RwLock<ping::PingManager>>,
     pub hidden_admin_ids: Vec<String>,
     pub default_cooldown: Duration,
     pub pings_public: bool,
     pub cooldowns: CooldownsConfig,
-    pub tracker_tx: Option<tokio::sync::mpsc::Sender<flight_tracker::TrackerCommand>>,
+    pub tracker_tx: Option<tokio::sync::mpsc::Sender<aviation::TrackerCommand>>,
     pub aviation_client: Option<aviation::AviationClient>,
     pub whisper: Option<Arc<dyn WhisperSender>>,
     pub admin_channel: Option<String>,
@@ -91,7 +89,7 @@ where
     let prefill_config = ai_config.as_ref().and_then(|c| c.history_prefill.clone());
 
     // Combine pre-built LLM client with AI config; both must be present to enable !ai.
-    let llm_client: Option<(Arc<dyn llm::LlmClient>, AiConfig)> = match (llm, ai_config) {
+    let llm_client: Option<(Arc<dyn ai::llm::LlmClient>, AiConfig)> = match (llm, ai_config) {
         (Some(llm_arc), Some(ai_cfg)) => {
             info!(backend = ?ai_cfg.backend, model = %ai_cfg.model, "AI command enabled");
             Some((llm_arc, ai_cfg))
@@ -106,7 +104,7 @@ where
     let chat_history: Option<ChatHistory> = if history_length > 0 {
         let buffer = if let Some(ref prefill_cfg) = prefill_config {
             let prefilled =
-                prefill::prefill_chat_history(&channel, history_length, prefill_cfg).await;
+                ai::prefill::prefill_chat_history(&channel, history_length, prefill_cfg).await;
             ChatHistoryBuffer::from_prefill(history_length, prefilled)
         } else {
             ChatHistoryBuffer::new(history_length)
@@ -144,8 +142,8 @@ where
             suspension_manager.clone(),
             hidden_admin_ids,
         )),
-        Box::new(commands::random_flight::RandomFlightCommand),
-        Box::new(commands::flights_above::FlightsAboveCommand::new(
+        Box::new(aviation::commands::random_flight::RandomFlightCommand),
+        Box::new(aviation::commands::flights_above::FlightsAboveCommand::new(
             aviation_client,
             Duration::from_secs(cooldowns.up),
         )),
@@ -157,20 +155,28 @@ where
     ];
 
     if let Some(tx) = tracker_tx {
-        cmd_list.push(Box::new(commands::track::TrackCommand::new(tx.clone())));
-        cmd_list.push(Box::new(commands::untrack::UntrackCommand::new(tx.clone())));
-        cmd_list.push(Box::new(commands::flights::FlightsCommand::new(tx.clone())));
-        cmd_list.push(Box::new(commands::flights::FlightCommand::new(tx)));
+        cmd_list.push(Box::new(aviation::commands::track::TrackCommand::new(
+            tx.clone(),
+        )));
+        cmd_list.push(Box::new(aviation::commands::untrack::UntrackCommand::new(
+            tx.clone(),
+        )));
+        cmd_list.push(Box::new(aviation::commands::flights::FlightsCommand::new(
+            tx.clone(),
+        )));
+        cmd_list.push(Box::new(aviation::commands::flights::FlightCommand::new(
+            tx,
+        )));
     }
 
     if let Some((llm, cfg)) = llm_client {
         let web = if cfg.web.enabled {
-            match web_search::SearchClient::new(
+            match ai::web_search::SearchClient::new(
                 &cfg.web.base_url,
                 Duration::from_secs(cfg.web.timeout),
             ) {
-                Ok(client) => Some(commands::ai::AiWeb {
-                    executor: Arc::new(web_search::WebToolExecutor::new(
+                Ok(client) => Some(ai::command::AiWeb {
+                    executor: Arc::new(ai::web_search::WebToolExecutor::new(
                         client,
                         cfg.web.max_results,
                         Duration::from_secs(cfg.web.cache_ttl_secs),
@@ -189,16 +195,16 @@ where
 
         let chat_ctx = chat_history
             .clone()
-            .map(|history| commands::ai::ChatContext {
+            .map(|history| ai::command::ChatContext {
                 history,
                 bot_username: bot_username.clone(),
             });
 
-        cmd_list.push(Box::new(commands::ai::AiCommand::new(
-            commands::ai::AiCommandDeps {
+        cmd_list.push(Box::new(ai::command::AiCommand::new(
+            ai::command::AiCommandDeps {
                 llm_client: llm.clone(),
                 model: cfg.model.clone(),
-                prompts: commands::ai::AiPrompts {
+                prompts: ai::command::AiPrompts {
                     system: cfg.system_prompt,
                     instruction_template: cfg.instruction_template,
                 },
@@ -212,8 +218,18 @@ where
             },
         )));
         cmd_list.push(Box::new(commands::news::NewsCommand::new(
+            llm.clone(),
+            cfg.model.clone(),
+            commands::news::NewsMode::News,
+            Duration::from_secs(cfg.timeout),
+            Duration::from_secs(cooldowns.news),
+            chat_ctx.clone(),
+            whisper.clone(),
+        )));
+        cmd_list.push(Box::new(commands::news::NewsCommand::new(
             llm,
             cfg.model,
+            commands::news::NewsMode::Tldr,
             Duration::from_secs(cfg.timeout),
             Duration::from_secs(cooldowns.news),
             chat_ctx,
@@ -273,10 +289,11 @@ pub(crate) async fn run_command_dispatcher<T, L>(
                         .as_ref()
                         .is_some_and(|ch| privmsg.channel_login == *ch);
                     if !is_admin_channel {
-                        history
-                            .lock()
-                            .await
-                            .push_user(privmsg.sender.login.clone(), privmsg.message_text.clone());
+                        history.lock().await.push_user_at(
+                            privmsg.sender.login.clone(),
+                            privmsg.message_text.clone(),
+                            privmsg.server_timestamp,
+                        );
                     }
                 }
 

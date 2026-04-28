@@ -15,11 +15,11 @@ use wiremock::MockServer;
 
 use twitch_1337::{
     PersonalBest, Services,
+    ai::llm::LlmClient,
     aviation::AviationClient,
     config::{AiConfig, Configuration},
-    llm::LlmClient,
     run_bot,
-    whisper::{self, WhisperError, WhisperSender},
+    twitch::whisper::{self, WhisperError, WhisperSender},
 };
 use twitch_irc::login::StaticLoginCredentials;
 use twitch_irc::{ClientConfig, TwitchIRCClient};
@@ -28,7 +28,7 @@ use super::fake_clock::FakeClock;
 use super::fake_llm::FakeLlm;
 use super::fake_transport::{self, FakeTransport, TransportHandle};
 use super::irc_line::{
-    parse_privmsg_text, privmsg, privmsg_as_broadcaster, privmsg_as_mod, privmsg_with,
+    parse_privmsg_text, privmsg, privmsg_as_broadcaster, privmsg_as_mod, privmsg_at, privmsg_with,
     reply_privmsg,
 };
 
@@ -214,6 +214,12 @@ impl TestBot {
         let line = reply_privmsg(&self.channel, user, text, parent_user, parent_text);
         self.transport.inject.send(line).await.expect("inject");
     }
+
+    pub async fn send_at(&self, user: &str, text: &str, tmi_ts_ms: i64) {
+        let line = privmsg_at(&self.channel, user, text, tmi_ts_ms);
+        self.transport.inject.send(line).await.expect("inject");
+    }
+
 
     /// Inject a PRIVMSG with a caller-supplied `user-id` IRCv3 tag. Used by
     /// memory tests to drive the extractor's permission matrix, which gates

@@ -1,3 +1,8 @@
+pub mod commands;
+pub mod tracker;
+
+pub use tracker::{FlightIdentifier, TrackerCommand, run_flight_tracker};
+
 use chrono::{DateTime, Utc};
 use eyre::{Result, WrapErr};
 use secrecy::ExposeSecret as _;
@@ -13,7 +18,6 @@ use twitch_irc::{
 
 use crate::config::AviationstackConfig;
 use crate::cooldown::format_cooldown_remaining;
-use crate::flight_tracker::FlightIdentifier;
 use crate::util::{APP_USER_AGENT, MAX_RESPONSE_LENGTH, truncate_response};
 
 const ADSBDB_BASE_URL: &str = "https://api.adsbdb.com/v0";
@@ -31,7 +35,7 @@ const UP_CONE_REFERENCE_ALT_FT: f64 = 35_000.0;
 
 // --- PLZ Lookup ---
 
-const PLZ_DATA: &str = include_str!("../data/plz.csv");
+const PLZ_DATA: &str = include_str!("../../data/plz.csv");
 
 fn plz_table() -> &'static HashMap<&'static str, (f64, f64)> {
     static TABLE: OnceLock<HashMap<&'static str, (f64, f64)>> = OnceLock::new();
@@ -66,7 +70,7 @@ fn is_valid_plz(plz: &str) -> bool {
 
 // --- Airport Lookup ---
 
-const AIRPORT_DATA: &str = include_str!("../data/airports.csv");
+const AIRPORT_DATA: &str = include_str!("../../data/airports.csv");
 
 struct AirportData {
     by_icao: HashMap<String, (f64, f64, String)>,
@@ -125,7 +129,7 @@ pub(crate) fn iata_to_coords(code: &str) -> Option<(f64, f64, &'static str)> {
 
 // --- Airline IATA-to-ICAO Lookup ---
 
-const AIRLINE_DATA: &str = include_str!("../data/airlines.csv");
+const AIRLINE_DATA: &str = include_str!("../../data/airlines.csv");
 
 /// Returns the static IATA→ICAO airline code table (lazy-initialized).
 fn airline_table() -> &'static HashMap<&'static str, &'static str> {

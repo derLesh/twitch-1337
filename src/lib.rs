@@ -4,28 +4,16 @@
 //! `TwitchIRCClient`, and runs the bot. Integration tests (`tests/`) use a
 //! fake transport, fake clock, and fake LLM against the same handlers.
 
+pub mod ai;
 pub mod aviation;
-pub mod chat_history;
-pub mod clock;
 pub mod commands;
 pub mod config;
 pub mod cooldown;
 pub mod database;
-pub mod flight_tracker;
-pub mod handlers;
-pub mod llm;
-pub mod memory;
 pub mod ping;
-pub mod prefill;
-pub mod seventv;
 pub mod suspend;
-pub mod telemetry;
-pub mod tls;
-pub mod token_storage;
-pub mod twitch_setup;
+pub mod twitch;
 pub mod util;
-pub mod web_search;
-pub mod whisper;
 
 use std::path::PathBuf;
 use std::sync::{Arc, atomic::AtomicU32};
@@ -42,10 +30,10 @@ use twitch_irc::{
 };
 
 use crate::{
+    ai::llm::LlmClient,
     aviation::AviationClient,
-    clock::Clock,
     config::Configuration,
-    handlers::{
+    twitch::handlers::{
         commands::{CommandHandlerConfig, run_generic_command_handler},
         latency::run_latency_handler,
         router::run_message_router,
@@ -54,12 +42,12 @@ use crate::{
         },
         tracker_1337::{TARGET_HOUR, TARGET_MINUTE, load_leaderboard, run_1337_handler},
     },
-    llm::LlmClient,
-    whisper::WhisperSender,
+    twitch::whisper::WhisperSender,
+    util::clock::Clock,
 };
 
 pub type AuthenticatedLoginCredentials =
-    RefreshingLoginCredentials<crate::token_storage::FileBasedTokenStorage>;
+    RefreshingLoginCredentials<crate::twitch::token_storage::FileBasedTokenStorage>;
 
 /// Generic alias for any authenticated Twitch IRC client. The production
 /// default is `SecureTCPTransport` + file-backed refreshing credentials.
@@ -68,16 +56,16 @@ pub type AuthenticatedTwitchClient<
     L = AuthenticatedLoginCredentials,
 > = TwitchIRCClient<T, L>;
 
-pub use chat_history::{
+pub use ai::chat_history::{
     ChatHistory, ChatHistoryBuffer, ChatHistoryEntry, ChatHistoryPage, ChatHistoryQuery,
     ChatHistorySource, DEFAULT_HISTORY_LENGTH, MAX_HISTORY_LENGTH, MAX_TOOL_RESULT_MESSAGES,
 };
 pub use config::{load_configuration, validate_config};
-pub use handlers::tracker_1337::PersonalBest;
-pub use telemetry::install_tracing;
-pub use tls::install_crypto_provider;
-pub use token_storage::FileBasedTokenStorage;
-pub use twitch_setup::{setup_and_verify_twitch_client, setup_twitch_client};
+pub use twitch::handlers::tracker_1337::PersonalBest;
+pub use twitch::setup::{setup_and_verify_twitch_client, setup_twitch_client};
+pub use twitch::tls::install_crypto_provider;
+pub use twitch::token_storage::FileBasedTokenStorage;
+pub use util::telemetry::install_tracing;
 pub use util::{
     APP_USER_AGENT, MAX_RESPONSE_LENGTH, ensure_data_dir, get_config_path, get_data_dir,
     parse_flight_duration, resolve_berlin_time, truncate_response,
@@ -131,14 +119,14 @@ where
 
     let (tracker_tx, handler_flight_tracker) = match aviation {
         Some(av) => {
-            let (tx, rx) = tokio::sync::mpsc::channel::<flight_tracker::TrackerCommand>(32);
+            let (tx, rx) = tokio::sync::mpsc::channel::<aviation::TrackerCommand>(32);
             let handle = tokio::spawn({
                 let client = client.clone();
                 let channel = config.twitch.channel.clone();
                 let dir = data_dir.clone();
                 let clk = clock.clone();
                 async move {
-                    flight_tracker::run_flight_tracker(rx, client, channel, av, dir, clk).await;
+                    aviation::run_flight_tracker(rx, client, channel, av, dir, clk).await;
                 }
             });
             (Some(tx), handle)
@@ -200,7 +188,7 @@ where
     // - model: extraction -> [ai], consolidation -> extraction -> [ai]
     // - reasoning_effort: extraction -> [ai], consolidation -> extraction -> [ai]
     let (ai_memory, consolidation_model, consolidation_reasoning_effort): (
-        Option<crate::commands::ai::AiMemory>,
+        Option<crate::ai::command::AiMemory>,
         Option<String>,
         Option<String>,
     ) = match (&config.ai, &llm) {
@@ -227,7 +215,7 @@ where
                 .clone()
                 .or_else(|| ai.extraction.reasoning_effort.clone())
                 .or_else(|| ai.reasoning_effort.clone());
-            match memory::MemoryStore::load(&data_dir) {
+            match ai::memory::MemoryStore::load(&data_dir) {
                 Ok((store, path)) => {
                     // Back-compat: honor the deprecated `ai.max_memories`
                     // when the user hasn't overridden `[ai.memory].max_user`.
@@ -249,19 +237,19 @@ where
                     } else {
                         ai.memory.max_user
                     };
-                    let config = memory::MemoryConfig {
+                    let config = ai::memory::MemoryConfig {
                         store: Arc::new(tokio::sync::RwLock::new(store)),
                         path,
-                        caps: memory::Caps {
+                        caps: ai::memory::Caps {
                             max_user,
                             max_lore: ai.memory.max_lore,
                             max_pref: ai.memory.max_pref,
                         },
                         half_life_days: ai.memory.half_life_days,
                     };
-                    let ai_memory = crate::commands::ai::AiMemory {
+                    let ai_memory = crate::ai::command::AiMemory {
                         config,
-                        extraction_deps: crate::commands::ai::AiExtractionDeps {
+                        extraction_deps: crate::ai::command::AiExtractionDeps {
                             enabled: ai.extraction.enabled,
                             llm: llm_arc.clone(),
                             model: extraction_model,
@@ -369,9 +357,9 @@ where
         // Format is validated in `validate_config`, so this cannot fail here.
         let run_at = chrono::NaiveTime::parse_from_str(&ai.run_at, "%H:%M")
             .expect("ai.consolidation.run_at is validated at config load");
-        memory::spawn_consolidation(
+        ai::memory::spawn_consolidation(
             llm_client,
-            memory::consolidation::ConsolidationLlmConfig {
+            ai::memory::consolidation::ConsolidationLlmConfig {
                 model,
                 reasoning_effort: consolidation_reasoning_effort,
             },

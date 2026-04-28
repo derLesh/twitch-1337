@@ -2,9 +2,10 @@ mod common;
 
 use std::time::Duration;
 
+use chrono::{Duration as ChronoDuration, Utc};
 use common::TestBotBuilder;
 use serial_test::serial;
-use twitch_1337::whisper::{FIRST_WHISPER_MAX_CHARS, WHISPER_MAX_CHARS};
+use twitch_1337::twitch::whisper::{FIRST_WHISPER_MAX_CHARS, WHISPER_MAX_CHARS};
 
 #[tokio::test]
 #[serial]
@@ -51,10 +52,11 @@ async fn news_command_summarizes_since_previous_user_message() {
         user_msg.content
     );
     assert!(
-        !user_msg.content.contains("old topic before alice"),
-        "included message before alice's previous line: {}",
+        user_msg.content.contains("old topic before alice"),
+        "recent alice line should not cut off earlier context: {}",
         user_msg.content
     );
+    assert!(user_msg.content.contains("alice: ich bin kurz weg"));
     assert!(
         !user_msg.content.contains("!news"),
         "included triggering command: {}",
@@ -134,7 +136,7 @@ async fn news_command_uses_full_history_without_previous_user_message() {
 
 #[tokio::test]
 #[serial]
-async fn news_command_starts_after_previous_news_response() {
+async fn news_command_does_not_use_previous_news_response_as_boundary() {
     let bot = TestBotBuilder::new()
         .with_ai()
         .with_config(|c| {
@@ -176,15 +178,64 @@ async fn news_command_starts_after_previous_news_response() {
         user_msg.content
     );
     assert!(
-        !user_msg.content.contains("bob: old topic"),
-        "included message before previous news response: {}",
+        user_msg.content.contains("bob: old topic"),
+        "previous public chat before news response should remain available: {}",
         user_msg.content
     );
     assert!(
         !user_msg.content.contains("ICYMI: old topic summary"),
-        "included previous news response: {}",
+        "hidden previous news whisper should not be inserted into chat history: {}",
         user_msg.content
     );
+
+    bot.shutdown().await;
+}
+
+#[tokio::test]
+#[serial]
+async fn news_command_uses_old_user_message_as_boundary_outside_recent_window() {
+    let bot = TestBotBuilder::new()
+        .with_ai()
+        .with_config(|c| {
+            if let Some(ai) = c.ai.as_mut() {
+                ai.history_length = 30;
+            }
+        })
+        .spawn()
+        .await;
+
+    bot.send("bob", "before old alice marker").await;
+    bot.send("alice", "old alice marker").await;
+    for i in 0..21 {
+        bot.send("carol", &format!("update {i}")).await;
+    }
+
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    bot.llm.push_chat("older alice marker cut off");
+    bot.send("alice", "!news").await;
+    let out = bot.expect_whisper(Duration::from_secs(2)).await;
+    assert_eq!(out.message, "ICYMI: older alice marker cut off");
+
+    let calls = bot.llm.chat_calls();
+    let user_msg = calls[0]
+        .messages
+        .iter()
+        .find(|m| m.role == "user")
+        .expect("request has a user message");
+
+    assert!(
+        !user_msg.content.contains("before old alice marker"),
+        "included content before old user boundary: {}",
+        user_msg.content
+    );
+    assert!(
+        !user_msg.content.contains("old alice marker"),
+        "included old user boundary line: {}",
+        user_msg.content
+    );
+    assert!(user_msg.content.contains("carol: update 0"));
+    assert!(user_msg.content.contains("carol: update 20"));
 
     bot.shutdown().await;
 }
@@ -308,6 +359,69 @@ async fn news_command_falls_back_to_chat_when_whisper_fails() {
     let out = bot.expect_say(Duration::from_secs(2)).await;
     let body = out.strip_prefix(". ").unwrap_or(&out);
     assert_eq!(body, "ICYMI: fallback summary");
+
+    bot.shutdown().await;
+}
+
+#[tokio::test]
+#[serial]
+async fn tldr_command_summarizes_available_last_24_hours() {
+    let bot = TestBotBuilder::new()
+        .with_ai()
+        .with_config(|c| {
+            if let Some(ai) = c.ai.as_mut() {
+                ai.history_length = 10;
+            }
+        })
+        .spawn()
+        .await;
+
+    let now = Utc::now();
+    bot.send_at(
+        "bob",
+        "older than one day",
+        (now - ChronoDuration::hours(25)).timestamp_millis(),
+    )
+    .await;
+    bot.send_at(
+        "alice",
+        "recent alice context",
+        (now - ChronoDuration::hours(2)).timestamp_millis(),
+    )
+    .await;
+    bot.send_at(
+        "carol",
+        "recent carol context",
+        (now - ChronoDuration::minutes(30)).timestamp_millis(),
+    )
+    .await;
+
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    bot.llm.push_chat("24h tldr summary");
+    bot.send_at("alice", "!tldr", now.timestamp_millis()).await;
+    let out = bot.expect_whisper(Duration::from_secs(2)).await;
+    assert_eq!(out.message, "ICYMI: 24h tldr summary");
+
+    let calls = bot.llm.chat_calls();
+    let user_msg = calls[0]
+        .messages
+        .iter()
+        .find(|m| m.role == "user")
+        .expect("request has a user message");
+
+    assert!(
+        !user_msg.content.contains("older than one day"),
+        "included message older than 24h: {}",
+        user_msg.content
+    );
+    assert!(user_msg.content.contains("alice: recent alice context"));
+    assert!(user_msg.content.contains("carol: recent carol context"));
+    assert!(
+        user_msg.content.contains("TLDR"),
+        "tldr prompt missing mode instruction: {}",
+        user_msg.content
+    );
 
     bot.shutdown().await;
 }

@@ -451,7 +451,7 @@ impl LlmClient for OpenAiClient {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::llm::{
+    use crate::ai::llm::{
         Message, ToolCall, ToolCallRound, ToolChatCompletionRequest, ToolResultMessage,
     };
 

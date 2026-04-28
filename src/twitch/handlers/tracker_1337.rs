@@ -25,7 +25,7 @@ use twitch_irc::{
     transport::Transport,
 };
 
-use crate::{clock::Clock, resolve_berlin_time};
+use crate::{resolve_berlin_time, util::clock::Clock};
 
 pub const TARGET_HOUR: u32 = 13;
 pub const TARGET_MINUTE: u32 = 37;

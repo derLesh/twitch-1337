@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use common::TestBotBuilder;
 use serial_test::serial;
-use twitch_1337::llm::{ToolCall, ToolChatCompletionResponse};
+use twitch_1337::ai::llm::{ToolCall, ToolChatCompletionResponse};
 use wiremock::matchers::{method, path, query_param};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
