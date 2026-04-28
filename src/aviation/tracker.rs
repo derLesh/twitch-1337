@@ -345,6 +345,7 @@ pub(crate) fn detect_phase(flight: &TrackedFlight, ac: &NearbyAircraft) -> Fligh
         && alt_val > CRUISE_MIN_ALTITUDE
         && vr.abs() < CRUISE_RATE_THRESHOLD
         && flight.polls_since_change >= CRUISE_STABLE_POLLS
+        && !matches!(flight.phase, FlightPhase::Descent | FlightPhase::Approach)
     {
         return FlightPhase::Cruise;
     }
@@ -1306,6 +1307,30 @@ mod tests {
         }
     }
 
+    fn tracked_flight_with(phase: FlightPhase, polls_since_change: u32) -> TrackedFlight {
+        TrackedFlight {
+            phase,
+            polls_since_change,
+            ..tracked_flight()
+        }
+    }
+
+    fn aircraft_at(altitude_ft: i64, baro_rate: i64) -> NearbyAircraft {
+        NearbyAircraft {
+            hex: Some("4952c3".to_string()),
+            flight: Some("TAP247".to_string()),
+            t: Some("A339".to_string()),
+            alt_baro: Some(AltBaro::Feet(altitude_ft)),
+            lat: Some(38.0),
+            lon: Some(-30.0),
+            gs: Some(450.0),
+            baro_rate: Some(baro_rate),
+            geom_rate: None,
+            squawk: Some("1000".to_string()),
+            nav_modes: None,
+        }
+    }
+
     fn metadata() -> AviationstackFlightMetadata {
         AviationstackFlightMetadata {
             flight_iata: None,
@@ -1379,5 +1404,29 @@ mod tests {
         apply_aviationstack_metadata(&mut flight, metadata);
 
         assert_eq!(flight.takeoff_at, Some(dt("2026-04-18T10:00:00Z")));
+    }
+
+    #[test]
+    fn detect_phase_keeps_descent_during_high_altitude_level_off() {
+        let flight = tracked_flight_with(FlightPhase::Descent, CRUISE_STABLE_POLLS);
+        let ac = aircraft_at(34_000, 0);
+
+        assert_eq!(detect_phase(&flight, &ac), FlightPhase::Descent);
+    }
+
+    #[test]
+    fn detect_phase_keeps_approach_during_high_altitude_level_off() {
+        let flight = tracked_flight_with(FlightPhase::Approach, CRUISE_STABLE_POLLS);
+        let ac = aircraft_at(12_000, 0);
+
+        assert_eq!(detect_phase(&flight, &ac), FlightPhase::Approach);
+    }
+
+    #[test]
+    fn detect_phase_still_detects_cruise_from_non_descent_phase() {
+        let flight = tracked_flight_with(FlightPhase::Climb, CRUISE_STABLE_POLLS);
+        let ac = aircraft_at(34_000, 0);
+
+        assert_eq!(detect_phase(&flight, &ac), FlightPhase::Cruise);
     }
 }
