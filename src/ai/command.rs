@@ -7,18 +7,17 @@ use eyre::{Result, eyre};
 use tracing::{debug, error, instrument};
 use twitch_irc::{login::LoginCredentials, transport::Transport};
 
-use crate::chat_history::{ChatHistory, ChatHistoryQuery, MAX_TOOL_RESULT_MESSAGES};
-use crate::cooldown::{PerUserCooldown, format_cooldown_remaining};
-use crate::llm::{
+use crate::ai::chat_history::{ChatHistory, ChatHistoryQuery, MAX_TOOL_RESULT_MESSAGES};
+use crate::ai::llm::{
     ChatCompletionRequest, LlmClient, Message, ToolCall, ToolCallRound, ToolChatCompletionRequest,
     ToolChatCompletionResponse, ToolDefinition, ToolResultMessage,
 };
-use crate::memory;
-use crate::seventv::SevenTvEmoteProvider;
+use crate::ai::memory;
+use crate::ai::web_search;
+use crate::commands::{Command, CommandContext};
+use crate::cooldown::{PerUserCooldown, format_cooldown_remaining};
+use crate::twitch::seventv::SevenTvEmoteProvider;
 use crate::util::{MAX_RESPONSE_LENGTH, truncate_response};
-use crate::web_search;
-
-use super::{Command, CommandContext};
 
 /// Groups the shared chat history buffer with its capacity and the bot's username.
 #[derive(Clone)]

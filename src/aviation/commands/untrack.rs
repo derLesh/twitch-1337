@@ -4,27 +4,27 @@ use tokio::sync::mpsc;
 use tracing::error;
 use twitch_irc::{login::LoginCredentials, transport::Transport};
 
-use super::{Command, CommandContext};
-use crate::flight_tracker::{FlightIdentifier, TrackerCommand};
+use crate::aviation::TrackerCommand;
+use crate::commands::{Command, CommandContext};
 
-pub struct TrackCommand {
+pub struct UntrackCommand {
     tracker_tx: mpsc::Sender<TrackerCommand>,
 }
 
-impl TrackCommand {
+impl UntrackCommand {
     pub fn new(tracker_tx: mpsc::Sender<TrackerCommand>) -> Self {
         Self { tracker_tx }
     }
 }
 
 #[async_trait]
-impl<T, L> Command<T, L> for TrackCommand
+impl<T, L> Command<T, L> for UntrackCommand
 where
     T: Transport,
     L: LoginCredentials,
 {
     fn name(&self) -> &str {
-        "!track"
+        "!untrack"
     }
 
     async fn execute(&self, ctx: CommandContext<'_, T, L>) -> Result<()> {
@@ -34,7 +34,7 @@ where
                 .client
                 .say_in_reply_to(
                     ctx.privmsg,
-                    "Benutzung: !track <callsign/hex> FDM".to_string(),
+                    "Benutzung: !untrack <callsign/hex> FDM".to_string(),
                 )
                 .await
             {
@@ -43,15 +43,21 @@ where
             return Ok(());
         }
 
-        let identifier = FlightIdentifier::parse(&input);
-        let cmd = TrackerCommand::Track {
-            identifier,
+        let is_mod = ctx
+            .privmsg
+            .badges
+            .iter()
+            .any(|b| b.name == "moderator" || b.name == "broadcaster");
+
+        let cmd = TrackerCommand::Untrack {
+            identifier: input.trim().to_string(),
             requested_by: ctx.privmsg.sender.login.clone(),
+            is_mod,
             reply_to: ctx.privmsg.clone(),
         };
 
         if let Err(e) = self.tracker_tx.send(cmd).await {
-            error!(error = ?e, "Failed to send track command to flight tracker");
+            error!(error = ?e, "Failed to send untrack command to flight tracker");
         }
 
         Ok(())

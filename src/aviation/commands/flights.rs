@@ -4,8 +4,8 @@ use tokio::sync::mpsc;
 use tracing::error;
 use twitch_irc::{login::LoginCredentials, transport::Transport};
 
-use super::{Command, CommandContext};
-use crate::flight_tracker::TrackerCommand;
+use crate::aviation::TrackerCommand;
+use crate::commands::{Command, CommandContext};
 
 pub struct FlightsCommand {
     tracker_tx: mpsc::Sender<TrackerCommand>,

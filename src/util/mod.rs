@@ -1,3 +1,6 @@
+pub mod clock;
+pub mod telemetry;
+
 use std::path::PathBuf;
 
 use chrono::MappedLocalTime;

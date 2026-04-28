@@ -7,11 +7,11 @@ use eyre::Result;
 use tracing::{debug, error, instrument, warn};
 use twitch_irc::{login::LoginCredentials, transport::Transport};
 
-use crate::commands::ai::ChatContext;
+use crate::ai::command::ChatContext;
+use crate::ai::llm::{ChatCompletionRequest, LlmClient, Message};
 use crate::cooldown::{PerUserCooldown, format_cooldown_remaining};
-use crate::llm::{ChatCompletionRequest, LlmClient, Message};
+use crate::twitch::whisper::{WHISPER_MAX_CHARS, WhisperSender};
 use crate::util::{MAX_RESPONSE_LENGTH, truncate_response};
-use crate::whisper::{WHISPER_MAX_CHARS, WhisperSender};
 
 use super::{Command, CommandContext};
 

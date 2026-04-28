@@ -7,9 +7,8 @@ use twitch_irc::{
     TwitchIRCClient, login::LoginCredentials, message::PrivmsgMessage, transport::Transport,
 };
 
+use crate::commands::{Command, CommandContext};
 use crate::util::parse_flight_duration;
-
-use super::{Command, CommandContext};
 
 pub struct RandomFlightCommand;
 

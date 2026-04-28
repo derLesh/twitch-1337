@@ -4,7 +4,7 @@ use color_eyre::eyre::{Result, WrapErr};
 use tracing::{debug, error, info, instrument, warn};
 use twitch_irc::{TwitchIRCClient, login::LoginCredentials, transport::Transport};
 
-use crate::{clock::Clock, config::Configuration, database, get_config_path};
+use crate::{config::Configuration, database, get_config_path, util::clock::Clock};
 
 /// Parse a datetime string in ISO 8601 format (YYYY-MM-DDTHH:MM:SS).
 pub(crate) fn parse_datetime(s: &str) -> Result<chrono::NaiveDateTime> {

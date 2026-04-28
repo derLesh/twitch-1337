@@ -12,7 +12,7 @@ use std::sync::Mutex;
 use async_trait::async_trait;
 use eyre::Result;
 
-use twitch_1337::llm::{
+use twitch_1337::ai::llm::{
     ChatCompletionRequest, LlmClient, ToolChatCompletionRequest, ToolChatCompletionResponse,
 };
 

@@ -5,7 +5,7 @@
 //! operations (merge, drop, edit) are reserved for the consolidator so a
 //! hijacked per-turn extraction cannot nuke user data.
 
-use crate::llm::ToolDefinition;
+use crate::ai::llm::ToolDefinition;
 
 /// Tool set exposed to the per-turn extractor. Read + additive write only.
 pub fn extractor_tools() -> Vec<ToolDefinition> {

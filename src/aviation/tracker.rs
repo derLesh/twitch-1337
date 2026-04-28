@@ -14,7 +14,7 @@ use twitch_irc::{
 use crate::aviation::{
     AltBaro, AviationClient, AviationstackFlightMetadata, NearbyAircraft, iata_to_coords,
 };
-use crate::clock::Clock;
+use crate::util::clock::Clock;
 
 const FLIGHTS_FILENAME: &str = "flights.ron";
 

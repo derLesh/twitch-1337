@@ -2,8 +2,8 @@ use async_trait::async_trait;
 use eyre::Result;
 use twitch_irc::{login::LoginCredentials, transport::Transport};
 
-use super::{Command, CommandContext};
 use crate::aviation::AviationClient;
+use crate::commands::{Command, CommandContext};
 use crate::cooldown::PerUserCooldown;
 
 pub struct FlightsAboveCommand {

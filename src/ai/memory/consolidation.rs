@@ -7,13 +7,13 @@ use eyre::{Result, WrapErr as _};
 use tokio::sync::{Notify, RwLock};
 use tracing::{debug, info, warn};
 
-use crate::llm::{
+use crate::ai::llm::{
     self, Message, ToolCallRound, ToolChatCompletionRequest, ToolChatCompletionResponse,
     ToolResultMessage,
 };
-use crate::memory::Memory;
-use crate::memory::store::MemoryStore;
-use crate::memory::tools::consolidator_tools;
+use crate::ai::memory::Memory;
+use crate::ai::memory::store::MemoryStore;
+use crate::ai::memory::tools::consolidator_tools;
 
 #[derive(Clone)]
 pub struct ConsolidationLlmConfig {
@@ -302,9 +302,9 @@ pub fn spawn_consolidation(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::llm::{ChatCompletionRequest, ToolCall};
-    use crate::memory::Scope;
-    use crate::memory::store::Memory;
+    use crate::ai::llm::{ChatCompletionRequest, ToolCall};
+    use crate::ai::memory::Scope;
+    use crate::ai::memory::store::Memory;
     use tempfile::TempDir;
 
     fn m_with(conf: u8, stale_days: i64, sources: Vec<String>) -> Memory {

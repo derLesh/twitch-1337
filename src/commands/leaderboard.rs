@@ -8,7 +8,7 @@ use tracing::error;
 use twitch_irc::{login::LoginCredentials, transport::Transport};
 
 use super::{Command, CommandContext};
-pub use crate::handlers::tracker_1337::PersonalBest;
+pub use crate::twitch::handlers::tracker_1337::PersonalBest;
 
 pub struct LeaderboardCommand {
     leaderboard: Arc<RwLock<HashMap<String, PersonalBest>>>,

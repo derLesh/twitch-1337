@@ -15,11 +15,11 @@ use wiremock::MockServer;
 
 use twitch_1337::{
     PersonalBest, Services,
+    ai::llm::LlmClient,
     aviation::AviationClient,
     config::{AiConfig, Configuration},
-    llm::LlmClient,
     run_bot,
-    whisper::{self, WhisperError, WhisperSender},
+    twitch::whisper::{self, WhisperError, WhisperSender},
 };
 use twitch_irc::login::StaticLoginCredentials;
 use twitch_irc::{ClientConfig, TwitchIRCClient};
