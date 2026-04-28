@@ -82,6 +82,114 @@ async fn grok_without_reply_behaves_like_ai_alias() {
 
 #[tokio::test]
 #[serial]
+async fn grok_reply_with_leading_mention_triggers_alias() {
+    let bot = TestBotBuilder::new()
+        .with_ai()
+        .with_config(|c| {
+            if let Some(ai) = c.ai.as_mut() {
+                ai.history_length = 0;
+            }
+        })
+        .spawn()
+        .await;
+    bot.llm.push_chat("Nein, Chat, das ist Quatsch.");
+
+    let mut bot = bot;
+    bot.send_reply(
+        "alice",
+        "@bob @grok stimmt das",
+        "bob",
+        "Die Erde ist flach",
+    )
+    .await;
+
+    let out = bot.expect_say(Duration::from_secs(2)).await;
+    let body = out.strip_prefix(". ").unwrap_or(&out);
+    assert_eq!(body, "Nein, Chat, das ist Quatsch.");
+
+    let calls = bot.llm.chat_calls();
+    assert_eq!(calls.len(), 1, "expected exactly one LLM call");
+    let user_message = calls[0]
+        .messages
+        .iter()
+        .find(|message| message.role == "user")
+        .expect("request has a user message");
+    assert!(user_message.content.contains("stimmt das"));
+    assert!(user_message.content.contains("Replied-to author: bob"));
+    assert!(
+        user_message
+            .content
+            .contains("Replied-to message: Die Erde ist flach")
+    );
+
+    bot.shutdown().await;
+}
+
+#[tokio::test]
+#[serial]
+async fn grok_empty_reply_with_leading_mention_uses_default_instruction() {
+    let bot = TestBotBuilder::new()
+        .with_ai()
+        .with_config(|c| {
+            if let Some(ai) = c.ai.as_mut() {
+                ai.history_length = 0;
+            }
+        })
+        .spawn()
+        .await;
+    bot.llm.push_chat("Kurz: nein.");
+
+    let mut bot = bot;
+    bot.send_reply("alice", "@bob @grok", "bob", "Berlin liegt auf dem Mond")
+        .await;
+
+    let out = bot.expect_say(Duration::from_secs(2)).await;
+    let body = out.strip_prefix(". ").unwrap_or(&out);
+    assert_eq!(body, "Kurz: nein.");
+
+    let calls = bot.llm.chat_calls();
+    assert_eq!(calls.len(), 1, "expected exactly one LLM call");
+    let user_message = calls[0]
+        .messages
+        .iter()
+        .find(|message| message.role == "user")
+        .expect("request has a user message");
+    assert!(user_message.content.contains("Prüfe die Reply-Nachricht"));
+    assert!(
+        user_message
+            .content
+            .contains("Replied-to message: Berlin liegt auf dem Mond")
+    );
+
+    bot.shutdown().await;
+}
+
+#[tokio::test]
+#[serial]
+async fn grok_strips_visible_reasoning_prefix_from_response() {
+    let bot = TestBotBuilder::new()
+        .with_ai()
+        .with_config(|c| {
+            if let Some(ai) = c.ai.as_mut() {
+                ai.history_length = 0;
+            }
+        })
+        .spawn()
+        .await;
+    bot.llm.push_chat("thought test_channel|Hallo Chat");
+
+    let mut bot = bot;
+    bot.send("alice", "@grok sag hallo").await;
+
+    let out = bot.expect_say(Duration::from_secs(2)).await;
+    let body = out.strip_prefix(". ").unwrap_or(&out);
+    assert_eq!(body, "Hallo Chat");
+
+    bot.shutdown().await;
+}
+
+#[tokio::test]
+#[serial]
 async fn grok_uses_web_tools_when_enabled() {
     let search = MockServer::start().await;
     Mock::given(method("GET"))
@@ -155,6 +263,9 @@ async fn grok_uses_web_tools_when_enabled() {
         .find(|message| message.role == "system")
         .expect("request has a system message");
     assert!(system_message.content.contains("test prompt"));
+    assert!(system_message.content.contains("Grok-inspired"));
+    assert!(system_message.content.contains("do not claim access to X"));
+    assert!(system_message.content.contains("do not invent X posts"));
     assert!(!system_message.content.contains("Du bist NICHT Grok"));
 
     bot.shutdown().await;
