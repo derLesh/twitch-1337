@@ -5,7 +5,7 @@ use std::time::Duration;
 use chrono::{Duration as ChronoDuration, Utc};
 use common::TestBotBuilder;
 use serial_test::serial;
-use twitch_1337::whisper::{FIRST_WHISPER_MAX_CHARS, WHISPER_MAX_CHARS};
+use twitch_1337::twitch::whisper::{FIRST_WHISPER_MAX_CHARS, WHISPER_MAX_CHARS};
 
 #[tokio::test]
 #[serial]

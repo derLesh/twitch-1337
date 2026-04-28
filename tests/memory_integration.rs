@@ -9,8 +9,8 @@ use std::time::Duration;
 
 use common::TestBotBuilder;
 use serial_test::serial;
-use twitch_1337::llm::{ToolCall, ToolChatCompletionResponse};
-use twitch_1337::memory::MemoryStore;
+use twitch_1337::ai::llm::{ToolCall, ToolChatCompletionResponse};
+use twitch_1337::ai::memory::MemoryStore;
 
 /// Adversarial test: speaker asserts both a self-fact and a third-party fact.
 /// The extractor emits two `save_memory` tool calls in one round; the
@@ -177,8 +177,8 @@ async fn consolidation_merges_dupes() {
     use std::sync::Arc;
     use tempfile::TempDir;
     use tokio::sync::RwLock;
-    use twitch_1337::llm::LlmClient;
-    use twitch_1337::memory::{Memory, Scope, consolidation};
+    use twitch_1337::ai::llm::LlmClient;
+    use twitch_1337::ai::memory::{Memory, Scope, consolidation};
 
     let fake = Arc::new(common::fake_llm::FakeLlm::new());
 

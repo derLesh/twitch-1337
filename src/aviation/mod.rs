@@ -1,0 +1,1108 @@
+pub mod commands;
+pub mod tracker;
+
+pub use tracker::{FlightIdentifier, TrackerCommand, run_flight_tracker};
+
+use chrono::{DateTime, Utc};
+use eyre::{Result, WrapErr};
+use secrecy::ExposeSecret as _;
+use serde::Deserialize;
+use std::collections::HashMap;
+use std::sync::Arc;
+use std::sync::OnceLock;
+use std::time::Duration;
+use tracing::{debug, error, warn};
+use twitch_irc::{
+    TwitchIRCClient, login::LoginCredentials, message::PrivmsgMessage, transport::Transport,
+};
+
+use crate::config::AviationstackConfig;
+use crate::cooldown::format_cooldown_remaining;
+use crate::util::{APP_USER_AGENT, MAX_RESPONSE_LENGTH, truncate_response};
+
+const ADSBDB_BASE_URL: &str = "https://api.adsbdb.com/v0";
+const ADSBLOL_BASE_URL: &str = "https://api.adsb.lol/v2";
+const NOMINATIM_BASE_URL: &str = "https://nominatim.openstreetmap.org";
+const UP_SEARCH_RADIUS_NM: u16 = 15;
+const UP_COMMAND_TIMEOUT: Duration = Duration::from_secs(20);
+const UP_ADSBLOL_TIMEOUT: Duration = Duration::from_secs(10);
+const UP_ADSBDB_TIMEOUT: Duration = Duration::from_secs(5);
+const UP_NOMINATIM_TIMEOUT: Duration = Duration::from_secs(5);
+const AIRLINE_LOOKUP_TIMEOUT: Duration = Duration::from_secs(5);
+const UP_MAX_CANDIDATES: usize = 10;
+const UP_MAX_RESULTS: usize = 5;
+const UP_CONE_REFERENCE_ALT_FT: f64 = 35_000.0;
+
+// --- PLZ Lookup ---
+
+const PLZ_DATA: &str = include_str!("../../data/plz.csv");
+
+fn plz_table() -> &'static HashMap<&'static str, (f64, f64)> {
+    static TABLE: OnceLock<HashMap<&'static str, (f64, f64)>> = OnceLock::new();
+    TABLE.get_or_init(|| {
+        let mut map = HashMap::new();
+        for line in PLZ_DATA.lines() {
+            let mut parts = line.splitn(3, ',');
+            let (Some(plz), Some(lat_str), Some(lon_str)) =
+                (parts.next(), parts.next(), parts.next())
+            else {
+                continue;
+            };
+            let Ok(lat) = lat_str.parse::<f64>() else {
+                continue;
+            };
+            let Ok(lon) = lon_str.parse::<f64>() else {
+                continue;
+            };
+            map.insert(plz, (lat, lon));
+        }
+        map
+    })
+}
+
+fn plz_to_coords(plz: &str) -> Option<(f64, f64)> {
+    plz_table().get(plz).copied()
+}
+
+fn is_valid_plz(plz: &str) -> bool {
+    plz.len() == 5 && plz.chars().all(|c| c.is_ascii_digit())
+}
+
+// --- Airport Lookup ---
+
+const AIRPORT_DATA: &str = include_str!("../../data/airports.csv");
+
+struct AirportData {
+    by_icao: HashMap<String, (f64, f64, String)>,
+    by_iata: HashMap<String, (f64, f64, String)>,
+}
+
+fn airport_data() -> &'static AirportData {
+    static DATA: OnceLock<AirportData> = OnceLock::new();
+    DATA.get_or_init(|| {
+        let mut by_icao = HashMap::new();
+        let mut by_iata = HashMap::new();
+        let mut reader = csv::ReaderBuilder::new()
+            .has_headers(false)
+            .from_reader(AIRPORT_DATA.as_bytes());
+        for result in reader.records() {
+            let Ok(record) = result else { continue };
+            if record.len() < 5 {
+                continue;
+            }
+            let icao = record[0].trim();
+            let iata = record[1].trim();
+            let name = record[2].trim().to_string();
+            let Ok(lat) = record[3].trim().parse::<f64>() else {
+                continue;
+            };
+            let Ok(lon) = record[4].trim().parse::<f64>() else {
+                continue;
+            };
+
+            // Only insert 4-letter codes into by_icao (codes are already uppercase in data)
+            if icao.len() == 4 {
+                by_icao.insert(icao.to_string(), (lat, lon, name.clone()));
+            }
+            // Insert non-empty IATA codes
+            if iata.len() == 3 {
+                by_iata.insert(iata.to_string(), (lat, lon, name));
+            }
+        }
+        AirportData { by_icao, by_iata }
+    })
+}
+
+fn icao_to_coords(code: &str) -> Option<(f64, f64, &'static str)> {
+    airport_data()
+        .by_icao
+        .get(code)
+        .map(|(lat, lon, name)| (*lat, *lon, name.as_str()))
+}
+
+pub(crate) fn iata_to_coords(code: &str) -> Option<(f64, f64, &'static str)> {
+    airport_data()
+        .by_iata
+        .get(code)
+        .map(|(lat, lon, name)| (*lat, *lon, name.as_str()))
+}
+
+// --- Airline IATA-to-ICAO Lookup ---
+
+const AIRLINE_DATA: &str = include_str!("../../data/airlines.csv");
+
+/// Returns the static IATA→ICAO airline code table (lazy-initialized).
+fn airline_table() -> &'static HashMap<&'static str, &'static str> {
+    static TABLE: OnceLock<HashMap<&'static str, &'static str>> = OnceLock::new();
+    TABLE.get_or_init(|| {
+        let mut map = HashMap::new();
+        for line in AIRLINE_DATA.lines() {
+            let Some((iata, icao)) = line.split_once(',') else {
+                continue;
+            };
+            let iata = iata.trim();
+            let icao = icao.trim();
+            if iata.len() == 2 && icao.len() == 3 {
+                map.insert(iata, icao);
+            }
+        }
+        map
+    })
+}
+
+/// Check if input looks like an IATA flight number (2 letters + 1-4 digits).
+fn is_iata_flight_number(s: &str) -> bool {
+    let bytes = s.as_bytes();
+    if bytes.len() < 3 || bytes.len() > 6 {
+        return false;
+    }
+    bytes[0].is_ascii_uppercase()
+        && bytes[1].is_ascii_uppercase()
+        && bytes[2..].iter().all(u8::is_ascii_digit)
+}
+
+fn is_icao_flight_number(s: &str) -> bool {
+    let bytes = s.as_bytes();
+    if bytes.len() < 4 || bytes.len() > 7 {
+        return false;
+    }
+    bytes[..3].iter().all(u8::is_ascii_uppercase)
+        && bytes[..3].iter().all(u8::is_ascii_alphabetic)
+        && bytes[3..].iter().all(u8::is_ascii_digit)
+}
+
+fn is_icao_pattern(s: &str) -> bool {
+    s.len() == 4 && s.chars().all(|c| c.is_ascii_alphabetic())
+}
+
+fn is_iata_pattern(s: &str) -> bool {
+    s.len() == 3 && s.chars().all(|c| c.is_ascii_alphabetic())
+}
+
+// --- Location Resolution ---
+
+struct ResolvedLocation {
+    lat: f64,
+    lon: f64,
+    display_name: String,
+}
+
+enum ResolveResult {
+    Found(ResolvedLocation),
+    PlzNotFound,
+    NotFound,
+}
+
+// --- adsb.lol types ---
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct AdsbLolResponse {
+    #[serde(default)]
+    pub(crate) ac: Vec<NearbyAircraft>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct NearbyAircraft {
+    pub hex: Option<String>,
+    pub flight: Option<String>,
+    pub t: Option<String>,
+    pub alt_baro: Option<AltBaro>,
+    pub lat: Option<f64>,
+    pub lon: Option<f64>,
+    pub gs: Option<f64>,
+    pub baro_rate: Option<i64>,
+    pub geom_rate: Option<i64>,
+    pub squawk: Option<String>,
+    pub nav_modes: Option<Vec<String>>,
+}
+
+#[derive(Debug, Clone)]
+pub enum AltBaro {
+    Feet(i64),
+    Ground,
+}
+
+impl<'de> Deserialize<'de> for AltBaro {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let value = serde_json::Value::deserialize(deserializer)?;
+        match value {
+            serde_json::Value::Number(n) => {
+                if let Some(i) = n.as_i64() {
+                    Ok(AltBaro::Feet(i))
+                } else {
+                    Ok(AltBaro::Feet(n.as_f64().unwrap_or(0.0) as i64))
+                }
+            }
+            serde_json::Value::String(s) if s == "ground" => Ok(AltBaro::Ground),
+            _ => Ok(AltBaro::Ground),
+        }
+    }
+}
+
+// --- adsbdb types ---
+
+#[derive(Debug, Deserialize)]
+struct AdsbDbResponse {
+    response: AdsbDbResponseInner,
+}
+
+#[derive(Debug, Deserialize)]
+struct AdsbDbResponseInner {
+    flightroute: Option<FlightRoute>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct FlightRoute {
+    pub origin: Airport,
+    pub destination: Airport,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Airport {
+    pub iata_code: String,
+}
+
+// --- adsbdb airline types ---
+
+#[derive(Debug, Deserialize)]
+struct AdsbDbAirlineResponse {
+    response: Vec<AdsbDbAirline>,
+}
+
+#[derive(Debug, Deserialize)]
+struct AdsbDbAirline {
+    icao: String,
+}
+
+// --- aviationstack types ---
+
+#[derive(Debug, Deserialize)]
+struct AviationstackFlightsResponse {
+    #[serde(default)]
+    data: Vec<AviationstackFlight>,
+}
+
+#[derive(Debug, Deserialize)]
+struct AviationstackFlight {
+    #[serde(default)]
+    flight: Option<AviationstackFlightIdentity>,
+    #[serde(default)]
+    airline: Option<AviationstackAirline>,
+    #[serde(default)]
+    departure: Option<AviationstackDeparture>,
+    #[serde(default)]
+    arrival: Option<AviationstackArrival>,
+    #[serde(default)]
+    aircraft: Option<AviationstackAircraft>,
+}
+
+#[derive(Debug, Deserialize)]
+struct AviationstackFlightIdentity {
+    number: Option<String>,
+    iata: Option<String>,
+    icao: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct AviationstackAirline {
+    name: Option<String>,
+    iata: Option<String>,
+    icao: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct AviationstackDeparture {
+    iata: Option<String>,
+    icao: Option<String>,
+    scheduled: Option<String>,
+    actual: Option<String>,
+    actual_runway: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct AviationstackArrival {
+    iata: Option<String>,
+    icao: Option<String>,
+    estimated: Option<String>,
+    actual: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct AviationstackAircraft {
+    icao24: Option<String>,
+    icao: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AviationstackFlightMetadata {
+    pub flight_iata: Option<String>,
+    pub flight_icao: Option<String>,
+    pub flight_number: Option<String>,
+    pub airline_iata: Option<String>,
+    pub airline_icao: Option<String>,
+    pub airline_name: Option<String>,
+    pub departure_iata: Option<String>,
+    pub departure_icao: Option<String>,
+    pub departure_scheduled: Option<DateTime<Utc>>,
+    pub departure_actual: Option<DateTime<Utc>>,
+    pub departure_actual_runway: Option<DateTime<Utc>>,
+    pub arrival_iata: Option<String>,
+    pub arrival_icao: Option<String>,
+    pub arrival_estimated: Option<DateTime<Utc>>,
+    pub arrival_actual: Option<DateTime<Utc>>,
+    pub aircraft_icao24: Option<String>,
+    pub aircraft_icao: Option<String>,
+}
+
+impl AviationstackFlightMetadata {
+    pub fn takeoff_time(&self) -> Option<DateTime<Utc>> {
+        self.departure_actual_runway
+            .as_ref()
+            .cloned()
+            .or_else(|| self.departure_actual.as_ref().cloned())
+    }
+}
+
+impl From<AviationstackFlight> for AviationstackFlightMetadata {
+    fn from(value: AviationstackFlight) -> Self {
+        let flight = value.flight;
+        let airline = value.airline;
+        let departure = value.departure;
+        let arrival = value.arrival;
+        let aircraft = value.aircraft;
+
+        Self {
+            flight_iata: flight.as_ref().and_then(|f| f.iata.clone()),
+            flight_icao: flight.as_ref().and_then(|f| f.icao.clone()),
+            flight_number: flight.as_ref().and_then(|f| f.number.clone()),
+            airline_iata: airline.as_ref().and_then(|a| a.iata.clone()),
+            airline_icao: airline.as_ref().and_then(|a| a.icao.clone()),
+            airline_name: airline.as_ref().and_then(|a| a.name.clone()),
+            departure_iata: departure.as_ref().and_then(|d| d.iata.clone()),
+            departure_icao: departure.as_ref().and_then(|d| d.icao.clone()),
+            departure_scheduled: departure
+                .as_ref()
+                .and_then(|d| parse_aviationstack_datetime(d.scheduled.as_deref())),
+            departure_actual: departure
+                .as_ref()
+                .and_then(|d| parse_aviationstack_datetime(d.actual.as_deref())),
+            departure_actual_runway: departure
+                .as_ref()
+                .and_then(|d| parse_aviationstack_datetime(d.actual_runway.as_deref())),
+            arrival_iata: arrival.as_ref().and_then(|a| a.iata.clone()),
+            arrival_icao: arrival.as_ref().and_then(|a| a.icao.clone()),
+            arrival_estimated: arrival
+                .as_ref()
+                .and_then(|a| parse_aviationstack_datetime(a.estimated.as_deref())),
+            arrival_actual: arrival
+                .as_ref()
+                .and_then(|a| parse_aviationstack_datetime(a.actual.as_deref())),
+            aircraft_icao24: aircraft.as_ref().and_then(|a| a.icao24.clone()),
+            aircraft_icao: aircraft.as_ref().and_then(|a| a.icao.clone()),
+        }
+    }
+}
+
+fn parse_aviationstack_datetime(value: Option<&str>) -> Option<DateTime<Utc>> {
+    let value = value?.trim();
+    if value.is_empty() {
+        return None;
+    }
+    DateTime::parse_from_rfc3339(value)
+        .ok()
+        .map(|dt| dt.with_timezone(&Utc))
+}
+
+// --- Nominatim types ---
+
+#[derive(Debug, Deserialize)]
+struct NominatimResult {
+    lat: String,
+    lon: String,
+    display_name: String,
+}
+
+// --- AviationClient ---
+
+#[derive(Clone)]
+pub struct AviationClient {
+    http: reqwest::Client,
+    adsblol_base_url: String,
+    adsbdb_base_url: String,
+    nominatim_base_url: String,
+    aviationstack: Option<AviationstackConfig>,
+}
+
+impl AviationClient {
+    pub fn new() -> Result<Self> {
+        let http = reqwest::Client::builder()
+            .user_agent(APP_USER_AGENT)
+            .build()
+            .wrap_err("Failed to build aviation HTTP client")?;
+        Ok(Self::new_with_base_url(
+            ADSBLOL_BASE_URL.to_owned(),
+            ADSBDB_BASE_URL.to_owned(),
+            NOMINATIM_BASE_URL.to_owned(),
+            http,
+        ))
+    }
+
+    pub fn new_with_base_url(
+        adsblol_base_url: String,
+        adsbdb_base_url: String,
+        nominatim_base_url: String,
+        http_client: reqwest::Client,
+    ) -> Self {
+        Self {
+            http: http_client,
+            adsblol_base_url,
+            adsbdb_base_url,
+            nominatim_base_url,
+            aviationstack: None,
+        }
+    }
+
+    pub fn with_aviationstack_config(mut self, aviationstack: Option<AviationstackConfig>) -> Self {
+        self.aviationstack = aviationstack.filter(|cfg| cfg.enabled);
+        self
+    }
+
+    pub fn aviationstack_enabled(&self) -> bool {
+        self.aviationstack.is_some()
+    }
+
+    async fn get_aircraft_nearby(
+        &self,
+        lat: f64,
+        lon: f64,
+        radius_nm: u16,
+    ) -> Result<Vec<NearbyAircraft>> {
+        let url = format!("{}/point/{lat}/{lon}/{radius_nm}", self.adsblol_base_url);
+        debug!(url = %url, "Fetching nearby aircraft from adsb.lol");
+
+        let resp: AdsbLolResponse = self
+            .http
+            .get(&url)
+            .send()
+            .await
+            .wrap_err("Failed to send request to adsb.lol")?
+            .error_for_status()
+            .wrap_err("adsb.lol returned error status")?
+            .json()
+            .await
+            .wrap_err("Failed to parse adsb.lol response")?;
+
+        debug!(count = resp.ac.len(), "Received aircraft from adsb.lol");
+        Ok(resp.ac)
+    }
+
+    pub async fn get_aircraft_by_hex(&self, hex: &str) -> Result<Option<NearbyAircraft>> {
+        let url = format!("{}/hex/{hex}", self.adsblol_base_url);
+        debug!(hex = %hex, "Fetching aircraft by hex from adsb.lol");
+
+        let resp: AdsbLolResponse = self
+            .http
+            .get(&url)
+            .send()
+            .await
+            .wrap_err("Failed to send request to adsb.lol")?
+            .error_for_status()
+            .wrap_err("adsb.lol returned error status")?
+            .json()
+            .await
+            .wrap_err("Failed to parse adsb.lol response")?;
+
+        Ok(resp.ac.into_iter().next())
+    }
+
+    pub async fn get_aircraft_by_callsign(&self, callsign: &str) -> Result<Option<NearbyAircraft>> {
+        let url = format!("{}/callsign/{callsign}", self.adsblol_base_url);
+        debug!(callsign = %callsign, "Fetching aircraft by callsign from adsb.lol");
+
+        let resp: AdsbLolResponse = self
+            .http
+            .get(&url)
+            .send()
+            .await
+            .wrap_err("Failed to send request to adsb.lol")?
+            .error_for_status()
+            .wrap_err("adsb.lol returned error status")?
+            .json()
+            .await
+            .wrap_err("Failed to parse adsb.lol response")?;
+
+        Ok(resp.ac.into_iter().next())
+    }
+
+    pub async fn get_flight_route(&self, callsign: &str) -> Result<Option<FlightRoute>> {
+        let url = format!("{}/callsign/{callsign}", self.adsbdb_base_url);
+        debug!(callsign = %callsign, "Fetching flight route from adsbdb");
+
+        let resp = self
+            .http
+            .get(&url)
+            .send()
+            .await
+            .wrap_err("Failed to send request to adsbdb")?;
+
+        if !resp.status().is_success() {
+            return Ok(None);
+        }
+
+        let body: AdsbDbResponse = resp
+            .json()
+            .await
+            .wrap_err("Failed to parse adsbdb response")?;
+
+        Ok(body.response.flightroute)
+    }
+
+    pub async fn get_aviationstack_flight_metadata(
+        &self,
+        identifier: &FlightIdentifier,
+        callsign: Option<&str>,
+    ) -> Result<Option<AviationstackFlightMetadata>> {
+        let Some(config) = &self.aviationstack else {
+            return Ok(None);
+        };
+        let Some((query_key, query_value)) = aviationstack_query(identifier, callsign) else {
+            debug!(identifier = %identifier, "Skipping aviationstack lookup: no callsign query");
+            return Ok(None);
+        };
+
+        let url = format!("{}/flights", config.base_url.trim_end_matches('/'));
+        debug!(
+            query_key,
+            query_value = %query_value,
+            "Fetching flight metadata from aviationstack"
+        );
+
+        let timeout = Duration::from_secs(config.timeout_secs);
+        let resp: AviationstackFlightsResponse = self
+            .http
+            .get(&url)
+            .query(&[
+                ("access_key", config.api_key.expose_secret()),
+                (query_key, query_value.as_str()),
+                ("limit", "1"),
+            ])
+            .timeout(timeout)
+            .send()
+            .await
+            .wrap_err("Failed to send request to aviationstack")?
+            .error_for_status()
+            .wrap_err("aviationstack returned error status")?
+            .json()
+            .await
+            .wrap_err("Failed to parse aviationstack response")?;
+
+        Ok(resp
+            .data
+            .into_iter()
+            .next()
+            .map(AviationstackFlightMetadata::from))
+    }
+
+    /// Resolve a potential IATA flight number to an ICAO callsign.
+    pub async fn resolve_callsign(&self, input: &str) -> String {
+        if !is_iata_flight_number(input) {
+            return input.to_string();
+        }
+
+        let (airline_iata, flight_num) = input.split_at(2);
+
+        // Try static CSV lookup first
+        if let Some(&icao) = airline_table().get(airline_iata) {
+            debug!(iata = %airline_iata, icao = %icao, "Resolved airline code via CSV");
+            return format!("{icao}{flight_num}");
+        }
+
+        // Fallback: query adsbdb airline API
+        debug!(iata = %airline_iata, "Airline not in CSV, trying adsbdb API");
+        match tokio::time::timeout(
+            AIRLINE_LOOKUP_TIMEOUT,
+            self.lookup_airline_icao(airline_iata),
+        )
+        .await
+        {
+            Ok(Ok(Some(icao))) => {
+                warn!(
+                    iata = %airline_iata,
+                    icao = %icao,
+                    "Resolved airline via adsbdb API — consider adding to airlines.csv"
+                );
+                format!("{icao}{flight_num}")
+            }
+            Ok(Ok(None)) => {
+                debug!(iata = %airline_iata, "Airline not found in adsbdb");
+                input.to_string()
+            }
+            Ok(Err(e)) => {
+                warn!(error = ?e, iata = %airline_iata, "adsbdb airline lookup failed");
+                input.to_string()
+            }
+            Err(_) => {
+                warn!(iata = %airline_iata, "adsbdb airline lookup timed out");
+                input.to_string()
+            }
+        }
+    }
+
+    /// Query adsbdb for an airline's ICAO code by IATA code.
+    async fn lookup_airline_icao(&self, iata: &str) -> Result<Option<String>> {
+        let url = format!("{}/airline/{iata}", self.adsbdb_base_url);
+        debug!(url = %url, "Fetching airline from adsbdb");
+
+        let resp = self
+            .http
+            .get(&url)
+            .send()
+            .await
+            .wrap_err("Failed to send request to adsbdb")?;
+
+        if !resp.status().is_success() {
+            return Ok(None);
+        }
+
+        let body: AdsbDbAirlineResponse = resp
+            .json()
+            .await
+            .wrap_err("Failed to parse adsbdb airline response")?;
+
+        Ok(body.response.into_iter().next().map(|a| a.icao))
+    }
+
+    async fn geocode_nominatim(&self, query: &str) -> Result<Option<ResolvedLocation>> {
+        let url = format!("{}/search", self.nominatim_base_url);
+        debug!(query = %query, "Geocoding via Nominatim");
+
+        let resp = self
+            .http
+            .get(&url)
+            .query(&[("q", query), ("format", "json"), ("limit", "1")])
+            .send()
+            .await
+            .wrap_err("Failed to send request to Nominatim")?
+            .error_for_status()
+            .wrap_err("Nominatim returned error status")?;
+
+        let results: Vec<NominatimResult> = resp
+            .json()
+            .await
+            .wrap_err("Failed to parse Nominatim response")?;
+
+        let Some(first) = results.into_iter().next() else {
+            debug!(query = %query, "Nominatim returned no results");
+            return Ok(None);
+        };
+
+        let lat: f64 = first.lat.parse().wrap_err("Invalid lat from Nominatim")?;
+        let lon: f64 = first.lon.parse().wrap_err("Invalid lon from Nominatim")?;
+
+        // Trim display_name to first comma-separated segment
+        let display_name = first
+            .display_name
+            .split(',')
+            .next()
+            .unwrap_or(&first.display_name)
+            .trim()
+            .to_string();
+
+        debug!(query = %query, lat = %lat, lon = %lon, display = %display_name, "Nominatim resolved");
+        Ok(Some(ResolvedLocation {
+            lat,
+            lon,
+            display_name,
+        }))
+    }
+}
+
+fn aviationstack_query(
+    identifier: &FlightIdentifier,
+    callsign: Option<&str>,
+) -> Option<(&'static str, String)> {
+    let candidate = match identifier {
+        FlightIdentifier::Callsign(value) => value.as_str(),
+        FlightIdentifier::Hex(_) => callsign?,
+    }
+    .trim();
+
+    if candidate.is_empty() {
+        return None;
+    }
+
+    let candidate = candidate.to_uppercase();
+    if is_iata_flight_number(&candidate) {
+        Some(("flight_iata", candidate))
+    } else if is_icao_flight_number(&candidate)
+        || !matches!(identifier, FlightIdentifier::Hex(_))
+        || callsign.is_some()
+    {
+        Some(("flight_icao", candidate))
+    } else {
+        None
+    }
+}
+
+async fn resolve_location(input: &str, aviation_client: &AviationClient) -> Result<ResolveResult> {
+    // 1. PLZ: 5 ASCII digits — no fallthrough on miss
+    if is_valid_plz(input) {
+        return match plz_to_coords(input) {
+            Some((lat, lon)) => Ok(ResolveResult::Found(ResolvedLocation {
+                lat,
+                lon,
+                display_name: input.to_string(),
+            })),
+            None => Ok(ResolveResult::PlzNotFound),
+        };
+    }
+
+    // Uppercase once for airport code lookups (keys stored uppercase)
+    let upper = input.to_uppercase();
+
+    // 2. ICAO: 4 ASCII letters — falls through to Nominatim on miss
+    if is_icao_pattern(input)
+        && let Some((lat, lon, name)) = icao_to_coords(&upper)
+    {
+        return Ok(ResolveResult::Found(ResolvedLocation {
+            lat,
+            lon,
+            display_name: name.to_string(),
+        }));
+    }
+
+    // 3. IATA: 3 ASCII letters — falls through to Nominatim on miss
+    if is_iata_pattern(input)
+        && let Some((lat, lon, name)) = iata_to_coords(&upper)
+    {
+        return Ok(ResolveResult::Found(ResolvedLocation {
+            lat,
+            lon,
+            display_name: name.to_string(),
+        }));
+    }
+
+    // 4. Nominatim: universal fallback
+    let result = tokio::time::timeout(
+        UP_NOMINATIM_TIMEOUT,
+        aviation_client.geocode_nominatim(input),
+    )
+    .await;
+
+    match result {
+        Ok(Ok(Some(location))) => Ok(ResolveResult::Found(location)),
+        Ok(Ok(None)) => Ok(ResolveResult::NotFound),
+        Ok(Err(e)) => Err(e.wrap_err("Nominatim geocoding failed")),
+        Err(_) => {
+            warn!(input = %input, "Nominatim request timed out");
+            Err(eyre::eyre!("Nominatim request timed out"))
+        }
+    }
+}
+
+// --- Command ---
+
+fn cone_distance_nm(ac: &NearbyAircraft, center_lat: f64, center_lon: f64) -> Option<f64> {
+    let (Some(ac_lat), Some(ac_lon), Some(alt)) = (ac.lat, ac.lon, &ac.alt_baro) else {
+        return None;
+    };
+    let alt_ft = match alt {
+        AltBaro::Feet(ft) if *ft > 0 => *ft as f64,
+        _ => return None,
+    };
+    let distance =
+        random_flight::geo::haversine_distance_nm(center_lat, center_lon, ac_lat, ac_lon);
+    let max_distance = alt_ft * f64::from(UP_SEARCH_RADIUS_NM) / UP_CONE_REFERENCE_ALT_FT;
+    if distance <= max_distance {
+        Some(distance)
+    } else {
+        None
+    }
+}
+
+fn format_altitude(alt: &Option<AltBaro>) -> String {
+    match alt {
+        Some(AltBaro::Feet(ft)) if *ft >= 1000 => format!("FL{}", ft / 100),
+        Some(AltBaro::Feet(ft)) => format!("{ft}ft"),
+        Some(AltBaro::Ground) => "GND".to_string(),
+        None => "?".to_string(),
+    }
+}
+
+pub async fn up_command<T, L>(
+    privmsg: &PrivmsgMessage,
+    client: &Arc<TwitchIRCClient<T, L>>,
+    aviation_client: &AviationClient,
+    input: &str,
+    cooldown: &crate::cooldown::PerUserCooldown,
+) -> Result<()>
+where
+    T: Transport,
+    L: LoginCredentials,
+{
+    let user = &privmsg.sender.login;
+    let input = input.trim();
+
+    // Empty input
+    if input.is_empty() {
+        if let Err(e) = client
+            .say_in_reply_to(
+                privmsg,
+                "Benutzung: !up <PLZ/ICAO/IATA/Ort> FDM".to_string(),
+            )
+            .await
+        {
+            error!(error = ?e, "Failed to send usage message");
+        }
+        return Ok(());
+    }
+
+    // Check cooldown
+    if let Some(remaining) = cooldown.check(user).await {
+        debug!(user = %user, remaining_secs = remaining.as_secs(), "!up on cooldown");
+        if let Err(e) = client
+            .say_in_reply_to(
+                privmsg,
+                format!(
+                    "Bitte warte noch {} Waiting",
+                    format_cooldown_remaining(remaining)
+                ),
+            )
+            .await
+        {
+            error!(error = ?e, "Failed to send cooldown message");
+        }
+        return Ok(());
+    }
+
+    cooldown.record(user).await;
+
+    // Resolve location
+    let location = match resolve_location(input, aviation_client).await {
+        Ok(ResolveResult::Found(loc)) => loc,
+        Ok(ResolveResult::PlzNotFound) => {
+            if let Err(e) = client
+                .say_in_reply_to(privmsg, "Kenne ich nicht die PLZ FDM".to_string())
+                .await
+            {
+                error!(error = ?e, "Failed to send unknown PLZ message");
+            }
+            return Ok(());
+        }
+        Ok(ResolveResult::NotFound) => {
+            if let Err(e) = client
+                .say_in_reply_to(privmsg, "Kenne ich nicht FDM".to_string())
+                .await
+            {
+                error!(error = ?e, "Failed to send not-found message");
+            }
+            return Ok(());
+        }
+        Err(e) => {
+            error!(error = ?e, input = %input, "Location resolution failed");
+            if let Err(e) = client
+                .say_in_reply_to(privmsg, "Da ist was schiefgelaufen FDM".to_string())
+                .await
+            {
+                error!(error = ?e, "Failed to send error message");
+            }
+            return Ok(());
+        }
+    };
+
+    let ResolvedLocation {
+        lat,
+        lon,
+        display_name,
+    } = &location;
+    debug!(input = %input, lat = %lat, lon = %lon, display = %display_name, "Looking up aircraft");
+
+    // Wrap entire API flow in overall timeout
+    let result = tokio::time::timeout(UP_COMMAND_TIMEOUT, async {
+        // Fetch nearby aircraft
+        let aircraft = tokio::time::timeout(
+            UP_ADSBLOL_TIMEOUT,
+            aviation_client.get_aircraft_nearby(*lat, *lon, UP_SEARCH_RADIUS_NM),
+        )
+        .await
+        .map_err(|_| eyre::eyre!("adsb.lol request timed out"))?
+        .wrap_err("adsb.lol request failed")?;
+
+        // Filter by cone visibility, then by callsign
+        let candidates: Vec<_> = aircraft
+            .iter()
+            .filter_map(|ac| {
+                let distance_nm = cone_distance_nm(ac, *lat, *lon)?;
+                let callsign = ac.flight.as_ref()?.trim();
+                if callsign.is_empty() {
+                    return None;
+                }
+                Some((callsign.to_string(), ac, distance_nm))
+            })
+            .take(UP_MAX_CANDIDATES)
+            .collect();
+
+        if candidates.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        // Fetch routes concurrently
+        let mut join_set = tokio::task::JoinSet::new();
+        for (callsign, ac, distance_nm) in &candidates {
+            let av_client = aviation_client.clone();
+            let cs = callsign.clone();
+            let icao_type = ac.t.clone();
+            let alt = ac.alt_baro.clone();
+            let dist = *distance_nm;
+            let (ac_lat, ac_lon) = (
+                ac.lat.expect("lat guaranteed by cone_distance_nm"),
+                ac.lon.expect("lon guaranteed by cone_distance_nm"),
+            );
+            let bearing = random_flight::geo::initial_bearing(*lat, *lon, ac_lat, ac_lon);
+            let direction = match random_flight::geo::cardinal_direction(bearing) {
+                "N" => "↑",
+                "NE" => "↗",
+                "E" => "→",
+                "SE" => "↘",
+                "S" => "↓",
+                "SW" => "↙",
+                "W" => "←",
+                "NW" => "↖",
+                _ => "?",
+            };
+            join_set.spawn(async move {
+                let route =
+                    tokio::time::timeout(UP_ADSBDB_TIMEOUT, av_client.get_flight_route(&cs)).await;
+
+                match route {
+                    Ok(Ok(Some(fr))) => Some((cs, icao_type, alt, fr, dist, direction)),
+                    Ok(Ok(None)) => None,
+                    Ok(Err(e)) => {
+                        warn!(callsign = %cs, error = ?e, "adsbdb lookup failed");
+                        None
+                    }
+                    Err(_) => {
+                        warn!(callsign = %cs, "adsbdb lookup timed out");
+                        None
+                    }
+                }
+            });
+        }
+
+        let mut results = Vec::new();
+        while let Some(res) = join_set.join_next().await {
+            if let Ok(Some(entry)) = res {
+                results.push(entry);
+            }
+        }
+
+        Ok::<_, eyre::Report>(results)
+    })
+    .await;
+
+    let response = match result {
+        Ok(Ok(entries)) if entries.is_empty() => {
+            format!("Nix los über {display_name}")
+        }
+        Ok(Ok(entries)) => {
+            let total = entries.len();
+            let parts: Vec<String> = entries
+                .iter()
+                .take(UP_MAX_RESULTS)
+                .map(|(cs, icao_type, alt, route, dist, direction)| {
+                    let typ = icao_type.as_deref().unwrap_or("?");
+                    format!(
+                        "{cs} ({typ}) {origin}→{dest} {alt} {dist:.1}nm {direction}",
+                        origin = route.origin.iata_code,
+                        dest = route.destination.iata_code,
+                        alt = format_altitude(alt),
+                    )
+                })
+                .collect();
+            let joined = parts.join(" | ");
+            let msg = format!("✈ {total} Flieger über {display_name}: {joined}");
+            truncate_response(&msg, MAX_RESPONSE_LENGTH)
+        }
+        Ok(Err(e)) => {
+            error!(error = ?e, input = %input, "!up command failed");
+            "Da ist was schiefgelaufen FDM".to_string()
+        }
+        Err(_) => {
+            error!(input = %input, "!up command timed out");
+            "Da ist was schiefgelaufen FDM".to_string()
+        }
+    };
+
+    if let Err(e) = client.say_in_reply_to(privmsg, response).await {
+        error!(error = ?e, "Failed to send !up response");
+    }
+
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn airline_table_contains_known_mappings() {
+        let table = airline_table();
+        assert_eq!(table.get("TP"), Some(&"TAP"));
+        assert_eq!(table.get("LH"), Some(&"DLH"));
+        assert_eq!(table.get("BA"), Some(&"BAW"));
+    }
+
+    #[test]
+    fn airline_table_is_nonempty() {
+        assert!(airline_table().len() > 100);
+    }
+
+    #[test]
+    fn is_iata_flight_number_valid() {
+        assert!(is_iata_flight_number("TP247"));
+        assert!(is_iata_flight_number("LH5765"));
+        assert!(is_iata_flight_number("BA12"));
+        assert!(is_iata_flight_number("AA1"));
+        assert!(is_iata_flight_number("EI1234"));
+    }
+
+    #[test]
+    fn is_iata_flight_number_rejects_icao() {
+        assert!(!is_iata_flight_number("TAP247"));
+        assert!(!is_iata_flight_number("DLH5765"));
+        assert!(!is_iata_flight_number("BAW12"));
+    }
+
+    #[test]
+    fn is_iata_flight_number_rejects_invalid() {
+        assert!(!is_iata_flight_number(""));
+        assert!(!is_iata_flight_number("T"));
+        assert!(!is_iata_flight_number("TP"));
+        assert!(!is_iata_flight_number("12345"));
+        assert!(!is_iata_flight_number("ABCDEF"));
+        assert!(!is_iata_flight_number("TP12345")); // too many digits
+    }
+
+    #[tokio::test]
+    async fn resolve_callsign_translates_iata() {
+        let client = AviationClient::new().unwrap();
+        assert_eq!(client.resolve_callsign("TP247").await, "TAP247");
+        assert_eq!(client.resolve_callsign("LH5765").await, "DLH5765");
+    }
+
+    #[tokio::test]
+    async fn resolve_callsign_passes_through_icao() {
+        let client = AviationClient::new().unwrap();
+        assert_eq!(client.resolve_callsign("TAP247").await, "TAP247");
+        assert_eq!(client.resolve_callsign("DLH5765").await, "DLH5765");
+    }
+
+    #[tokio::test]
+    async fn resolve_callsign_passes_through_hex() {
+        let client = AviationClient::new().unwrap();
+        assert_eq!(client.resolve_callsign("4CA87D").await, "4CA87D");
+    }
+}

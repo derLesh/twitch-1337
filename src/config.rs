@@ -8,7 +8,7 @@ use secrecy::{ExposeSecret as _, SecretString};
 use serde::Deserialize;
 use tracing::info;
 
-use crate::{database, prefill};
+use crate::{ai::prefill, database};
 
 fn default_expected_latency() -> u32 {
     100
@@ -50,7 +50,7 @@ fn default_ai_timeout() -> u64 {
 }
 
 fn default_history_length() -> u64 {
-    crate::chat_history::DEFAULT_HISTORY_LENGTH
+    crate::ai::chat_history::DEFAULT_HISTORY_LENGTH
 }
 
 fn default_emote_glossary_path() -> String {
@@ -588,11 +588,11 @@ pub fn validate_config(config: &Configuration) -> Result<()> {
     }
 
     if let Some(ref ai) = config.ai
-        && ai.history_length > crate::chat_history::MAX_HISTORY_LENGTH
+        && ai.history_length > crate::ai::chat_history::MAX_HISTORY_LENGTH
     {
         bail!(
             "ai.history_length must be <= {} (got {})",
-            crate::chat_history::MAX_HISTORY_LENGTH,
+            crate::ai::chat_history::MAX_HISTORY_LENGTH,
             ai.history_length
         );
     }
@@ -779,7 +779,7 @@ mod tests {
 
         assert_eq!(
             ai.history_length,
-            crate::chat_history::DEFAULT_HISTORY_LENGTH
+            crate::ai::chat_history::DEFAULT_HISTORY_LENGTH
         );
         assert_eq!(ai.instruction_template, "{message}");
     }
@@ -788,7 +788,7 @@ mod tests {
     fn validate_rejects_history_length_above_max() {
         let mut c = Configuration::test_default();
         let mut ai = ai_with_run_at("04:00");
-        ai.history_length = crate::chat_history::MAX_HISTORY_LENGTH + 1;
+        ai.history_length = crate::ai::chat_history::MAX_HISTORY_LENGTH + 1;
         c.ai = Some(ai);
 
         let err = validate_config(&c).unwrap_err();

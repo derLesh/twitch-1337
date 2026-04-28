@@ -12,7 +12,7 @@ use async_trait::async_trait;
 use chrono::{DateTime, Duration, Utc};
 use tokio::sync::oneshot;
 
-use twitch_1337::clock::Clock;
+use twitch_1337::util::clock::Clock;
 
 struct Waiter {
     target: DateTime<Utc>,

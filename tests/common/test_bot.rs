@@ -15,11 +15,11 @@ use wiremock::MockServer;
 
 use twitch_1337::{
     PersonalBest, Services,
+    ai::llm::LlmClient,
     aviation::AviationClient,
     config::{AiConfig, Configuration},
-    llm::LlmClient,
     run_bot,
-    whisper::{self, WhisperError, WhisperSender},
+    twitch::whisper::{self, WhisperError, WhisperSender},
 };
 use twitch_irc::login::StaticLoginCredentials;
 use twitch_irc::{ClientConfig, TwitchIRCClient};
@@ -29,6 +29,7 @@ use super::fake_llm::FakeLlm;
 use super::fake_transport::{self, FakeTransport, TransportHandle};
 use super::irc_line::{
     parse_privmsg_text, privmsg, privmsg_as_broadcaster, privmsg_as_mod, privmsg_at, privmsg_with,
+    reply_privmsg,
 };
 
 pub struct TestBot {
@@ -206,6 +207,11 @@ impl Default for TestBotBuilder {
 impl TestBot {
     pub async fn send(&self, user: &str, text: &str) {
         let line = privmsg(&self.channel, user, text);
+        self.transport.inject.send(line).await.expect("inject");
+    }
+
+    pub async fn send_reply(&self, user: &str, text: &str, parent_user: &str, parent_text: &str) {
+        let line = reply_privmsg(&self.channel, user, text, parent_user, parent_text);
         self.transport.inject.send(line).await.expect("inject");
     }
 

@@ -152,7 +152,8 @@ async fn track_command_enriches_flight_from_aviationstack_once() {
 
     let state_path = bot.data_dir.path().join("flights.ron");
     let persisted = tokio::fs::read_to_string(state_path).await.unwrap();
-    let state: twitch_1337::flight_tracker::FlightTrackerState = ron::from_str(&persisted).unwrap();
+    let state: twitch_1337::aviation::tracker::FlightTrackerState =
+        ron::from_str(&persisted).unwrap();
     let flight = state.flights.first().expect("persisted flight");
     assert_eq!(flight.route, Some(("FRA".to_string(), "MUC".to_string())));
     assert_eq!(

@@ -6,8 +6,9 @@ use secrecy::ExposeSecret as _;
 use tokio::sync::oneshot;
 use tracing::info;
 use twitch_1337::{
-    Services, aviation, clock::SystemClock, ensure_data_dir, get_data_dir, install_crypto_provider,
-    install_tracing, llm, load_configuration, run_bot, setup_and_verify_twitch_client, whisper,
+    Services, ai::llm, aviation, ensure_data_dir, get_data_dir, install_crypto_provider,
+    install_tracing, load_configuration, run_bot, setup_and_verify_twitch_client, twitch::whisper,
+    util::clock::SystemClock,
 };
 
 #[tokio::main]

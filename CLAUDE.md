@@ -118,10 +118,10 @@ Atomic persistence pattern: write tmp + rename. See `ping.rs`, `memory.rs`, `fli
 
 ## Adding handler
 
-Handlers live in `src/handlers/` and are spawned from `src/lib.rs::run_bot`. Each handler is generic over `<T: Transport, L: LoginCredentials>` so integration tests can swap in a fake transport. Shared deps (clock, data_dir, llm, aviation) come from `Services` in `src/lib.rs`.
+Handlers live in `src/twitch/handlers/` and are spawned from `src/lib.rs::run_bot`. Each handler is generic over `<T: Transport, L: LoginCredentials>` so integration tests can swap in a fake transport. Shared deps (clock, data_dir, llm, aviation) come from `Services` in `src/lib.rs`.
 
 ```rust
-// src/handlers/my_handler.rs
+// src/twitch/handlers/my_handler.rs
 pub async fn run_my_handler<T, L>(
     broadcast_tx: broadcast::Sender<ServerMessage>,
     client: Arc<TwitchIRCClient<T, L>>,
@@ -135,11 +135,11 @@ Integration-testable via `TestBotBuilder` in `tests/common/`.
 
 ## Key constants
 
-`src/handlers/tracker_1337.rs`: `TARGET_HOUR=13`, `TARGET_MINUTE=37`, `MAX_USERS=10_000`.
+`src/twitch/handlers/tracker_1337.rs`: `TARGET_HOUR=13`, `TARGET_MINUTE=37`, `MAX_USERS=10_000`.
 
-`src/handlers/latency.rs`: `LATENCY_PING_INTERVAL=300s`, `LATENCY_EMA_ALPHA=0.2`.
+`src/twitch/handlers/latency.rs`: `LATENCY_PING_INTERVAL=300s`, `LATENCY_EMA_ALPHA=0.2`.
 
-`src/flight_tracker.rs`: `MAX_TRACKED_FLIGHTS=12`, `MAX_FLIGHTS_PER_USER=3`, `TRACKING_LOST_THRESHOLD=300s`, `TRACKING_LOST_REMOVAL=1800s`, `POLL_FAST/NORMAL/SLOW=30/60/120s`.
+`src/aviation/tracker.rs`: `MAX_TRACKED_FLIGHTS=12`, `MAX_FLIGHTS_PER_USER=3`, `TRACKING_LOST_THRESHOLD=300s`, `TRACKING_LOST_REMOVAL=1800s`, `POLL_FAST/NORMAL/SLOW=30/60/120s`.
 
 ## Binary / Docker
 
