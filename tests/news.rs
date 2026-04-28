@@ -401,7 +401,7 @@ async fn tldr_command_summarizes_available_last_24_hours() {
     bot.llm.push_chat("24h tldr summary");
     bot.send_at("alice", "!tldr", now.timestamp_millis()).await;
     let out = bot.expect_whisper(Duration::from_secs(2)).await;
-    assert_eq!(out.message, "ICYMI: 24h tldr summary");
+    assert_eq!(out.message, "In den letzten 24h: 24h tldr summary");
 
     let calls = bot.llm.chat_calls();
     let user_msg = calls[0]
@@ -422,6 +422,52 @@ async fn tldr_command_summarizes_available_last_24_hours() {
         "tldr prompt missing mode instruction: {}",
         user_msg.content
     );
+
+    bot.shutdown().await;
+}
+
+#[tokio::test]
+#[serial]
+async fn tldr_command_allows_longer_followup_whisper() {
+    let bot = TestBotBuilder::new()
+        .with_ai()
+        .with_config(|c| {
+            if let Some(ai) = c.ai.as_mut() {
+                ai.history_length = 10;
+            }
+            c.cooldowns.news = 0;
+        })
+        .spawn()
+        .await;
+
+    let now = Utc::now();
+    bot.send_at("bob", "first tldr topic", now.timestamp_millis())
+        .await;
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    bot.llm.push_chat("kurzes tldr");
+    bot.send_privmsg_as("alice", "alice-id", "!tldr").await;
+    let first = bot.expect_whisper(Duration::from_secs(2)).await;
+    assert_eq!(first.message, "In den letzten 24h: kurzes tldr");
+
+    bot.send_at("carol", "very long tldr topic", now.timestamp_millis())
+        .await;
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    bot.llm.push_chat("lang ".repeat(300));
+    bot.send_privmsg_as("alice", "alice-id", "!tldr").await;
+    let second = bot.expect_whisper(Duration::from_secs(2)).await;
+
+    let len = second.message.chars().count();
+    assert!(
+        len > FIRST_WHISPER_MAX_CHARS,
+        "follow-up tldr was too short: {len}"
+    );
+    assert!(
+        len <= WHISPER_MAX_CHARS,
+        "follow-up tldr exceeded limit: {len}"
+    );
+    assert!(second.message.starts_with("In den letzten 24h:"));
 
     bot.shutdown().await;
 }

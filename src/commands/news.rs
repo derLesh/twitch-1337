@@ -17,7 +17,8 @@ use super::{Command, CommandContext};
 
 const NEWS_PREFIX: &str = "ICYMI:";
 const NEWS_SYSTEM_PROMPT: &str = "Du fasst Twitch-Chat-Verläufe hilfreich zusammen. Antworte auf Deutsch, erfinde keine Details und konzentriere dich auf Themen, Highlights und wichtige Antworten. Beginne die Antwort mit \"ICYMI:\". Wenn du mehrere Themen auflistest, trenne sie mit \" | \". Bleibe kompakt, aber du musst dich nicht auf eine einzelne Twitch-Chatnachricht beschränken.";
-const TLDR_SYSTEM_PROMPT: &str = "Du erstellst ein hilfreiches TLDR der letzten verfügbaren 24 Stunden eines Twitch-Chats. Antworte auf Deutsch, erfinde keine Details und strukturiere die wichtigsten Themen, Highlights, Fragen/Antworten, Running Gags und offenen Punkte knapp. Beginne die Antwort mit \"In den letzten 24h:\".";
+const TLDR_PREFIX: &str = "In den letzten 24h:";
+const TLDR_SYSTEM_PROMPT: &str = "Du erstellst ein hilfreiches TLDR der letzten verfügbaren 24 Stunden eines Twitch-Chats. Antworte auf Deutsch, erfinde keine Details und strukturiere die wichtigsten Themen, Highlights, Fragen/Antworten, Running Gags und offenen Punkte knapp. Twitch zeigt nur Plain Text an: Verwende kein Markdown. Beginne die Antwort mit \"In den letzten 24h:\".";
 const EMPTY_HISTORY_MESSAGE: &str =
     "Ich habe noch keine Chat-Historie für eine Zusammenfassung FDM";
 const NO_NEW_MESSAGES_MESSAGE: &str =
@@ -51,6 +52,13 @@ impl NewsMode {
         match self {
             Self::News => EMPTY_HISTORY_MESSAGE,
             Self::Tldr => NO_TLDR_MESSAGES_MESSAGE,
+        }
+    }
+
+    fn response_prefix(self) -> &'static str {
+        match self {
+            Self::News => NEWS_PREFIX,
+            Self::Tldr => TLDR_PREFIX,
         }
     }
 }
@@ -169,15 +177,15 @@ impl NewsCommand {
     }
 }
 
-fn format_news_response(text: &str, max_chars: usize) -> String {
+fn format_response(text: &str, prefix: &str, max_chars: usize) -> String {
     let trimmed = text.trim();
     let prefixed = if trimmed
-        .get(..NEWS_PREFIX.len())
-        .is_some_and(|prefix| prefix.eq_ignore_ascii_case(NEWS_PREFIX))
+        .get(..prefix.len())
+        .is_some_and(|existing_prefix| existing_prefix.eq_ignore_ascii_case(prefix))
     {
-        format!("{NEWS_PREFIX}{}", &trimmed[NEWS_PREFIX.len()..])
+        format!("{prefix}{}", &trimmed[prefix.len()..])
     } else {
-        format!("{NEWS_PREFIX} {trimmed}")
+        format!("{prefix} {trimmed}")
     };
 
     truncate_response(&prefixed, max_chars)
@@ -279,7 +287,10 @@ where
             tokio::time::timeout(self.timeout, self.llm_client.chat_completion(request)).await;
 
         let (response, success) = match result {
-            Ok(Ok(text)) => (format_news_response(&text, WHISPER_MAX_CHARS), true),
+            Ok(Ok(text)) => (
+                format_response(&text, self.mode.response_prefix(), WHISPER_MAX_CHARS),
+                true,
+            ),
             Ok(Err(e)) => {
                 error!(error = ?e, "News AI execution failed");
                 ("Da ist was schiefgelaufen FDM".to_string(), false)
