@@ -18,6 +18,8 @@ use crate::{
     twitch::{seventv::SevenTvEmoteProvider, whisper::WhisperSender},
 };
 
+const GROK_ALIAS_TRIGGER: &str = "@grok";
+
 /// Configuration for the generic command handler.
 pub struct CommandHandlerConfig<T: Transport, L: LoginCredentials> {
     pub broadcast_tx: broadcast::Sender<ServerMessage>,
@@ -256,6 +258,40 @@ where
     .await;
 }
 
+struct CommandInvocation<'a> {
+    trigger: &'a str,
+    args: Vec<&'a str>,
+}
+
+fn command_invocation(message_text: &str) -> Option<CommandInvocation<'_>> {
+    let words = message_text.split_whitespace().collect::<Vec<_>>();
+    let first_word = *words.first()?;
+
+    if let Some((idx, trigger)) = words.iter().enumerate().find(|(idx, word)| {
+        word.eq_ignore_ascii_case(GROK_ALIAS_TRIGGER)
+            && words[..*idx].iter().all(|word| is_twitch_mention(word))
+    }) {
+        return Some(CommandInvocation {
+            trigger,
+            args: words[idx + 1..].to_vec(),
+        });
+    }
+
+    Some(CommandInvocation {
+        trigger: first_word,
+        args: words[1..].to_vec(),
+    })
+}
+
+fn is_twitch_mention(word: &str) -> bool {
+    word.strip_prefix('@')
+        .is_some_and(|name| !name.is_empty() && name.chars().all(is_twitch_login_char))
+}
+
+fn is_twitch_login_char(ch: char) -> bool {
+    ch.is_ascii_alphanumeric() || ch == '_'
+}
+
 /// Main dispatch loop for trait-based commands.
 pub(crate) async fn run_command_dispatcher<T, L>(
     mut broadcast_rx: broadcast::Receiver<ServerMessage>,
@@ -297,42 +333,42 @@ pub(crate) async fn run_command_dispatcher<T, L>(
                     }
                 }
 
-                let mut words = privmsg.message_text.split_whitespace();
-                let Some(first_word) = words.next() else {
+                let Some(invocation) = command_invocation(&privmsg.message_text) else {
                     continue;
                 };
 
                 let Some(cmd) = commands
                     .iter()
-                    .find(|c| c.enabled() && c.matches(first_word))
+                    .find(|c| c.enabled() && c.matches(invocation.trigger))
                 else {
                     continue;
                 };
 
                 // Must match SuspendCommand's normalization, else admin
                 // suspensions silently miss the dispatcher hook.
-                let suspend_key = crate::commands::normalize_command_name(first_word);
+                let suspend_key = crate::commands::normalize_command_name(invocation.trigger);
                 if suspension_manager
                     .is_suspended(&suspend_key)
                     .await
                     .is_some()
                 {
-                    debug!(command = %first_word, "Skipping suspended command");
+                    debug!(command = %invocation.trigger, "Skipping suspended command");
                     continue;
                 }
 
+                let trigger = invocation.trigger;
                 let ctx = crate::commands::CommandContext {
                     privmsg: &privmsg,
                     client: &client,
-                    trigger: first_word,
-                    args: words.collect(),
+                    trigger,
+                    args: invocation.args,
                 };
 
                 if let Err(e) = cmd.execute(ctx).await {
                     error!(
                         error = ?e,
                         user = %privmsg.sender.login,
-                        command = %first_word,
+                        command = %trigger,
                         "Error handling command"
                     );
                 }
