@@ -19,7 +19,7 @@ rand = "0.10.1"
 reqwest = { version = "0.13", default-features = false, features = ["json", "rustls-no-provider"] }
 ron = "0.12.1"
 rustls = { version = "0.23", default-features = false, features = ["ring"] }
-schemars = { version = "0.9", features = ["derive"] }
+schemars = { version = "1.2", features = ["derive"] }
 scraper = "0.26"
 secrecy = { version = "0.10", features = ["serde"] }
 serde = { version = "1.0.228", features = ["derive"] }
