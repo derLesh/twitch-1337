@@ -4,6 +4,7 @@ use std::time::Duration;
 use serde::Deserialize;
 use serde_json::json;
 use tokio::sync::Mutex;
+use tracing::{error, warn};
 
 use llm::{ToolCall, ToolResultMessage};
 
@@ -127,13 +128,15 @@ impl WebToolExecutor {
                     .chain()
                     .any(|cause| cause.to_string().to_ascii_lowercase().contains("timed out"))
                 {
+                    warn!(error = ?err, query, "web_search timed out");
                     "search_timeout"
                 } else {
+                    error!(error = ?err, query, "web_search failed");
                     "search_failed"
                 };
                 json!({
                     "error": error_code,
-                    "details": err.to_string(),
+                    "details": format!("{err:#}"),
                 })
                 .to_string()
             }
@@ -166,15 +169,18 @@ impl WebToolExecutor {
             Err(err) => {
                 let msg = err.to_string().to_ascii_lowercase();
                 let error_code = if msg.contains("blocked") {
+                    warn!(error = ?err, url, "fetch_url blocked");
                     "fetch_blocked"
                 } else if msg.contains("timed out") {
+                    warn!(error = ?err, url, "fetch_url timed out");
                     "fetch_timeout"
                 } else {
+                    error!(error = ?err, url, "fetch_url failed");
                     "fetch_failed"
                 };
                 json!({
                     "error": error_code,
-                    "details": err.to_string(),
+                    "details": format!("{err:#}"),
                 })
                 .to_string()
             }
