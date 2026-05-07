@@ -7,7 +7,7 @@ use twitch_irc::{login::LoginCredentials, transport::Transport};
 
 use crate::ping::PingManager;
 
-use super::{ADMIN_DENIED_MSG, Command, CommandContext, is_admin};
+use super::{ADMIN_DENIED_MSG, Command, CommandContext, is_admin, normalize_username};
 
 /// Normalize a ping name from user input to the canonical lowercase form.
 fn normalize_ping_name(name: &str) -> String {
@@ -194,7 +194,7 @@ impl PingAdminCommand {
         }
 
         let name = normalize_ping_name(ctx.args[1]);
-        let user = ctx.args[2].trim_start_matches('@').to_lowercase();
+        let user = normalize_username(ctx.args[2]);
 
         let mut manager = self.ping_manager.write().await;
         let result = match op {

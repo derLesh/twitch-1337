@@ -470,7 +470,7 @@ pub async fn run_1337_handler<T, L>(
                 drop(leaderboard_guard);
 
                 if is_record {
-                    message.push_str(" - neuer Rekord!");
+                    message.push_str(" - neue PB!");
                 }
             }
         }

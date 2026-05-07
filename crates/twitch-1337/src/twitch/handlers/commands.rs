@@ -162,7 +162,10 @@ where
             aviation_client,
             Duration::from_secs(cooldowns.up),
         )),
-        Box::new(commands::leaderboard::LeaderboardCommand::new(leaderboard)),
+        Box::new(commands::leaderboard::LeaderboardCommand::new(
+            leaderboard.clone(),
+        )),
+        Box::new(commands::pb::PbCommand::new(leaderboard)),
         Box::new(commands::feedback::FeedbackCommand::new(
             data_dir.clone(),
             Duration::from_secs(cooldowns.feedback),

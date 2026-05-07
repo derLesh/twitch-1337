@@ -9,6 +9,7 @@ use twitch_irc::{
 pub mod feedback;
 pub mod leaderboard;
 pub mod news;
+pub mod pb;
 pub mod ping_admin;
 pub mod ping_trigger;
 pub mod suspend;
@@ -34,6 +35,13 @@ pub fn is_admin(privmsg: &PrivmsgMessage, hidden_admin_ids: &[String]) -> bool {
 /// dispatcher's suspension lookup — they MUST agree.
 pub fn normalize_command_name(raw: &str) -> String {
     raw.trim_start_matches('!').to_ascii_lowercase()
+}
+
+/// Normalize a username argument: strip a leading `@` and ASCII-lowercase.
+/// Twitch logins are ASCII-only and always lowercase, so this matches the
+/// keys stored by handlers (`privmsg.sender.login`).
+pub fn normalize_username(raw: &str) -> String {
+    raw.trim_start_matches('@').to_ascii_lowercase()
 }
 
 /// Context passed to every command execution.
