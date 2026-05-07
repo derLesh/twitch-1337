@@ -75,7 +75,7 @@ pub async fn run_ritual(
     let transcript_text = tokio::fs::read_to_string(&dated).await.unwrap_or_default();
     let nonce = fresh_nonce();
 
-    let mem_block = build_chat_turn_context(
+    let mem_ctx = build_chat_turn_context(
         store,
         BuildOpts {
             inject_byte_budget: cfg.inject_byte_budget,
@@ -110,6 +110,7 @@ pub async fn run_ritual(
             date: &now_str,
         },
     );
+    let mem_block = mem_ctx.memory;
     let system_prompt = format!("{head}\n\n{mem_block}\n{transcript_block}");
 
     let exec = DreamerExecutor::new(DreamerExecutorOpts {

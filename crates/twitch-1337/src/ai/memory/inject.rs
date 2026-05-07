@@ -127,19 +127,29 @@ pub struct BuildOpts {
     pub invocation_channel: InvocationChannel,
 }
 
-/// Build the chat-turn injected memory context: recent chat sections first (invocation
-/// channel first), then SOUL + LORE always; users + state ordered by `updated_at` desc,
-/// oldest dropped if over budget.
-pub async fn build_chat_turn_context(store: &MemoryStore, opts: BuildOpts) -> Result<String> {
-    // Render recent-chat sections in invocation-first order.
-    let mut recent_sections: Vec<String> = Vec::with_capacity(2);
-    let primary_section = render_recent_section(
+/// Result of [`build_chat_turn_context`]. `recent_chat` holds the per-turn rolling
+/// chat sections (volatile, belongs in the user message for cache hygiene);
+/// `memory` holds SOUL/LORE/users/state nonce-fenced blocks (less volatile,
+/// belongs in the system message). Either may be empty.
+pub struct ChatTurnContext {
+    pub recent_chat: String,
+    pub memory: String,
+}
+
+/// Build the chat-turn injected context split into a recent-chat section and a
+/// memory section. Callers place each in the message that maximizes prompt
+/// caching: memory in the system message, recent chat in the user message.
+pub async fn build_chat_turn_context(
+    store: &MemoryStore,
+    opts: BuildOpts,
+) -> Result<ChatTurnContext> {
+    let primary_rendered = render_recent_section(
         opts.primary_history.as_ref(),
         &opts.primary_login,
         RECENT_CHAT_PRIMARY_BYTES,
     )
     .await;
-    let ai_section = match (
+    let ai_rendered = match (
         opts.ai_channel_history.as_ref(),
         opts.ai_channel_login.as_ref(),
     ) {
@@ -149,30 +159,27 @@ pub async fn build_chat_turn_context(store: &MemoryStore, opts: BuildOpts) -> Re
         _ => None,
     };
 
-    match opts.invocation_channel {
-        InvocationChannel::AiChannel => {
-            if let Some(s) = ai_section {
-                recent_sections.push(s);
-            }
-            if let Some(s) = primary_section {
-                recent_sections.push(s);
-            }
+    let (first, second) = match opts.invocation_channel {
+        InvocationChannel::AiChannel => (ai_rendered, primary_rendered),
+        InvocationChannel::Primary => (primary_rendered, ai_rendered),
+    };
+    let mut mentioned: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    let mut recent_sections: Vec<String> = Vec::with_capacity(2);
+    for section in [first, second].into_iter().flatten() {
+        for u in section.usernames {
+            mentioned.insert(u);
         }
-        InvocationChannel::Primary => {
-            if let Some(s) = primary_section {
-                recent_sections.push(s);
-            }
-            if let Some(s) = ai_section {
-                recent_sections.push(s);
-            }
-        }
+        recent_sections.push(section.body);
     }
 
-    // Existing memory blocks: SOUL + LORE + user/state ordered by updated_at desc.
     let soul = store.read_kind(&FileKind::Soul).await?;
     let lore = store.read_kind(&FileKind::Lore).await?;
     let mut users = store.list_users().await?;
     let mut states = store.list_state().await?;
+
+    // Build a mention table from the full users list before draining for memory
+    // blocks, so users dropped by the byte budget still appear in the table.
+    let mention_table = render_mention_table(&users, &mentioned);
 
     let mut memory_blocks: Vec<String> = Vec::new();
     memory_blocks.push(fence_block(FenceLabel::Soul, &opts.nonce, &soul.body));
@@ -204,24 +211,76 @@ pub async fn build_chat_turn_context(store: &MemoryStore, opts: BuildOpts) -> Re
     }
 
     let memory_body = memory_blocks.join("\n");
-
-    if recent_sections.is_empty() {
-        return Ok(memory_body);
+    let mut recent_chat = recent_sections.join("\n\n");
+    if !mention_table.is_empty() {
+        if !recent_chat.is_empty() {
+            recent_chat.push_str("\n\n");
+        }
+        recent_chat.push_str(&mention_table);
     }
+    Ok(ChatTurnContext {
+        recent_chat,
+        memory: memory_body,
+    })
+}
 
-    let mut out = recent_sections.join("\n\n");
-    out.push_str("\n\n");
-    out.push_str(&memory_body);
-    Ok(out)
+/// Build a markdown table mapping the lowercased login of every user file whose
+/// login appears in `mentioned` to its Twitch user_id and display name. Users
+/// without a memory file are skipped, since we have no user_id for them.
+fn render_mention_table(
+    users: &[MemoryFile],
+    mentioned: &std::collections::BTreeSet<String>,
+) -> String {
+    if mentioned.is_empty() {
+        return String::new();
+    }
+    let mut rows: Vec<(String, String, String)> = Vec::new();
+    for u in users {
+        let FileKind::User { user_id } = &u.kind else {
+            continue;
+        };
+        let Some(login) = u.frontmatter.username.as_deref() else {
+            continue;
+        };
+        let key = login.to_ascii_lowercase();
+        if !mentioned.contains(&key) {
+            continue;
+        }
+        let display = u
+            .frontmatter
+            .display_name
+            .as_deref()
+            .unwrap_or(login)
+            .to_string();
+        rows.push((login.to_string(), display, user_id.clone()));
+    }
+    if rows.is_empty() {
+        return String::new();
+    }
+    rows.sort();
+    let mut s = String::from(
+        "## Mentioned users\n\n| login | display_name | user_id |\n| --- | --- | --- |\n",
+    );
+    for (login, display, id) in rows {
+        s.push_str(&format!("| {login} | {display} | {id} |\n"));
+    }
+    s
+}
+
+pub(crate) struct RenderedRecentSection {
+    pub body: String,
+    pub usernames: Vec<String>,
 }
 
 /// Render one `## Recent chat (#login)` section, newest-first up to `cap` bytes,
-/// then reverse to chronological order. Returns `None` for missing or empty buffers.
+/// then reverse to chronological order. Also returns the lowercased usernames
+/// of every line that survived the byte cap. Returns `None` for missing or
+/// empty buffers.
 pub(crate) async fn render_recent_section(
     buf: Option<&Arc<Mutex<ChatHistoryBuffer>>>,
     login: &str,
     cap: usize,
-) -> Option<String> {
+) -> Option<RenderedRecentSection> {
     let buf = buf?;
     let snapshot: Vec<ChatHistoryEntry> = buf.lock().await.snapshot();
     if snapshot.is_empty() {
@@ -229,24 +288,26 @@ pub(crate) async fn render_recent_section(
     }
 
     let mut chosen: Vec<String> = Vec::new();
+    let mut usernames: Vec<String> = Vec::new();
     let mut bytes = 0usize;
     for entry in snapshot.iter().rev() {
         let line = format_entry_line(entry);
-        let line_bytes = line.len() + 1; // +1 for newline
+        let line_bytes = line.len() + 1;
         if bytes + line_bytes > cap {
             break;
         }
         bytes += line_bytes;
         chosen.push(line);
+        usernames.push(entry.username.to_ascii_lowercase());
     }
     if chosen.is_empty() {
         return None;
     }
     chosen.reverse();
 
-    let mut s = format!("## Recent chat (#{login})\n");
-    s.push_str(&chosen.join("\n"));
-    Some(s)
+    let mut body = format!("## Recent chat (#{login})\n");
+    body.push_str(&chosen.join("\n"));
+    Some(RenderedRecentSection { body, usernames })
 }
 
 fn format_entry_line(entry: &ChatHistoryEntry) -> String {
@@ -386,8 +447,9 @@ mod tests {
         .await
         .unwrap();
         // Newest user retained, oldest dropped.
-        assert!(ctx.contains("kind=user id=3"));
-        assert!(!ctx.contains("kind=user id=1"));
+        assert!(ctx.memory.contains("kind=user id=3"));
+        assert!(!ctx.memory.contains("kind=user id=1"));
+        assert!(ctx.recent_chat.is_empty());
     }
 
     #[tokio::test]
@@ -421,11 +483,18 @@ mod tests {
         .await
         .unwrap();
 
-        let pri_idx = body.find("Recent chat (#main)").expect("primary header");
-        let ai_idx = body.find("Recent chat (#ai_chan)").expect("ai header");
+        let pri_idx = body
+            .recent_chat
+            .find("Recent chat (#main)")
+            .expect("primary header");
+        let ai_idx = body
+            .recent_chat
+            .find("Recent chat (#ai_chan)")
+            .expect("ai header");
         assert!(ai_idx < pri_idx, "invocation channel must come first");
-        assert!(body.contains("alice: hello primary"));
-        assert!(body.contains("bob: hello ai"));
+        assert!(body.recent_chat.contains("alice: hello primary"));
+        assert!(body.recent_chat.contains("bob: hello ai"));
+        assert!(!body.memory.contains("Recent chat"));
     }
 
     #[tokio::test]
@@ -458,8 +527,115 @@ mod tests {
         .await
         .unwrap();
 
-        assert!(body.contains("Recent chat (#main)"));
-        assert!(!body.contains("Recent chat (#ai_chan)"));
+        assert!(body.recent_chat.contains("Recent chat (#main)"));
+        assert!(!body.recent_chat.contains("Recent chat (#ai_chan)"));
+    }
+
+    #[tokio::test]
+    async fn build_chat_turn_context_emits_mention_table_for_chat_users_with_files() {
+        use crate::ai::chat_history::ChatHistoryBuffer;
+        use std::sync::Arc;
+        use tokio::sync::Mutex;
+
+        let dir = tempfile::tempdir().unwrap();
+        let store = MemoryStore::open(dir.path(), Caps::default())
+            .await
+            .unwrap();
+        // alice and bob have user files; carol speaks but has no file.
+        store
+            .write(
+                &FileKind::User {
+                    user_id: "111".into(),
+                },
+                "alice body",
+                Some("alice"),
+                Some("Alice"),
+            )
+            .await
+            .unwrap();
+        store
+            .write(
+                &FileKind::User {
+                    user_id: "222".into(),
+                },
+                "bob body",
+                Some("bob"),
+                Some("Bob"),
+            )
+            .await
+            .unwrap();
+
+        let primary = Arc::new(Mutex::new(ChatHistoryBuffer::new(10)));
+        {
+            let mut p = primary.lock().await;
+            p.push_user("ALICE", "hi"); // mixed-case lookup
+            p.push_user("carol", "no file");
+            p.push_user("bob", "hello");
+        }
+
+        let body = build_chat_turn_context(
+            &store,
+            BuildOpts {
+                inject_byte_budget: 24576,
+                nonce: "n00000000000000nn".into(),
+                primary_history: Some(primary),
+                primary_login: "main".into(),
+                ai_channel_history: None,
+                ai_channel_login: None,
+                invocation_channel: InvocationChannel::Primary,
+            },
+        )
+        .await
+        .unwrap();
+
+        assert!(
+            body.recent_chat.contains("## Mentioned users"),
+            "missing table: {}",
+            body.recent_chat
+        );
+        assert!(body.recent_chat.contains("| alice | Alice | 111 |"));
+        assert!(body.recent_chat.contains("| bob | Bob | 222 |"));
+        // carol has no user file → no row.
+        assert!(!body.recent_chat.contains("carol |"));
+        // Memory section must not contain the table.
+        assert!(!body.memory.contains("Mentioned users"));
+    }
+
+    #[tokio::test]
+    async fn build_chat_turn_context_omits_mention_table_when_no_chat() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = MemoryStore::open(dir.path(), Caps::default())
+            .await
+            .unwrap();
+        store
+            .write(
+                &FileKind::User {
+                    user_id: "111".into(),
+                },
+                "alice body",
+                Some("alice"),
+                Some("Alice"),
+            )
+            .await
+            .unwrap();
+
+        let body = build_chat_turn_context(
+            &store,
+            BuildOpts {
+                inject_byte_budget: 24576,
+                nonce: "n00000000000000nn".into(),
+                primary_history: None,
+                primary_login: "main".into(),
+                ai_channel_history: None,
+                ai_channel_login: None,
+                invocation_channel: InvocationChannel::Primary,
+            },
+        )
+        .await
+        .unwrap();
+
+        assert!(body.recent_chat.is_empty());
+        assert!(!body.memory.contains("Mentioned users"));
     }
 
     #[tokio::test]
@@ -497,11 +673,9 @@ mod tests {
         .unwrap();
 
         let primary_section_bytes = body
+            .recent_chat
             .split("Recent chat (#main)")
             .nth(1)
-            .unwrap_or("")
-            .split("<<<FILE")
-            .next()
             .unwrap_or("")
             .len();
         assert!(
