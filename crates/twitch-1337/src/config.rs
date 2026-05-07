@@ -107,6 +107,10 @@ fn default_dreamer_timeout() -> u64 {
     120
 }
 
+fn default_dreamer_max_rounds() -> usize {
+    20
+}
+
 fn default_max_rounds() -> usize {
     3
 }
@@ -195,6 +199,11 @@ pub struct DreamerConfigSection {
     pub run_at: String,
     #[serde(default = "default_dreamer_timeout")]
     pub timeout_secs: u64,
+    /// Max tool-call rounds the ritual is allowed. The dreamer touches every
+    /// memory file plus the day's transcript, so this is intentionally larger
+    /// than `ai.max_turn_rounds` (which caps a single chat turn).
+    #[serde(default = "default_dreamer_max_rounds")]
+    pub max_rounds: usize,
 }
 
 impl Default for DreamerConfigSection {
@@ -205,6 +214,7 @@ impl Default for DreamerConfigSection {
             reasoning_effort: None,
             run_at: default_dreamer_run_at(),
             timeout_secs: default_dreamer_timeout(),
+            max_rounds: default_dreamer_max_rounds(),
         }
     }
 }
@@ -640,6 +650,12 @@ pub fn validate_config(config: &Configuration) -> Result<()> {
             bail!(
                 "ai.max_writes_per_turn must be 1..=64 (got {})",
                 ai.max_writes_per_turn
+            );
+        }
+        if !(1..=200).contains(&ai.dreamer.max_rounds) {
+            bail!(
+                "ai.dreamer.max_rounds must be 1..=200 (got {})",
+                ai.dreamer.max_rounds
             );
         }
         validate_reasoning_effort(

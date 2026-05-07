@@ -43,7 +43,19 @@ where
             return Ok(());
         }
 
-        let identifier = FlightIdentifier::parse(&input);
+        let identifier = match FlightIdentifier::parse(&input) {
+            Ok(id) => id,
+            Err(e) => {
+                if let Err(send_err) = ctx
+                    .client
+                    .say_in_reply_to(ctx.privmsg, format!("{e} FDM"))
+                    .await
+                {
+                    error!(error = ?send_err, "Failed to send invalid-identifier message");
+                }
+                return Ok(());
+            }
+        };
         let cmd = TrackerCommand::Track {
             identifier,
             requested_by: ctx.privmsg.sender.login.clone(),

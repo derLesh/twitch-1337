@@ -345,8 +345,12 @@ pub async fn run_scheduled_message_handler<T, L>(
 
     info!("Dynamic scheduled message handler started");
 
-    // Track running tasks by schedule name
-    let mut running_tasks: HashMap<String, JoinHandle<()>> = HashMap::new();
+    // Track running tasks by schedule name. We keep a cloned `Schedule`
+    // alongside the handle so a hot-reload that edits an existing schedule's
+    // content (without renaming) still aborts the stale task and respawns.
+    // Without this, `retain` keyed only on name silently dropped content
+    // changes — see issue #39.
+    let mut running_tasks: HashMap<String, (JoinHandle<()>, database::Schedule)> = HashMap::new();
     let mut current_version = 0u64;
 
     // Monitor cache for changes every 30 seconds
@@ -357,7 +361,7 @@ pub async fn run_scheduled_message_handler<T, L>(
             _ = check_interval.tick() => {}
             () = shutdown.notified() => {
                 info!("Scheduled message handler: shutdown received, awaiting children");
-                for (name, handle) in running_tasks.drain() {
+                for (name, (handle, _)) in running_tasks.drain() {
                     handle.abort();
                     if let Err(e) = handle.await
                         && !e.is_cancelled()
@@ -389,33 +393,44 @@ pub async fn run_scheduled_message_handler<T, L>(
             let desired_schedules: HashMap<String, database::Schedule> =
                 schedules.into_iter().map(|s| (s.name.clone(), s)).collect();
 
-            // Stop tasks for schedules that no longer exist or have changed
-            running_tasks.retain(|name, handle| {
-                if !desired_schedules.contains_key(name) {
-                    info!(schedule = %name, "Stopping task for removed/changed schedule");
-                    handle.abort();
-                    false
-                } else {
-                    true
-                }
-            });
+            // Stop tasks for schedules that no longer exist OR whose content
+            // changed. Comparing the captured `Schedule` against the desired
+            // one catches in-place edits to message/interval/active window
+            // that share a name — `or_insert_with` below would otherwise be a
+            // no-op for the changed entry and the stale task keeps firing.
+            running_tasks.retain(
+                |name, (handle, captured)| match desired_schedules.get(name) {
+                    None => {
+                        info!(schedule = %name, "Stopping task for removed schedule");
+                        handle.abort();
+                        false
+                    }
+                    Some(desired) if desired != captured => {
+                        info!(schedule = %name, "Restarting task for changed schedule");
+                        handle.abort();
+                        false
+                    }
+                    Some(_) => true,
+                },
+            );
 
-            // Start tasks for new schedules
+            // Start tasks for new (or just-aborted) schedules.
             for (name, schedule) in desired_schedules {
                 let channel = channel.clone();
                 let shutdown = shutdown.clone();
                 let clock = clock.clone();
                 running_tasks.entry(name.clone()).or_insert_with(|| {
                     info!(schedule = %name, "Starting task for new schedule");
-
-                    tokio::spawn(run_schedule_task(
+                    let captured = schedule.clone();
+                    let handle = tokio::spawn(run_schedule_task(
                         schedule,
                         client.clone(),
                         cache.clone(),
                         channel,
                         shutdown,
                         clock,
-                    ))
+                    ));
+                    (handle, captured)
                 });
             }
 

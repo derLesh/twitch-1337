@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::util::resolve_berlin_time;
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 pub struct Schedule {
     pub name: String,
     pub start_date: Option<NaiveDateTime>,

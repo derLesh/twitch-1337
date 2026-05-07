@@ -76,14 +76,22 @@ impl FlightIdentifier {
     /// Parse user input into a FlightIdentifier.
     ///
     /// 6-character all-hex-digit strings are treated as ICAO24 hex codes.
-    /// Everything else is treated as a callsign.
-    pub fn parse(input: &str) -> Self {
+    /// Everything else is treated as a callsign and must be ASCII alphanumeric
+    /// with length 1..=8 (ICAO callsigns are at most 8 chars). Rejects path
+    /// separators and other characters that would let user input forge URL
+    /// segments when interpolated into ADS-B aggregator endpoints.
+    pub fn parse(input: &str) -> eyre::Result<Self> {
         let input = input.trim().to_uppercase();
-        if input.len() == 6 && input.chars().all(|c| c.is_ascii_hexdigit()) {
-            FlightIdentifier::Hex(input)
-        } else {
-            FlightIdentifier::Callsign(input)
+        if input.is_empty() {
+            eyre::bail!("Identifier darf nicht leer sein");
         }
+        if input.len() == 6 && input.chars().all(|c| c.is_ascii_hexdigit()) {
+            return Ok(FlightIdentifier::Hex(input));
+        }
+        if input.len() > 8 || !input.chars().all(|c| c.is_ascii_alphanumeric()) {
+            eyre::bail!("Ungültiges callsign/hex");
+        }
+        Ok(FlightIdentifier::Callsign(input))
     }
 
     /// Returns the display string (the callsign or hex value).
@@ -1452,5 +1460,45 @@ mod tests {
         let ac = aircraft_at(34_000, 0);
 
         assert_eq!(detect_phase(&flight, &ac), FlightPhase::Cruise);
+    }
+
+    #[test]
+    fn parse_accepts_six_char_hex() {
+        let id = FlightIdentifier::parse("4ca87d").unwrap();
+        assert_eq!(id, FlightIdentifier::Hex("4CA87D".to_string()));
+    }
+
+    #[test]
+    fn parse_accepts_alphanumeric_callsign() {
+        let id = FlightIdentifier::parse("DLH1234").unwrap();
+        assert_eq!(id, FlightIdentifier::Callsign("DLH1234".to_string()));
+    }
+
+    #[test]
+    fn parse_accepts_eight_char_callsign() {
+        let id = FlightIdentifier::parse("RYR1234A").unwrap();
+        assert_eq!(id, FlightIdentifier::Callsign("RYR1234A".to_string()));
+    }
+
+    #[test]
+    fn parse_rejects_path_traversal() {
+        assert!(FlightIdentifier::parse("../foo").is_err());
+        assert!(FlightIdentifier::parse("a/b").is_err());
+    }
+
+    #[test]
+    fn parse_rejects_too_long_callsign() {
+        assert!(FlightIdentifier::parse("ABCDEFGHI").is_err());
+    }
+
+    #[test]
+    fn parse_rejects_non_ascii() {
+        assert!(FlightIdentifier::parse("DLH1ä34").is_err());
+    }
+
+    #[test]
+    fn parse_rejects_empty() {
+        assert!(FlightIdentifier::parse("").is_err());
+        assert!(FlightIdentifier::parse("   ").is_err());
     }
 }

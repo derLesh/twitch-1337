@@ -54,9 +54,15 @@ pub struct PingManager {
 
 impl PingManager {
     /// Load pings from disk. Creates empty store if file doesn't exist.
+    ///
+    /// Templates are re-validated against `validate_template` after
+    /// deserialization so that entries that were written before the validator
+    /// existed, hand-edited on disk, or survived a partial atomic write cannot
+    /// smuggle CR/LF/NUL into outgoing PRIVMSGs. Failing entries are dropped
+    /// with a warning.
     pub fn load(data_dir: &Path) -> Result<Self> {
         let path = data_dir.join(PINGS_FILENAME);
-        let store = if path.exists() {
+        let mut store: PingStore = if path.exists() {
             let data = std::fs::read_to_string(&path).wrap_err("Failed to read pings.ron")?;
             ron::from_str(&data).wrap_err("Failed to parse pings.ron")?
         } else {
@@ -65,6 +71,20 @@ impl PingManager {
                 pings: HashMap::new(),
             }
         };
+
+        store
+            .pings
+            .retain(|name, ping| match validate_template(&ping.template) {
+                Ok(()) => true,
+                Err(e) => {
+                    tracing::warn!(
+                        ping = %name,
+                        error = %e,
+                        "Dropping ping with invalid template on load",
+                    );
+                    false
+                }
+            });
 
         info!(count = store.pings.len(), "Loaded pings");
 
@@ -358,6 +378,24 @@ mod tests {
         assert!(result.is_err());
         let ping = mgr.store.pings.get("test").unwrap();
         assert_eq!(ping.template, "Hey {mentions}!");
+    }
+
+    #[test]
+    fn load_drops_pings_with_invalid_template_on_disk() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(PINGS_FILENAME);
+        // Hand-write a pings.ron containing one good and one CR/LF-bearing entry,
+        // simulating a file written before validate_template existed or
+        // hand-edited on disk.
+        let raw = "(pings: {\n  \"good\": (template: \"Hey {mentions}!\", members: [], cooldown: None, created_by: \"admin\"),\n  \"bad\": (template: \"Hey {mentions}\\r\\nPRIVMSG #other :pwned\", members: [], cooldown: None, created_by: \"admin\"),\n})\n";
+        std::fs::write(&path, raw).unwrap();
+
+        let mgr = PingManager::load(dir.path()).unwrap();
+        assert!(mgr.store.pings.contains_key("good"));
+        assert!(
+            !mgr.store.pings.contains_key("bad"),
+            "ping with control chars must be dropped on load",
+        );
     }
 
     #[test]

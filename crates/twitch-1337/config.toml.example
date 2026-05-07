@@ -146,6 +146,9 @@ client_secret = "your_client_secret"
 # reasoning_effort = "high"        # fallback → [ai].reasoning_effort
 # run_at           = "04:00"       # HH:MM in Europe/Berlin
 # timeout_secs     = 120
+# max_rounds       = 20            # Max tool-call rounds per ritual (1..=200, default: 20).
+                                  # Independent from ai.max_turn_rounds since the ritual
+                                  # touches every memory file plus the day's transcript.
 
 # Optional: Scheduled messages configuration
 # Add [[schedules]] sections to define scheduled messages.

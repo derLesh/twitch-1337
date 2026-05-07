@@ -135,6 +135,8 @@ impl AviationClient {
     pub fn new() -> Result<Self> {
         let http = reqwest::Client::builder()
             .user_agent(APP_USER_AGENT)
+            .connect_timeout(Duration::from_secs(5))
+            .timeout(Duration::from_secs(15))
             .build()
             .wrap_err("Failed to build aviation HTTP client")?;
         Ok(Self::new_with_adsb_aggregators(

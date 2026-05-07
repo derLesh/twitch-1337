@@ -164,7 +164,7 @@ where
                     .or_else(|| ai.reasoning_effort.clone()),
                 run_at,
                 timeout_secs: ai.dreamer.timeout_secs,
-                max_rounds: ai.max_turn_rounds,
+                max_rounds: ai.dreamer.max_rounds,
                 max_writes_per_turn: ai.max_writes_per_turn,
                 inject_byte_budget: ai.memory.inject_byte_budget,
                 channel: channel_for_ritual,
