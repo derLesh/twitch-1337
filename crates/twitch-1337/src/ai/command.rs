@@ -15,9 +15,7 @@ use llm::{
 use crate::ai::chat_history::{ChatHistory, ChatHistoryQuery, MAX_TOOL_RESULT_MESSAGES};
 use crate::ai::memory::inject;
 use crate::ai::memory::store::MemoryStore;
-use crate::ai::memory::tools::{
-    ChatTurnExecutor, ChatTurnExecutorOpts, SayChannel, chat_turn_tools,
-};
+use crate::ai::memory::tools::{ChatTurnExecutor, ChatTurnExecutorOpts, chat_turn_tools};
 use crate::ai::memory::transcript::TranscriptWriter;
 use crate::ai::memory::types::{Caps, Role};
 use crate::ai::web_search;
@@ -384,7 +382,7 @@ impl ToolExecutor for WebExecutor<'_> {
 }
 
 /// Memory-v2 path executor that dispatches by tool name to the chat-turn
-/// executor (write_file/write_state/delete_state/say) or, when web tools are
+/// executor (write_file/write_state/delete_state) or, when web tools are
 /// configured, the web search executor (web_search/fetch_url).
 struct V2Executor<'a> {
     chat: &'a ChatTurnExecutor,
@@ -679,7 +677,6 @@ where
                 instruction_with_reply_context(&instruction, &ctx, grok_alias);
             let user_message = format!("{instructions_head}\n\n{instruction_for_prompt}");
 
-            let (say_tx, mut say_rx) = tokio::sync::mpsc::channel::<String>(16);
             let exec = ChatTurnExecutor::new(ChatTurnExecutorOpts {
                 store: mem.store.clone(),
                 speaker_user_id: ctx.privmsg.sender.id.clone(),
@@ -687,46 +684,6 @@ where
                 speaker_display_name: ctx.privmsg.sender.name.clone(),
                 speaker_role: role,
                 max_writes_per_turn: mem.max_writes_per_turn,
-                say: SayChannel::mpsc(say_tx),
-            });
-
-            // Drain `say` lines as they arrive — fire-and-forget chat sends in their tool order.
-            let client = ctx.client.clone();
-            let privmsg_for_reply = ctx.privmsg.clone();
-            let transcript_for_drain = mem.transcript.clone();
-            let bot_username_for_drain = self.bot_username.clone();
-            let target_buffer = self
-                .chat_ctx
-                .as_ref()
-                .map(|c| c.buffer_for(&ctx.privmsg.channel_login).clone());
-            let is_primary_source = !self
-                .chat_ctx
-                .as_ref()
-                .is_some_and(|c| c.is_ai_channel(&ctx.privmsg.channel_login));
-            let drainer = tokio::spawn(async move {
-                while let Some(line) = say_rx.recv().await {
-                    let ts = Utc::now();
-                    if let Err(e) = client
-                        .say_in_reply_to(&privmsg_for_reply, line.clone())
-                        .await
-                    {
-                        error!(error = ?e, "say drain failed");
-                    }
-                    if let Some(ref buf) = target_buffer {
-                        buf.lock().await.push_bot_at(
-                            bot_username_for_drain.clone(),
-                            line.clone(),
-                            ts,
-                        );
-                    }
-                    if is_primary_source
-                        && let Err(e) = transcript_for_drain
-                            .append_line(ts, &bot_username_for_drain, &line)
-                            .await
-                    {
-                        error!(error = ?e, "transcript bot-reply append failed");
-                    }
-                }
             });
 
             let mut tools = chat_turn_tools();
@@ -754,14 +711,50 @@ where
                 chat: &exec,
                 web: self.web.as_ref().map(|w| w.executor.as_ref()),
             };
-            match run_agent(&*self.llm_client, req, &combined_exec, opts).await {
-                Ok(AgentOutcome::Text(_)) => { /* clean exit; any say already on wire */ }
-                Ok(AgentOutcome::MaxRoundsExceeded) => warn!("AI max_turn_rounds exceeded"),
-                Ok(AgentOutcome::Timeout { round }) => warn!(round, "AI per-round timeout"),
-                Err(e) => warn!(error = ?e, "AI llm error"),
+            let final_text = match run_agent(&*self.llm_client, req, &combined_exec, opts).await {
+                Ok(AgentOutcome::Text(text)) => Some(text),
+                Ok(AgentOutcome::MaxRoundsExceeded) => {
+                    warn!("AI max_turn_rounds exceeded");
+                    None
+                }
+                Ok(AgentOutcome::Timeout { round }) => {
+                    warn!(round, "AI per-round timeout");
+                    None
+                }
+                Err(e) => {
+                    warn!(error = ?e, "AI llm error");
+                    None
+                }
+            };
+
+            if let Some(text) = final_text {
+                let visible = clean_user_facing_ai_response(&text);
+                let line = truncate_response(visible, MAX_RESPONSE_LENGTH);
+                if !line.is_empty() {
+                    let ts = Utc::now();
+                    if let Err(e) = ctx.client.say_in_reply_to(ctx.privmsg, line.clone()).await {
+                        error!(error = ?e, "Failed to send AI response");
+                    }
+                    if let Some(ref chat) = self.chat_ctx {
+                        chat.buffer_for(&ctx.privmsg.channel_login)
+                            .lock()
+                            .await
+                            .push_bot_at(self.bot_username.clone(), line.clone(), ts);
+                    }
+                    let is_primary_source = !self
+                        .chat_ctx
+                        .as_ref()
+                        .is_some_and(|c| c.is_ai_channel(&ctx.privmsg.channel_login));
+                    if is_primary_source
+                        && let Err(e) = mem
+                            .transcript
+                            .append_line(ts, &self.bot_username, &line)
+                            .await
+                    {
+                        error!(error = ?e, "transcript bot-reply append failed");
+                    }
+                }
             }
-            drop(exec); // closes say_tx
-            drainer.await.ok();
 
             return Ok(());
         }

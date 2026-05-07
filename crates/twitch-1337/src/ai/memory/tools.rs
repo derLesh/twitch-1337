@@ -1,12 +1,10 @@
 //! Tool args + definitions for the v2 chat-turn and dreamer loops.
 
-use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use async_trait::async_trait;
 use schemars::JsonSchema;
 use serde::Deserialize;
-use tokio::sync::Mutex;
 
 use llm::{ToolCall, ToolDefinition, ToolExecutor, ToolResultMessage};
 
@@ -15,8 +13,6 @@ use crate::ai::memory::sanitize::{
 };
 use crate::ai::memory::store::{MemoryStore, WriteError};
 use crate::ai::memory::types::{FileKind, Role};
-
-const SAY_MAX_CHARS: usize = 500;
 
 // ---------------------------------------------------------------------------
 // Arg structs
@@ -39,11 +35,6 @@ pub struct DeleteStateArgs {
     pub slug: String,
 }
 
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct SayArgs {
-    pub text: String,
-}
-
 // ---------------------------------------------------------------------------
 // Tool definitions
 // ---------------------------------------------------------------------------
@@ -62,10 +53,6 @@ pub fn chat_turn_tools() -> Vec<ToolDefinition> {
             "delete_state",
             "Remove a state file. Regulars may only delete state files they created.",
         ),
-        ToolDefinition::derived::<SayArgs>(
-            "say",
-            "Append one chat line. Aim for ≤3 sentences per call; the app truncates >500 chars to ≤500 + …. Multiple calls produce multiple lines.",
-        ),
     ]
 }
 
@@ -81,40 +68,6 @@ pub fn dreamer_tools() -> Vec<ToolDefinition> {
 }
 
 // ---------------------------------------------------------------------------
-// SayChannel — production uses mpsc; tests collect lines in a Vec
-// ---------------------------------------------------------------------------
-
-/// Sink for `say(text)` lines.
-///
-/// Production code wires an `mpsc::Sender<String>` from the !ai handler.
-/// Tests use the collecting variant to inspect emitted lines without an IRC
-/// connection.
-#[derive(Clone)]
-pub enum SayChannel {
-    Mpsc(tokio::sync::mpsc::Sender<String>),
-    Collect(Arc<Mutex<Vec<String>>>),
-}
-
-impl SayChannel {
-    pub fn mpsc(tx: tokio::sync::mpsc::Sender<String>) -> Self {
-        Self::Mpsc(tx)
-    }
-
-    pub fn collecting() -> Self {
-        Self::Collect(Arc::new(Mutex::new(Vec::new())))
-    }
-
-    async fn send(&self, line: String) {
-        match self {
-            SayChannel::Mpsc(tx) => {
-                let _ = tx.send(line).await;
-            }
-            SayChannel::Collect(buf) => buf.lock().await.push(line),
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
 // ChatTurnExecutor
 // ---------------------------------------------------------------------------
 
@@ -125,9 +78,8 @@ pub struct ChatTurnExecutorOpts {
     pub speaker_display_name: String,
     pub speaker_role: Role,
     /// Maximum write-class tool calls (write_file, write_state, delete_state)
-    /// per turn. `say` is never counted.
+    /// per turn.
     pub max_writes_per_turn: usize,
-    pub say: SayChannel,
 }
 
 pub struct ChatTurnExecutor {
@@ -140,15 +92,6 @@ impl ChatTurnExecutor {
         Self {
             opts,
             write_count: AtomicUsize::new(0),
-        }
-    }
-
-    /// Returns the collecting buffer when the executor was built with
-    /// [`SayChannel::collecting`], otherwise `None`.
-    pub fn say_collector(&self) -> Option<Arc<Mutex<Vec<String>>>> {
-        match &self.opts.say {
-            SayChannel::Collect(buf) => Some(buf.clone()),
-            _ => None,
         }
     }
 
@@ -303,23 +246,6 @@ impl ChatTurnExecutor {
             Err(e) => format!("io_error: {e}"),
         }
     }
-
-    async fn handle_say(&self, call: &ToolCall) -> String {
-        let args: SayArgs = match call.parse_args() {
-            Ok(a) => a,
-            Err(_) => return "invalid_arguments".into(),
-        };
-        let text = if args.text.chars().count() > SAY_MAX_CHARS {
-            let truncated: String = args.text.chars().take(SAY_MAX_CHARS - 1).collect();
-            format!("{truncated}\u{2026}") // U+2026 HORIZONTAL ELLIPSIS
-        } else {
-            args.text
-        };
-        // Collapse newlines so a single `say` call never splits an IRC PRIVMSG.
-        let line = text.replace(['\n', '\r'], " ");
-        self.opts.say.send(line).await;
-        "ok".into()
-    }
 }
 
 #[async_trait]
@@ -329,7 +255,6 @@ impl ToolExecutor for ChatTurnExecutor {
             "write_file" => self.handle_write_file(call).await,
             "write_state" => self.handle_write_state(call).await,
             "delete_state" => self.handle_delete_state(call).await,
-            "say" => self.handle_say(call).await,
             _ => "unknown_tool".to_string(),
         };
         ToolResultMessage::for_call(call, content)
@@ -359,7 +284,6 @@ impl DreamerExecutor {
                 speaker_display_name: String::new(),
                 speaker_role: Role::Dreamer,
                 max_writes_per_turn: opts.max_writes_per_turn,
-                say: SayChannel::collecting(), // never used; dreamer never sees `say`.
             }),
         }
     }
@@ -368,9 +292,6 @@ impl DreamerExecutor {
 #[async_trait]
 impl ToolExecutor for DreamerExecutor {
     async fn execute(&self, call: &ToolCall) -> ToolResultMessage {
-        if call.name == "say" {
-            return ToolResultMessage::for_call(call, "unknown_tool");
-        }
         self.inner.execute(call).await
     }
 }
@@ -384,16 +305,13 @@ mod schema_tests {
     use super::*;
 
     #[test]
-    fn chat_turn_tools_has_four_named_tools() {
+    fn chat_turn_tools_has_three_named_tools() {
         let names: Vec<_> = chat_turn_tools().into_iter().map(|t| t.name).collect();
-        assert_eq!(
-            names,
-            vec!["write_file", "write_state", "delete_state", "say"]
-        );
+        assert_eq!(names, vec!["write_file", "write_state", "delete_state"]);
     }
 
     #[test]
-    fn dreamer_tools_has_three_no_say() {
+    fn dreamer_tools_matches_chat_turn_tools() {
         let names: Vec<_> = dreamer_tools().into_iter().map(|t| t.name).collect();
         assert_eq!(names, vec!["write_file", "write_state", "delete_state"]);
     }
@@ -430,7 +348,6 @@ mod exec_tests {
             speaker_display_name: "Alice".into(),
             speaker_role: role,
             max_writes_per_turn: max_writes,
-            say: SayChannel::collecting(),
         })
     }
 
@@ -572,7 +489,7 @@ mod exec_tests {
     }
 
     #[tokio::test]
-    async fn write_quota_exhausts_after_n_writes_but_say_still_works() {
+    async fn write_quota_exhausts_after_n_writes() {
         let dir = tempfile::tempdir().unwrap();
         let store = MemoryStore::open(dir.path(), Caps::default())
             .await
@@ -592,10 +509,6 @@ mod exec_tests {
             ))
             .await;
         assert_eq!(r2.content, "write_quota_exhausted");
-        let r3 = exec
-            .execute(&call("say", serde_json::json!({"text": "still on"})))
-            .await;
-        assert_eq!(r3.content, "ok");
     }
 
     #[tokio::test]
@@ -621,25 +534,6 @@ mod exec_tests {
     }
 
     #[tokio::test]
-    async fn say_truncates_over_500_chars() {
-        let dir = tempfile::tempdir().unwrap();
-        let store = MemoryStore::open(dir.path(), Caps::default())
-            .await
-            .unwrap();
-        let exec = make_executor(Role::Regular, store.clone(), 8).await;
-        let long = "x".repeat(600);
-        let r = exec
-            .execute(&call("say", serde_json::json!({"text": long})))
-            .await;
-        assert_eq!(r.content, "ok");
-        let lines = exec.say_collector().unwrap().lock().await.clone();
-        assert_eq!(lines.len(), 1);
-        let line = &lines[0];
-        assert!(line.ends_with('\u{2026}'));
-        assert!(line.chars().count() <= 500);
-    }
-
-    #[tokio::test]
     async fn dreamer_can_write_soul_lore_any_user() {
         let dir = tempfile::tempdir().unwrap();
         let store = MemoryStore::open(dir.path(), Caps::default())
@@ -658,21 +552,5 @@ mod exec_tests {
                 .await;
             assert_eq!(r.content, "ok", "dreamer write {path}");
         }
-    }
-
-    #[tokio::test]
-    async fn dreamer_say_returns_unknown_tool() {
-        let dir = tempfile::tempdir().unwrap();
-        let store = MemoryStore::open(dir.path(), Caps::default())
-            .await
-            .unwrap();
-        let exec = DreamerExecutor::new(DreamerExecutorOpts {
-            store,
-            max_writes_per_turn: 32,
-        });
-        let r = exec
-            .execute(&call("say", serde_json::json!({"text": "hi"})))
-            .await;
-        assert_eq!(r.content, "unknown_tool");
     }
 }

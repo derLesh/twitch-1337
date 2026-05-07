@@ -21,38 +21,30 @@ use llm::{ToolCall, ToolChatCompletionResponse};
 use serial_test::serial;
 
 // ---------------------------------------------------------------------------
-// 1. Basic write + say
+// 1. Basic write + reply
 // ---------------------------------------------------------------------------
 
-/// Push tool calls: write_file(users/12345.md, "alice content") + say("hello alice"),
-/// then Message("done"). Send `!ai hi` from user 12345; assert say + file contents.
+/// Push tool call: write_file(users/12345.md, "alice content"), then final
+/// Message("hello alice"). Send `!ai hi` from user 12345; assert reply + file contents.
 #[tokio::test]
 #[serial]
-async fn memory_v2_basic_write_and_say() {
+async fn memory_v2_basic_write_and_reply() {
     let mut bot = TestBotBuilder::new().with_ai().spawn().await;
 
     bot.llm.push_tool(ToolChatCompletionResponse::ToolCalls {
-        calls: vec![
-            ToolCall {
-                id: "wf1".into(),
-                name: "write_file".into(),
-                arguments: serde_json::json!({
-                    "path": "users/12345.md",
-                    "body": "alice likes rust",
-                }),
-                arguments_parse_error: None,
-            },
-            ToolCall {
-                id: "say1".into(),
-                name: "say".into(),
-                arguments: serde_json::json!({ "text": "hello alice" }),
-                arguments_parse_error: None,
-            },
-        ],
+        calls: vec![ToolCall {
+            id: "wf1".into(),
+            name: "write_file".into(),
+            arguments: serde_json::json!({
+                "path": "users/12345.md",
+                "body": "alice likes rust",
+            }),
+            arguments_parse_error: None,
+        }],
         reasoning_content: None,
     });
     bot.llm
-        .push_tool(ToolChatCompletionResponse::Message("done".into()));
+        .push_tool(ToolChatCompletionResponse::Message("hello alice".into()));
 
     bot.send_privmsg_as("alice", "12345", "!ai hi").await;
     wait_for_say(&mut bot, "hello alice", Duration::from_secs(3)).await;
@@ -74,44 +66,29 @@ async fn memory_v2_basic_write_and_say() {
 }
 
 // ---------------------------------------------------------------------------
-// 2. Multiple say calls — both reach the channel
+// 2. Multiline final message — newlines collapsed into a single chat line
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
 #[serial]
-async fn memory_v2_multi_say() {
+async fn memory_v2_multiline_collapses() {
     let mut bot = TestBotBuilder::new().with_ai().spawn().await;
 
-    bot.llm.push_tool(ToolChatCompletionResponse::ToolCalls {
-        calls: vec![
-            ToolCall {
-                id: "s1".into(),
-                name: "say".into(),
-                arguments: serde_json::json!({ "text": "first line" }),
-                arguments_parse_error: None,
-            },
-            ToolCall {
-                id: "s2".into(),
-                name: "say".into(),
-                arguments: serde_json::json!({ "text": "second line" }),
-                arguments_parse_error: None,
-            },
-        ],
-        reasoning_content: None,
-    });
-    bot.llm
-        .push_tool(ToolChatCompletionResponse::Message("done".into()));
+    bot.llm.push_tool(ToolChatCompletionResponse::Message(
+        "first line\nsecond line".into(),
+    ));
 
     bot.send("alice", "!ai hello").await;
 
-    wait_for_say(&mut bot, "first line", Duration::from_secs(3)).await;
-    wait_for_say(&mut bot, "second line", Duration::from_secs(3)).await;
+    let line = bot.expect_say(Duration::from_secs(3)).await;
+    assert!(line.contains("first line"), "got: {line:?}");
+    assert!(line.contains("second line"), "got: {line:?}");
 
     bot.shutdown().await;
 }
 
 // ---------------------------------------------------------------------------
-// 3. No say tool → silent
+// 3. Empty final message → silent
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -119,9 +96,9 @@ async fn memory_v2_multi_say() {
 async fn memory_v2_silent() {
     let mut bot = TestBotBuilder::new().with_ai().spawn().await;
 
-    // Model terminates immediately without calling say.
+    // Empty final message → no chat reply.
     bot.llm
-        .push_tool(ToolChatCompletionResponse::Message("done".into()));
+        .push_tool(ToolChatCompletionResponse::Message(String::new()));
 
     bot.send("alice", "!ai quiet").await;
 
@@ -275,7 +252,7 @@ async fn chat_turn_write_quota() {
         .await;
 
     // Two writes in one round: second must get write_quota_exhausted.
-    // Then a say to confirm the agent is still alive.
+    // Then a final message to confirm the agent is still alive.
     bot.llm.push_tool(ToolChatCompletionResponse::ToolCalls {
         calls: vec![
             ToolCall {
@@ -296,17 +273,11 @@ async fn chat_turn_write_quota() {
                 }),
                 arguments_parse_error: None,
             },
-            ToolCall {
-                id: "say2".into(),
-                name: "say".into(),
-                arguments: serde_json::json!({ "text": "still on" }),
-                arguments_parse_error: None,
-            },
         ],
         reasoning_content: None,
     });
     bot.llm
-        .push_tool(ToolChatCompletionResponse::Message("done".into()));
+        .push_tool(ToolChatCompletionResponse::Message("still on".into()));
 
     bot.send_privmsg_as("alice", "12345", "!ai write twice")
         .await;
