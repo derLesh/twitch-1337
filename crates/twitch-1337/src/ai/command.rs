@@ -9,7 +9,7 @@ use twitch_irc::{login::LoginCredentials, transport::Transport};
 
 use llm::{
     AgentOpts, AgentOutcome, LlmClient, LlmError, Message, ToolCall, ToolCallRound,
-    ToolChatCompletionRequest, ToolExecutor, ToolResultMessage, run_agent,
+    ToolChatCompletionRequest, ToolExecutor, ToolResultMessage, TraceIds, run_agent,
 };
 
 use crate::ai::chat_history::ChatHistory;
@@ -149,6 +149,7 @@ impl AiCommand {
 struct V2Executor<'a> {
     chat: &'a ChatTurnExecutor,
     web: Option<&'a content::ContentToolExecutor>,
+    trace: &'a TraceIds,
 }
 
 #[async_trait]
@@ -156,7 +157,7 @@ impl ToolExecutor for V2Executor<'_> {
     async fn execute(&self, call: &ToolCall) -> ToolResultMessage {
         if content::is_web_tool(&call.name) {
             match self.web {
-                Some(w) => w.execute_tool_call(call).await,
+                Some(w) => w.execute_tool_call(call, self.trace).await,
                 None => ToolResultMessage::for_call(call, "unknown_tool".to_string()),
             }
         } else {
@@ -165,7 +166,7 @@ impl ToolExecutor for V2Executor<'_> {
     }
 }
 
-async fn forced_web_search_round(web: &AiWeb, query: &str) -> ToolCallRound {
+async fn forced_web_search_round(web: &AiWeb, query: &str, trace: &TraceIds) -> ToolCallRound {
     let call = ToolCall {
         id: "forced_web_search_1".to_string(),
         name: "web_search".to_string(),
@@ -175,7 +176,7 @@ async fn forced_web_search_round(web: &AiWeb, query: &str) -> ToolCallRound {
         }),
         arguments_parse_error: None,
     };
-    let result = web.executor.execute_tool_call(&call).await;
+    let result = web.executor.execute_tool_call(&call, trace).await;
     ToolCallRound {
         calls: vec![call],
         results: vec![result],
@@ -390,8 +391,12 @@ where
         if self.web.is_some() {
             tools.extend(content::ai_tools());
         }
+        let trace = TraceIds {
+            user: Some(ctx.privmsg.sender.login.clone()),
+            session_id: Some(crate::ai::session::new_session_id()),
+        };
         let prior_rounds = if grok_alias && let Some(ref w) = self.web {
-            vec![forced_web_search_round(w, &instruction_for_prompt).await]
+            vec![forced_web_search_round(w, &instruction_for_prompt, &trace).await]
         } else {
             Vec::new()
         };
@@ -401,6 +406,7 @@ where
             tools,
             reasoning_effort: self.reasoning_effort.clone(),
             prior_rounds,
+            trace: trace.clone(),
         };
         let opts = AgentOpts {
             max_rounds: mem.max_turn_rounds,
@@ -410,6 +416,7 @@ where
         let combined_exec = V2Executor {
             chat: &exec,
             web: self.web.as_ref().map(|w| w.executor.as_ref()),
+            trace: &trace,
         };
         let final_text = match run_agent(&*self.llm_client, req, &combined_exec, opts).await {
             Ok(AgentOutcome::Text(text)) => Some(text),

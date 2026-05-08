@@ -136,6 +136,10 @@ pub async fn run_ritual(
         tools: dreamer_tools(),
         reasoning_effort: cfg.reasoning_effort.clone(),
         prior_rounds: Vec::new(),
+        trace: llm::TraceIds {
+            user: Some("<dreamer>".to_string()),
+            session_id: Some(crate::ai::session::new_session_id()),
+        },
     };
     let opts = AgentOpts {
         max_rounds: cfg.max_rounds,

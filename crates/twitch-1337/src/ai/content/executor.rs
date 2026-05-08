@@ -6,7 +6,7 @@ use serde_json::json;
 use tokio::sync::Mutex;
 use tracing::{error, warn};
 
-use llm::{ToolCall, ToolResultMessage};
+use llm::{ToolCall, ToolResultMessage, TraceIds};
 
 use super::cache::TtlCache;
 use super::client::{SearchClient, SearchResult};
@@ -67,19 +67,19 @@ impl ContentToolExecutor {
         self.max_results
     }
 
-    pub async fn execute_tool_call(&self, call: &ToolCall) -> ToolResultMessage {
-        let content = self.execute(call).await;
+    pub async fn execute_tool_call(&self, call: &ToolCall, trace: &TraceIds) -> ToolResultMessage {
+        let content = self.execute(call, trace).await;
         ToolResultMessage::for_call(call, content)
     }
 
-    async fn execute(&self, call: &ToolCall) -> String {
+    async fn execute(&self, call: &ToolCall, trace: &TraceIds) -> String {
         match call.name.as_str() {
             "web_search" => match call.parse_args::<WebSearchArgs>() {
                 Ok(args) => self.execute_web_search(args).await,
                 Err(e) => Self::args_error_payload(&call.name, &e),
             },
             "read_url" => match call.parse_args::<ReadUrlArgs>() {
-                Ok(args) => self.execute_read_url(args).await,
+                Ok(args) => self.execute_read_url(args, trace).await,
                 Err(e) => Self::args_error_payload(&call.name, &e),
             },
             other => json!({
@@ -159,7 +159,7 @@ impl ContentToolExecutor {
         }
     }
 
-    async fn execute_read_url(&self, args: ReadUrlArgs) -> String {
+    async fn execute_read_url(&self, args: ReadUrlArgs, trace: &TraceIds) -> String {
         let instruction = args
             .instruction
             .as_deref()
@@ -193,6 +193,7 @@ impl ContentToolExecutor {
                 &fetched.content_type,
                 &fetched.payload,
                 instruction.as_deref(),
+                trace,
             )
             .await
         {
@@ -307,7 +308,9 @@ mod tests {
             arguments: serde_json::json!({}),
             arguments_parse_error: None,
         };
-        let result = executor.execute_tool_call(&call).await;
+        let result = executor
+            .execute_tool_call(&call, &TraceIds::default())
+            .await;
         assert!(
             result.content.contains("\"unknown_tool\""),
             "{}",
@@ -327,7 +330,9 @@ mod tests {
                 raw: "{bad".into(),
             }),
         };
-        let result = executor.execute_tool_call(&call).await;
+        let result = executor
+            .execute_tool_call(&call, &TraceIds::default())
+            .await;
         assert!(
             result.content.contains("\"invalid_arguments_json\""),
             "{}",
@@ -344,7 +349,9 @@ mod tests {
             arguments: serde_json::json!({ "url": "http://127.0.0.1:1/nope" }),
             arguments_parse_error: None,
         };
-        let result = executor.execute_tool_call(&call).await;
+        let result = executor
+            .execute_tool_call(&call, &TraceIds::default())
+            .await;
         assert!(
             result.content.contains("\"fetch_blocked\"")
                 || result.content.contains("\"fetch_failed\""),

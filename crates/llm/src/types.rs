@@ -101,6 +101,18 @@ pub struct ToolCallRound {
     pub reasoning_content: Option<String>,
 }
 
+/// Identity hints forwarded as standard OpenAI body fields. OpenRouter's
+/// Langfuse broadcast maps `user` to `userId` and `session_id` to Session ID
+/// in the trace UI. Providers that don't recognize the fields (e.g. Ollama)
+/// silently ignore them.
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct TraceIds {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub user: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<String>,
+}
+
 /// Request for a chat completion.
 #[derive(Debug, Clone)]
 pub struct ChatCompletionRequest {
@@ -108,6 +120,7 @@ pub struct ChatCompletionRequest {
     pub messages: Vec<Message>,
     /// Optional reasoning effort hint (provider/model-specific values).
     pub reasoning_effort: Option<String>,
+    pub trace: TraceIds,
 }
 
 /// Request for a chat completion with tool support.
@@ -120,6 +133,7 @@ pub struct ToolChatCompletionRequest {
     pub reasoning_effort: Option<String>,
     /// Prior tool-call rounds, threaded back in order.
     pub prior_rounds: Vec<ToolCallRound>,
+    pub trace: TraceIds,
 }
 
 /// Definition of a tool the LLM can call.

@@ -7,7 +7,7 @@ use eyre::Result;
 use tracing::{debug, error, instrument, warn};
 use twitch_irc::{login::LoginCredentials, transport::Transport};
 
-use llm::{ChatCompletionRequest, LlmClient, Message};
+use llm::{ChatCompletionRequest, LlmClient, Message, TraceIds};
 
 use crate::ai::command::ChatContext;
 use crate::cooldown::{PerUserCooldown, format_cooldown_remaining};
@@ -276,6 +276,10 @@ where
                 Message::user(user_message),
             ],
             reasoning_effort: None,
+            trace: TraceIds {
+                user: Some(user.clone()),
+                session_id: Some(crate::ai::session::new_session_id()),
+            },
         };
 
         let result =

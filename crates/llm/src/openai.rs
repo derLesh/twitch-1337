@@ -7,7 +7,7 @@ use crate::client::LlmClient;
 use crate::error::{LlmError, Result};
 use crate::types::{
     ChatCompletionRequest, ToolArgsError, ToolCall, ToolChatCompletionRequest,
-    ToolChatCompletionResponse,
+    ToolChatCompletionResponse, TraceIds,
 };
 use crate::util::truncate_for_echo;
 
@@ -27,6 +27,8 @@ struct ApiRequest {
     reasoning_effort: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     reasoning: Option<ApiReasoning>,
+    #[serde(flatten)]
+    trace: TraceIds,
 }
 
 #[derive(Debug, Serialize)]
@@ -73,6 +75,8 @@ struct ApiToolRequest {
     reasoning_effort: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     reasoning: Option<ApiReasoning>,
+    #[serde(flatten)]
+    trace: TraceIds,
 }
 
 #[derive(Debug, Deserialize)]
@@ -264,6 +268,7 @@ impl LlmClient for OpenAiClient {
             model,
             messages,
             reasoning_effort,
+            trace,
         } = request;
         let (reasoning_effort, reasoning) = self.map_reasoning(reasoning_effort);
 
@@ -278,6 +283,7 @@ impl LlmClient for OpenAiClient {
                 .collect(),
             reasoning_effort,
             reasoning,
+            trace,
         };
 
         debug!(model = %api_request.model, "Sending request to OpenAI-compatible API");
@@ -328,6 +334,7 @@ impl LlmClient for OpenAiClient {
             tools,
             reasoning_effort,
             prior_rounds,
+            trace,
         } = request;
         let (reasoning_effort, reasoning) = self.map_reasoning(reasoning_effort);
 
@@ -351,6 +358,7 @@ impl LlmClient for OpenAiClient {
             tools: api_tools,
             reasoning_effort,
             reasoning,
+            trace,
         };
 
         if let Ok(req_json) = serde_json::to_string(&api_request) {
@@ -474,6 +482,7 @@ mod tests {
             tools: vec![],
             reasoning_effort: None,
             prior_rounds: rounds,
+            trace: TraceIds::default(),
         }
     }
 
@@ -680,5 +689,55 @@ mod tests {
         let (reasoning_effort, reasoning) = client.map_reasoning(Some("xhigh".to_string()));
         assert_eq!(reasoning_effort.as_deref(), Some("xhigh"));
         assert!(reasoning.is_none());
+    }
+
+    #[test]
+    fn api_tool_request_serializes_trace_ids_when_set() {
+        let req = ApiToolRequest {
+            model: "m".to_string(),
+            messages: vec![],
+            tools: vec![],
+            reasoning_effort: None,
+            reasoning: None,
+            trace: TraceIds {
+                user: Some("nikolai".to_string()),
+                session_id: Some("turn-42".to_string()),
+            },
+        };
+        let value = serde_json::to_value(&req).unwrap();
+        assert_eq!(value["user"], "nikolai");
+        assert_eq!(value["session_id"], "turn-42");
+    }
+
+    #[test]
+    fn api_tool_request_omits_trace_ids_when_default() {
+        let req = ApiToolRequest {
+            model: "m".to_string(),
+            messages: vec![],
+            tools: vec![],
+            reasoning_effort: None,
+            reasoning: None,
+            trace: TraceIds::default(),
+        };
+        let value = serde_json::to_value(&req).unwrap();
+        assert!(value.get("user").is_none());
+        assert!(value.get("session_id").is_none());
+    }
+
+    #[test]
+    fn api_request_serializes_trace_ids_when_set() {
+        let req = ApiRequest {
+            model: "m".to_string(),
+            messages: vec![],
+            reasoning_effort: None,
+            reasoning: None,
+            trace: TraceIds {
+                user: Some("u".to_string()),
+                session_id: Some("s".to_string()),
+            },
+        };
+        let value = serde_json::to_value(&req).unwrap();
+        assert_eq!(value["user"], "u");
+        assert_eq!(value["session_id"], "s");
     }
 }

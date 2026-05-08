@@ -176,6 +176,7 @@ mod tests {
             tools: vec![],
             reasoning_effort: None,
             prior_rounds: vec![],
+            trace: crate::types::TraceIds::default(),
         }
     }
 

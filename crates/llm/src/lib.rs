@@ -17,4 +17,5 @@ pub use openai::OpenAiClient;
 pub use types::{
     ChatCompletionRequest, Message, Role, ToolArgsError, ToolCall, ToolCallRound,
     ToolChatCompletionRequest, ToolChatCompletionResponse, ToolDefinition, ToolResultMessage,
+    TraceIds,
 };

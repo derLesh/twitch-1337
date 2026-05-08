@@ -11,6 +11,7 @@ use std::time::Duration;
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use eyre::{Result, WrapErr as _, bail};
+use llm::TraceIds;
 use secrecy::{ExposeSecret as _, SecretString};
 use serde_json::{Value, json};
 
@@ -50,8 +51,9 @@ impl MediaClient {
         content_type: &str,
         payload: &Payload,
         instruction: Option<&str>,
+        trace: &TraceIds,
     ) -> Result<String> {
-        let body = self.build_request(content_type, payload, instruction);
+        let body = self.build_request(content_type, payload, instruction, trace);
 
         let url = format!("{}/chat/completions", self.base_url.trim_end_matches('/'));
         let mut req = self.http.post(&url).timeout(self.timeout).json(&body);
@@ -89,6 +91,7 @@ impl MediaClient {
         content_type: &str,
         payload: &Payload,
         instruction: Option<&str>,
+        trace: &TraceIds,
     ) -> Value {
         let prompt = instruction
             .map(str::trim)
@@ -111,7 +114,7 @@ impl MediaClient {
             }
         };
 
-        json!({
+        let mut body = json!({
             "model": self.model,
             "messages": [
                 { "role": "system", "content": SYSTEM_PROMPT },
@@ -123,7 +126,14 @@ impl MediaClient {
                     ],
                 },
             ],
-        })
+        });
+        if let Some(user) = &trace.user {
+            body["user"] = Value::String(user.clone());
+        }
+        if let Some(session_id) = &trace.session_id {
+            body["session_id"] = Value::String(session_id.clone());
+        }
+        body
     }
 }
 
@@ -149,6 +159,7 @@ mod tests {
             "image/png",
             &Payload::Bytes(vec![1, 2, 3]),
             Some("what is shown?"),
+            &TraceIds::default(),
         );
         let parts = &req["messages"][1]["content"];
         assert_eq!(parts[0]["type"], "text");
@@ -161,7 +172,12 @@ mod tests {
     #[test]
     fn build_request_text_uses_inline_text_part() {
         let c = client();
-        let req = c.build_request("text/html", &Payload::Text("Hello".into()), None);
+        let req = c.build_request(
+            "text/html",
+            &Payload::Text("Hello".into()),
+            None,
+            &TraceIds::default(),
+        );
         let parts = &req["messages"][1]["content"];
         assert_eq!(parts[0]["text"], "Describe the contents.");
         assert_eq!(parts[1]["type"], "text");
@@ -171,7 +187,12 @@ mod tests {
     #[test]
     fn build_request_includes_system_prompt() {
         let c = client();
-        let req = c.build_request("text/plain", &Payload::Text("x".into()), None);
+        let req = c.build_request(
+            "text/plain",
+            &Payload::Text("x".into()),
+            None,
+            &TraceIds::default(),
+        );
         assert_eq!(req["messages"][0]["role"], "system");
         assert!(
             req["messages"][0]["content"]
@@ -179,6 +200,31 @@ mod tests {
                 .expect("system content")
                 .contains("Twitch chat bot"),
         );
+    }
+
+    #[test]
+    fn build_request_emits_trace_ids_when_set() {
+        let c = client();
+        let trace = TraceIds {
+            user: Some("nikolai".into()),
+            session_id: Some("turn-9".into()),
+        };
+        let req = c.build_request("text/plain", &Payload::Text("x".into()), None, &trace);
+        assert_eq!(req["user"], "nikolai");
+        assert_eq!(req["session_id"], "turn-9");
+    }
+
+    #[test]
+    fn build_request_omits_trace_ids_when_default() {
+        let c = client();
+        let req = c.build_request(
+            "text/plain",
+            &Payload::Text("x".into()),
+            None,
+            &TraceIds::default(),
+        );
+        assert!(req.get("user").is_none());
+        assert!(req.get("session_id").is_none());
     }
 
     #[tokio::test]
@@ -205,7 +251,12 @@ mod tests {
             Duration::from_secs(2),
         );
         let answer = c
-            .analyze("image/png", &Payload::Bytes(vec![1, 2]), Some("what?"))
+            .analyze(
+                "image/png",
+                &Payload::Bytes(vec![1, 2]),
+                Some("what?"),
+                &TraceIds::default(),
+            )
             .await
             .expect("ok");
         assert_eq!(answer, "It is a cat.");
@@ -228,7 +279,12 @@ mod tests {
             Duration::from_secs(2),
         );
         let err = c
-            .analyze("text/plain", &Payload::Text("x".into()), None)
+            .analyze(
+                "text/plain",
+                &Payload::Text("x".into()),
+                None,
+                &TraceIds::default(),
+            )
             .await
             .expect_err("err");
         assert!(

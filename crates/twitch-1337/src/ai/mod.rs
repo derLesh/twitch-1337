@@ -3,3 +3,4 @@ pub mod command;
 pub mod content;
 pub mod memory;
 pub mod prefill;
+pub mod session;
