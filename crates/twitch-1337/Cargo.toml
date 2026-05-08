@@ -9,11 +9,15 @@ testing = []
 
 [dependencies]
 async-trait = { workspace = true }
+base64 = { workspace = true }
+bytesize = { workspace = true }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
 color-eyre = { workspace = true }
 csv = { workspace = true }
 eyre = { workspace = true }
+futures-util = { workspace = true }
+infer = { workspace = true }
 llm = { path = "../llm" }
 notify-debouncer-mini = { workspace = true }
 random-flight = { git = "https://github.com/Chronophylos/random-flight.git", rev = "261c2ba4a53770b51fbfb1ab93a806027eaf4fdf" }
@@ -42,7 +46,6 @@ twitch-1337 = { path = ".", features = ["testing"] }
 async-trait = "0.1"
 bytes = "1"
 either = "1"
-futures-util = "0.3"
 proptest = "1.11"
 serial_test = "3"
 tempfile = "3"

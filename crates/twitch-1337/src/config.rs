@@ -135,6 +135,34 @@ fn default_web_base_url() -> String {
     "http://localhost:8080/search".to_string()
 }
 
+fn default_media_model() -> String {
+    "~google/gemini-flash-latest".to_string()
+}
+
+fn default_media_timeout() -> u64 {
+    60
+}
+
+fn default_max_image_size() -> bytesize::ByteSize {
+    bytesize::ByteSize::mib(10)
+}
+
+fn default_max_pdf_size() -> bytesize::ByteSize {
+    bytesize::ByteSize::mib(25)
+}
+
+fn default_max_audio_size() -> bytesize::ByteSize {
+    bytesize::ByteSize::mib(25)
+}
+
+fn default_max_video_size() -> bytesize::ByteSize {
+    bytesize::ByteSize::mib(50)
+}
+
+fn default_max_text_size() -> bytesize::ByteSize {
+    bytesize::ByteSize::mib(1)
+}
+
 fn default_aviationstack_base_url() -> String {
     "https://api.aviationstack.com/v1".to_string()
 }
@@ -255,7 +283,7 @@ impl Default for AiEmotesConfigSection {
     }
 }
 
-/// Tool-calling web access for `!ai` (`web_search` and `fetch_url`).
+/// Tool-calling web access for `!ai` (`web_search` and `read_url`).
 #[derive(Debug, Clone, Deserialize)]
 pub struct AiWebConfigSection {
     #[serde(default)]
@@ -284,6 +312,53 @@ impl Default for AiWebConfigSection {
             max_rounds: default_max_rounds(),
             cache_ttl_secs: default_web_cache_ttl_secs(),
             cache_capacity: default_web_cache_capacity(),
+        }
+    }
+}
+
+/// Multimodal sub-agent for `read_url`. Reuses `[ai].api_key` and
+/// `[ai].base_url`; only the model and per-type size caps differ.
+#[derive(Debug, Clone, Deserialize)]
+pub struct AiMediaConfig {
+    #[serde(default = "default_media_model")]
+    pub model: String,
+    #[serde(default = "default_media_timeout")]
+    pub timeout: u64,
+    #[serde(default = "default_max_image_size")]
+    pub max_image_size: bytesize::ByteSize,
+    #[serde(default = "default_max_pdf_size")]
+    pub max_pdf_size: bytesize::ByteSize,
+    #[serde(default = "default_max_audio_size")]
+    pub max_audio_size: bytesize::ByteSize,
+    #[serde(default = "default_max_video_size")]
+    pub max_video_size: bytesize::ByteSize,
+    #[serde(default = "default_max_text_size")]
+    pub max_text_size: bytesize::ByteSize,
+}
+
+impl Default for AiMediaConfig {
+    fn default() -> Self {
+        Self {
+            model: default_media_model(),
+            timeout: default_media_timeout(),
+            max_image_size: default_max_image_size(),
+            max_pdf_size: default_max_pdf_size(),
+            max_audio_size: default_max_audio_size(),
+            max_video_size: default_max_video_size(),
+            max_text_size: default_max_text_size(),
+        }
+    }
+}
+
+impl AiMediaConfig {
+    pub fn cap_for(&self, bucket: crate::ai::content::detect::Bucket) -> bytesize::ByteSize {
+        use crate::ai::content::detect::Bucket;
+        match bucket {
+            Bucket::Image => self.max_image_size,
+            Bucket::Pdf => self.max_pdf_size,
+            Bucket::Audio => self.max_audio_size,
+            Bucket::Video => self.max_video_size,
+            Bucket::Text => self.max_text_size,
         }
     }
 }
@@ -331,7 +406,10 @@ pub struct AiConfig {
     /// Optional 7TV emote glossary prompt grounding.
     #[serde(default)]
     pub emotes: AiEmotesConfigSection,
-    /// Optional web tool surface for `!ai` (`web_search`, `fetch_url`).
+    /// Multimodal sub-agent for `read_url`.
+    #[serde(default)]
+    pub media: AiMediaConfig,
+    /// Optional web tool surface for `!ai` (`web_search`, `read_url`).
     #[serde(default)]
     pub web: AiWebConfigSection,
 }
@@ -799,6 +877,7 @@ mod tests {
                 ..DreamerConfigSection::default()
             },
             emotes: AiEmotesConfigSection::default(),
+            media: AiMediaConfig::default(),
             web: AiWebConfigSection::default(),
         }
     }
@@ -986,6 +1065,52 @@ mod tests {
     }
 
     #[test]
+    fn ai_media_defaults_when_section_absent() {
+        let ai: AiConfig = toml::from_str(
+            r#"
+                backend = "openai"
+                api_key = "k"
+                model = "m"
+            "#,
+        )
+        .expect("parse");
+
+        assert_eq!(ai.media.model, "~google/gemini-flash-latest");
+        assert_eq!(ai.media.timeout, 60);
+        assert_eq!(ai.media.max_image_size.as_u64(), 10 * 1024 * 1024);
+        assert_eq!(ai.media.max_pdf_size.as_u64(), 25 * 1024 * 1024);
+        assert_eq!(ai.media.max_audio_size.as_u64(), 25 * 1024 * 1024);
+        assert_eq!(ai.media.max_video_size.as_u64(), 50 * 1024 * 1024);
+        assert_eq!(ai.media.max_text_size.as_u64(), 1024 * 1024);
+    }
+
+    #[test]
+    fn ai_media_parses_human_readable_sizes() {
+        let ai: AiConfig = toml::from_str(
+            r#"
+                backend = "openai"
+                api_key = "k"
+                model = "m"
+
+                [media]
+                model = "openai/gpt-4o-mini"
+                timeout = 90
+                max_image_size = "5 MB"
+                max_pdf_size = "15 MB"
+                max_audio_size = "20 MB"
+                max_video_size = "100 MB"
+                max_text_size = "512 KB"
+            "#,
+        )
+        .expect("parse");
+
+        assert_eq!(ai.media.model, "openai/gpt-4o-mini");
+        assert_eq!(ai.media.timeout, 90);
+        assert_eq!(ai.media.max_image_size.as_u64(), 5 * 1000 * 1000);
+        assert_eq!(ai.media.max_text_size.as_u64(), 512 * 1000);
+    }
+
+    #[test]
     fn validate_rejects_max_turn_rounds_out_of_range() {
         let mut c = Configuration::test_default();
         let mut ai = ai_with_run_at("04:00");
@@ -1079,5 +1204,16 @@ mod tests {
         ai.ai_channel_history_length = 50;
         c.ai = Some(ai);
         validate_config(&c).unwrap();
+    }
+
+    #[test]
+    fn ai_media_cap_for_bucket_returns_correct_field() {
+        use crate::ai::content::detect::Bucket;
+        let cfg = AiMediaConfig::default();
+        assert_eq!(cfg.cap_for(Bucket::Image), cfg.max_image_size);
+        assert_eq!(cfg.cap_for(Bucket::Pdf), cfg.max_pdf_size);
+        assert_eq!(cfg.cap_for(Bucket::Audio), cfg.max_audio_size);
+        assert_eq!(cfg.cap_for(Bucket::Video), cfg.max_video_size);
+        assert_eq!(cfg.cap_for(Bucket::Text), cfg.max_text_size);
     }
 }

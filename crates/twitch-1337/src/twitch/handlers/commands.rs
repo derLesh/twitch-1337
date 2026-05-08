@@ -189,24 +189,43 @@ where
 
     if let (Some((llm, cfg)), Some(ai_memory_v2)) = (llm_client, ai_memory_v2) {
         let web = if cfg.web.enabled {
-            match ai::web_search::SearchClient::new(
+            let search = match ai::content::SearchClient::new(
                 &cfg.web.base_url,
                 Duration::from_secs(cfg.web.timeout),
             ) {
-                Ok(client) => Some(ai::command::AiWeb {
-                    executor: Arc::new(ai::web_search::WebToolExecutor::new(
-                        client,
-                        cfg.web.max_results,
-                        Duration::from_secs(cfg.web.cache_ttl_secs),
-                        cfg.web.cache_capacity,
-                    )),
-                    max_rounds: cfg.web.max_rounds,
-                }),
+                Ok(c) => Some(c),
                 Err(e) => {
-                    error!(error = ?e, "Failed to initialize ai.web client; disabling web tools");
+                    error!(error = ?e, "Failed to initialize ai.web search client; disabling web tools");
                     None
                 }
-            }
+            };
+
+            let media_http = reqwest::Client::builder()
+                .user_agent(crate::APP_USER_AGENT)
+                .build()
+                .expect("build media HTTP client");
+            let provider_base_url = cfg.base_url.clone().unwrap_or_else(|| match cfg.backend {
+                crate::config::AiBackend::OpenAi => "https://api.openai.com/v1".to_string(),
+                crate::config::AiBackend::Ollama => "http://localhost:11434/v1".to_string(),
+            });
+            let media = Arc::new(ai::content::MediaClient::new(
+                media_http,
+                provider_base_url,
+                cfg.api_key.clone(),
+                cfg.media.model.clone(),
+                Duration::from_secs(cfg.media.timeout),
+            ));
+            search.map(|client| ai::command::AiWeb {
+                executor: Arc::new(ai::content::ContentToolExecutor::new(
+                    client,
+                    media,
+                    cfg.media.clone(),
+                    cfg.web.max_results,
+                    Duration::from_secs(cfg.web.cache_ttl_secs),
+                    cfg.web.cache_capacity,
+                )),
+                max_rounds: cfg.web.max_rounds,
+            })
         } else {
             None
         };

@@ -10,6 +10,8 @@ use llm::{ToolCall, ToolResultMessage};
 
 use super::cache::TtlCache;
 use super::client::{SearchClient, SearchResult};
+use super::media::MediaClient;
+use crate::config::AiMediaConfig;
 
 #[derive(Debug, Deserialize)]
 struct WebSearchArgs {
@@ -18,32 +20,46 @@ struct WebSearchArgs {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
-pub(super) struct FetchUrlArgs {
+pub(super) struct ReadUrlArgs {
     /// HTTP(S) URL to fetch.
     pub url: String,
+    /// Optional natural-language instruction. If omitted, the sub-agent returns
+    /// a generic description.
+    #[serde(default)]
+    pub instruction: Option<String>,
 }
 
-const FETCH_RESULT_MAX_CHARS: usize = 4_000;
-
-pub struct WebToolExecutor {
+pub struct ContentToolExecutor {
     client: SearchClient,
+    media: Arc<MediaClient>,
+    caps: AiMediaConfig,
     max_results: usize,
     search_cache: Arc<Mutex<TtlCache<Vec<SearchResult>>>>,
-    fetch_cache: Arc<Mutex<TtlCache<String>>>,
+    read_cache: Arc<Mutex<TtlCache<ReadCacheEntry>>>,
 }
 
-impl WebToolExecutor {
+#[derive(Debug, Clone)]
+struct ReadCacheEntry {
+    content_type: String,
+    answer: String,
+}
+
+impl ContentToolExecutor {
     pub fn new(
         client: SearchClient,
+        media: Arc<MediaClient>,
+        caps: AiMediaConfig,
         max_results: usize,
         cache_ttl: Duration,
         cache_capacity: usize,
     ) -> Self {
         Self {
             client,
+            media,
+            caps,
             max_results,
             search_cache: Arc::new(Mutex::new(TtlCache::new(cache_ttl, cache_capacity))),
-            fetch_cache: Arc::new(Mutex::new(TtlCache::new(cache_ttl, cache_capacity))),
+            read_cache: Arc::new(Mutex::new(TtlCache::new(cache_ttl, cache_capacity))),
         }
     }
 
@@ -62,8 +78,8 @@ impl WebToolExecutor {
                 Ok(args) => self.execute_web_search(args).await,
                 Err(e) => Self::args_error_payload(&call.name, &e),
             },
-            "fetch_url" => match call.parse_args::<FetchUrlArgs>() {
-                Ok(args) => self.execute_fetch_url(args).await,
+            "read_url" => match call.parse_args::<ReadUrlArgs>() {
+                Ok(args) => self.execute_read_url(args).await,
                 Err(e) => Self::args_error_payload(&call.name, &e),
             },
             other => json!({
@@ -143,48 +159,103 @@ impl WebToolExecutor {
         }
     }
 
-    async fn execute_fetch_url(&self, args: FetchUrlArgs) -> String {
-        let url = args.url.as_str();
-        let key = normalize_url(url);
-        if let Some(cached) = self.fetch_cache.lock().await.get(&key) {
+    async fn execute_read_url(&self, args: ReadUrlArgs) -> String {
+        let instruction = args
+            .instruction
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string);
+
+        let cache_key = format!(
+            "{}::{}",
+            normalize_url(&args.url),
+            instruction.as_deref().unwrap_or("").to_ascii_lowercase()
+        );
+        if let Some(cached) = self.read_cache.lock().await.get(&cache_key) {
             return json!({
                 "cached": true,
-                "url": url,
-                "content": cached,
+                "url": args.url,
+                "content_type": cached.content_type,
+                "answer": cached.answer,
             })
             .to_string();
         }
 
-        match self.client.fetch_url(url).await {
-            Ok(content) => {
-                let shortened = truncate_chars(&content, FETCH_RESULT_MAX_CHARS);
-                self.fetch_cache.lock().await.insert(key, shortened.clone());
-                json!({
-                    "cached": false,
-                    "url": url,
-                    "content": shortened,
-                })
-                .to_string()
-            }
-            Err(err) => {
-                let msg = err.to_string().to_ascii_lowercase();
-                let error_code = if msg.contains("blocked") {
-                    warn!(error = ?err, url, "fetch_url blocked");
-                    "fetch_blocked"
-                } else if msg.contains("timed out") {
-                    warn!(error = ?err, url, "fetch_url timed out");
-                    "fetch_timeout"
-                } else {
-                    error!(error = ?err, url, "fetch_url failed");
-                    "fetch_failed"
-                };
-                json!({
-                    "error": error_code,
-                    "details": format!("{err:#}"),
-                })
-                .to_string()
-            }
-        }
+        let fetched = match self.client.fetch_for_read(&args.url, &self.caps).await {
+            Ok(f) => f,
+            Err(err) => return Self::map_fetch_err(&err, &args.url),
+        };
+
+        let answer = match self
+            .media
+            .analyze(
+                &fetched.content_type,
+                &fetched.payload,
+                instruction.as_deref(),
+            )
+            .await
+        {
+            Ok(a) => a,
+            Err(err) => return Self::map_media_err(&err, &args.url),
+        };
+
+        self.read_cache.lock().await.insert(
+            cache_key,
+            ReadCacheEntry {
+                content_type: fetched.content_type.clone(),
+                answer: answer.clone(),
+            },
+        );
+
+        json!({
+            "cached": false,
+            "url": args.url,
+            "content_type": fetched.content_type,
+            "answer": answer,
+        })
+        .to_string()
+    }
+
+    fn map_fetch_err(err: &eyre::Report, url: &str) -> String {
+        let msg = err.to_string().to_ascii_lowercase();
+        let code = if msg.contains("blocked") {
+            warn!(error = ?err, url, "read_url blocked");
+            "fetch_blocked"
+        } else if msg.contains("too large") {
+            warn!(error = ?err, url, "read_url payload too large");
+            "payload_too_large"
+        } else if msg.contains("unsupported") {
+            warn!(error = ?err, url, "read_url unsupported content type");
+            "unsupported_content_type"
+        } else if msg.contains("timed out") {
+            warn!(error = ?err, url, "read_url timed out");
+            "fetch_timeout"
+        } else {
+            error!(error = ?err, url, "read_url fetch failed");
+            "fetch_failed"
+        };
+        json!({
+            "error": code,
+            "details": format!("{err:#}"),
+        })
+        .to_string()
+    }
+
+    fn map_media_err(err: &eyre::Report, url: &str) -> String {
+        let msg = err.to_string().to_ascii_lowercase();
+        let code = if msg.contains("timed out") {
+            warn!(error = ?err, url, "read_url media timeout");
+            "analysis_timeout"
+        } else {
+            error!(error = ?err, url, "read_url media failed");
+            "analysis_failed"
+        };
+        json!({
+            "error": code,
+            "details": format!("{err:#}"),
+        })
+        .to_string()
     }
 }
 
@@ -196,33 +267,35 @@ fn normalize_url(url: &str) -> String {
     url.trim().to_ascii_lowercase()
 }
 
-fn truncate_chars(value: &str, max_chars: usize) -> String {
-    let len = value.chars().count();
-    if len <= max_chars {
-        return value.to_string();
-    }
-    let cutoff = value
-        .char_indices()
-        .nth(max_chars)
-        .map(|(idx, _)| idx)
-        .unwrap_or(value.len());
-    format!("{}...", &value[..cutoff])
-}
-
 #[cfg(test)]
 mod tests {
     use llm::ToolArgsError;
+    use std::time::Duration;
 
     use super::*;
 
-    fn test_executor() -> WebToolExecutor {
+    fn test_executor() -> ContentToolExecutor {
         crate::install_crypto_provider();
         let client = SearchClient::new_with_client(
             "http://127.0.0.1:65535/search".to_string(),
             Duration::from_secs(1),
             reqwest::Client::new(),
         );
-        WebToolExecutor::new(client, 5, Duration::from_secs(300), 32)
+        let media = Arc::new(MediaClient::new(
+            reqwest::Client::new(),
+            "http://127.0.0.1:65535/v1".to_string(),
+            None,
+            "test-model".into(),
+            Duration::from_secs(1),
+        ));
+        ContentToolExecutor::new(
+            client,
+            media,
+            AiMediaConfig::default(),
+            5,
+            Duration::from_secs(300),
+            32,
+        )
     }
 
     #[tokio::test]
@@ -234,7 +307,6 @@ mod tests {
             arguments: serde_json::json!({}),
             arguments_parse_error: None,
         };
-
         let result = executor.execute_tool_call(&call).await;
         assert!(
             result.content.contains("\"unknown_tool\""),
@@ -244,21 +316,38 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn surfaces_arguments_parse_error() {
+    async fn read_url_surfaces_arguments_parse_error() {
         let executor = test_executor();
         let call = ToolCall {
             id: "c1".into(),
-            name: "web_search".into(),
+            name: "read_url".into(),
             arguments: serde_json::Value::Null,
             arguments_parse_error: Some(ToolArgsError::Provider {
                 error: "expected value".into(),
                 raw: "{bad".into(),
             }),
         };
-
         let result = executor.execute_tool_call(&call).await;
         assert!(
             result.content.contains("\"invalid_arguments_json\""),
+            "{}",
+            result.content
+        );
+    }
+
+    #[tokio::test]
+    async fn read_url_returns_fetch_failed_for_unreachable_host() {
+        let executor = test_executor();
+        let call = ToolCall {
+            id: "c1".into(),
+            name: "read_url".into(),
+            arguments: serde_json::json!({ "url": "http://127.0.0.1:1/nope" }),
+            arguments_parse_error: None,
+        };
+        let result = executor.execute_tool_call(&call).await;
+        assert!(
+            result.content.contains("\"fetch_blocked\"")
+                || result.content.contains("\"fetch_failed\""),
             "{}",
             result.content
         );

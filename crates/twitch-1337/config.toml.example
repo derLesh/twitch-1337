@@ -95,7 +95,7 @@ client_secret = "your_client_secret"
 # usage = "jokes, fail moments, or ironic chat reactions"
 # avoid = "serious topics"
 #
-# Optional: expose web tools to !ai (`web_search` + `fetch_url`) via SearXNG.
+# Optional: expose web tools to !ai (`web_search` + `read_url`) via SearXNG.
 # The model can search current events and fetch article text at runtime.
 # [ai.web]
 # enabled = false

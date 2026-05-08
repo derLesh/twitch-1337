@@ -242,7 +242,7 @@ async fn ai_command_web_tool_flow_search_success() {
     assert_eq!(calls.len(), 2, "expected tool loop with two rounds");
     let first_tools: Vec<String> = calls[0].tools.iter().map(|t| t.name.clone()).collect();
     assert!(first_tools.iter().any(|t| t == "web_search"));
-    assert!(first_tools.iter().any(|t| t == "fetch_url"));
+    assert!(first_tools.iter().any(|t| t == "read_url"));
     let first_round = calls[1]
         .prior_rounds
         .first()
@@ -257,4 +257,101 @@ async fn ai_command_web_tool_flow_search_success() {
     );
 
     bot.shutdown().await;
+}
+
+#[tokio::test]
+#[serial]
+async fn ai_command_read_url_round_trip() {
+    // Bypass the SSRF guard so the bot can reach local wiremock servers.
+    twitch_1337::ai::content::client::ssrf_bypass_for_tests(true);
+
+    // 1. Origin server hosting the URL the bot will fetch.
+    let origin = MockServer::start().await;
+    let png = vec![
+        0x89u8, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D,
+    ];
+    Mock::given(method("GET"))
+        .and(path("/p.png"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "image/png")
+                .set_body_bytes(png),
+        )
+        .mount(&origin)
+        .await;
+
+    // 2. Media-model provider (OpenAI-compatible /v1/chat/completions).
+    let media = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/v1/chat/completions"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "choices": [{
+                "message": { "role": "assistant", "content": "A small PNG." }
+            }]
+        })))
+        .mount(&media)
+        .await;
+
+    // SearXNG endpoint (unused but needs to exist because cfg.web.enabled = true).
+    let search = MockServer::start().await;
+
+    let media_uri = media.uri();
+    let search_uri = search.uri();
+    let png_url = format!("{}/p.png", origin.uri());
+
+    let mut bot = TestBotBuilder::new()
+        .with_ai()
+        .with_config(|c| {
+            let ai = c.ai.as_mut().expect("ai configured");
+            ai.base_url = Some(format!("{media_uri}/v1"));
+            ai.web.enabled = true;
+            ai.web.base_url = format!("{search_uri}/search");
+            ai.web.timeout = 5;
+        })
+        .spawn()
+        .await;
+
+    // Round 1: main model calls read_url.
+    bot.llm.push_tool(ToolChatCompletionResponse::ToolCalls {
+        calls: vec![ToolCall {
+            id: "call_1".into(),
+            name: "read_url".into(),
+            arguments: serde_json::json!({
+                "url": png_url,
+                "instruction": "describe this image",
+            }),
+            arguments_parse_error: None,
+        }],
+        reasoning_content: None,
+    });
+    // Round 2: main model returns final assistant text.
+    bot.llm.push_tool_message("Image seen: A small PNG.");
+
+    bot.send("alice", "!ai please look at the picture").await;
+    let body = bot.expect_reply(Duration::from_secs(5)).await;
+    assert!(
+        body.contains("A small PNG."),
+        "reply did not contain media answer: {body}"
+    );
+
+    // The second round-trip's prior tool result should carry the answer
+    // returned by the media sub-agent.
+    let calls = bot.llm.tool_calls();
+    assert_eq!(calls.len(), 2, "expected two LLM rounds");
+    let first_round = calls[1]
+        .prior_rounds
+        .first()
+        .expect("second request includes first round");
+    assert_eq!(first_round.results[0].tool_name, "read_url");
+    assert!(
+        first_round.results[0].content.contains("A small PNG."),
+        "tool result: {}",
+        first_round.results[0].content
+    );
+
+    bot.shutdown().await;
+
+    // Reset the bypass so subsequent tests (if any run in the same process) are
+    // not affected. Serial execution means this is belt-and-suspenders.
+    twitch_1337::ai::content::client::ssrf_bypass_for_tests(false);
 }

@@ -80,6 +80,7 @@ impl TestBotBuilder {
                 max_writes_per_turn: 8,
                 dreamer: twitch_1337::config::DreamerConfigSection::default(),
                 emotes: twitch_1337::config::AiEmotesConfigSection::default(),
+                media: twitch_1337::config::AiMediaConfig::default(),
                 web: twitch_1337::config::AiWebConfigSection::default(),
             });
         }
