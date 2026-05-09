@@ -32,7 +32,7 @@ pub struct SevenTvEmoteProvider {
 #[derive(Debug, Default)]
 struct PromptCache {
     last_refresh: Option<Instant>,
-    prompt: Option<String>,
+    emotes: Option<Vec<PromptEmote>>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -48,6 +48,14 @@ struct GlossaryEmote {
     #[serde(default)]
     usage: Option<String>,
     #[serde(default)]
+    avoid: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct PromptEmote {
+    name: String,
+    meaning: String,
+    usage: Option<String>,
     avoid: Option<String>,
 }
 
@@ -101,9 +109,22 @@ impl SevenTvEmoteProvider {
         })
     }
 
-    /// Return the current prompt block for the Twitch channel id, refreshing
-    /// the backing catalog + glossary at most once per configured interval.
-    pub async fn prompt_block(&self, twitch_channel_id: &str) -> Option<String> {
+    /// Return a turn-specific prompt block for the Twitch channel id.
+    ///
+    /// The backing catalog + glossary are refreshed at most once per
+    /// configured interval, but ranking happens per turn so current chat emotes
+    /// and the user instruction can influence which entries the model sees.
+    pub async fn prompt_block_for_turn(
+        &self,
+        twitch_channel_id: &str,
+        instruction: &str,
+        recent_chat: &str,
+    ) -> Option<String> {
+        let emotes = self.prompt_emotes(twitch_channel_id).await?;
+        build_prompt_block(&emotes, self.max_prompt_emotes, instruction, recent_chat)
+    }
+
+    async fn prompt_emotes(&self, twitch_channel_id: &str) -> Option<Vec<PromptEmote>> {
         let mut cache = self.cache.lock().await;
         let now = Instant::now();
 
@@ -111,27 +132,30 @@ impl SevenTvEmoteProvider {
             .last_refresh
             .is_some_and(|last| now.duration_since(last) < self.refresh_interval)
         {
-            return cache.prompt.clone();
+            return cache.emotes.clone();
         }
 
-        match self.refresh_prompt(twitch_channel_id).await {
-            Ok(prompt) => {
+        match self.refresh_prompt_emotes(twitch_channel_id).await {
+            Ok(emotes) => {
                 cache.last_refresh = Some(now);
-                cache.prompt = prompt;
+                cache.emotes = emotes;
             }
             Err(e) => {
                 cache.last_refresh = Some(now);
                 warn!(
                     error = ?e,
-                    "Failed to refresh 7TV emote prompt; using cached prompt if available"
+                    "Failed to refresh 7TV emote glossary; using cached entries if available"
                 );
             }
         }
 
-        cache.prompt.clone()
+        cache.emotes.clone()
     }
 
-    async fn refresh_prompt(&self, twitch_channel_id: &str) -> Result<Option<String>> {
+    async fn refresh_prompt_emotes(
+        &self,
+        twitch_channel_id: &str,
+    ) -> Result<Option<Vec<PromptEmote>>> {
         let glossary = self.load_glossary().await?;
         if glossary.emotes.is_empty() {
             debug!(
@@ -142,8 +166,8 @@ impl SevenTvEmoteProvider {
         }
 
         let available = self.fetch_available_emotes(twitch_channel_id).await?;
-        let prompt = build_prompt_block(&glossary.emotes, &available, self.max_prompt_emotes);
-        Ok(prompt)
+        let emotes = build_available_prompt_emotes(&glossary.emotes, &available);
+        Ok(emotes)
     }
 
     async fn load_glossary(&self) -> Result<Glossary> {
@@ -249,13 +273,12 @@ fn insert_available(available: &mut HashSet<String>, emote: SevenTvEmote) {
     available.insert(emote.name);
 }
 
-fn build_prompt_block(
+fn build_available_prompt_emotes(
     glossary: &[GlossaryEmote],
     available: &HashSet<String>,
-    max_prompt_emotes: usize,
-) -> Option<String> {
+) -> Option<Vec<PromptEmote>> {
     let mut seen = HashSet::new();
-    let mut lines = Vec::new();
+    let mut emotes = Vec::new();
     let mut stale_count = 0usize;
 
     for emote in glossary {
@@ -278,30 +301,22 @@ fn build_prompt_block(
             continue;
         }
 
-        let mut line = format!("- {name}: meaning={meaning}");
-        if let Some(usage) = emote
+        let usage = emote
             .usage
             .as_deref()
             .map(normalize_prompt_field)
-            .filter(|s| !s.is_empty())
-        {
-            line.push_str("; use=");
-            line.push_str(&usage);
-        }
-        if let Some(avoid) = emote
+            .filter(|s| !s.is_empty());
+        let avoid = emote
             .avoid
             .as_deref()
             .map(normalize_prompt_field)
-            .filter(|s| !s.is_empty())
-        {
-            line.push_str("; avoid=");
-            line.push_str(&avoid);
-        }
-        lines.push(line);
-
-        if lines.len() >= max_prompt_emotes {
-            break;
-        }
+            .filter(|s| !s.is_empty());
+        emotes.push(PromptEmote {
+            name: name.to_string(),
+            meaning,
+            usage,
+            avoid,
+        });
     }
 
     if stale_count > 0 {
@@ -311,14 +326,147 @@ fn build_prompt_block(
         );
     }
 
+    if emotes.is_empty() {
+        return None;
+    }
+
+    Some(emotes)
+}
+
+fn build_prompt_block(
+    emotes: &[PromptEmote],
+    max_prompt_emotes: usize,
+    instruction: &str,
+    recent_chat: &str,
+) -> Option<String> {
+    let lines = rank_prompt_emotes(emotes, instruction, recent_chat)
+        .into_iter()
+        .take(max_prompt_emotes)
+        .map(format_prompt_emote_line)
+        .collect::<Vec<_>>();
+
     if lines.is_empty() {
         return None;
     }
 
     Some(format!(
-        "\n\n7TV emotes available in this channel:\nUse only these exact emote codes, only when they naturally match the tone. Do not explain emotes. Use at most one or two emotes per response, and skip emotes for serious topics.\n{}",
+        "\n\n7TV emotes available in this channel:\nUse only these exact emote codes. In normal casual Twitch-chat replies, include exactly one fitting emote by default. Use zero emotes only for extremely serious, administrative, fact-sensitive, or clearly unsuitable topics. Use two emotes only when the chat moment is obviously hype, chaotic, or spammy. Prefer emotes recently used by chat when they fit. Do not invent or explain emotes.\n{}",
         lines.join("\n")
     ))
+}
+
+fn rank_prompt_emotes<'a>(
+    emotes: &'a [PromptEmote],
+    instruction: &str,
+    recent_chat: &str,
+) -> Vec<&'a PromptEmote> {
+    let context_terms = searchable_terms(instruction);
+    let mut ranked = emotes
+        .iter()
+        .enumerate()
+        .map(|(index, emote)| {
+            let recent_count = recent_emote_count(recent_chat, &emote.name);
+            let context_score = context_match_score(emote, &context_terms);
+            (index, recent_count, context_score, emote)
+        })
+        .collect::<Vec<_>>();
+
+    ranked.sort_by(|a, b| {
+        b.1.cmp(&a.1)
+            .then_with(|| b.2.cmp(&a.2))
+            .then_with(|| a.0.cmp(&b.0))
+    });
+
+    ranked.into_iter().map(|(_, _, _, emote)| emote).collect()
+}
+
+fn format_prompt_emote_line(emote: &PromptEmote) -> String {
+    let mut line = format!("- {}: meaning={}", emote.name, emote.meaning);
+    if let Some(usage) = emote.usage.as_deref() {
+        line.push_str("; use=");
+        line.push_str(usage);
+    }
+    if let Some(avoid) = emote.avoid.as_deref() {
+        line.push_str("; avoid=");
+        line.push_str(avoid);
+    }
+    line
+}
+
+fn recent_emote_count(recent_chat: &str, emote_name: &str) -> usize {
+    recent_chat
+        .split_whitespace()
+        .filter(|token| token_matches_emote(token, emote_name))
+        .count()
+}
+
+fn token_matches_emote(token: &str, emote_name: &str) -> bool {
+    token == emote_name || trim_wrapping_chat_punctuation(token) == emote_name
+}
+
+fn trim_wrapping_chat_punctuation(token: &str) -> &str {
+    token.trim_matches(|c| {
+        matches!(
+            c,
+            ',' | '.' | '!' | ';' | '"' | '\'' | '(' | ')' | '[' | ']' | '{' | '}'
+        )
+    })
+}
+
+fn context_match_score(emote: &PromptEmote, context_terms: &[String]) -> usize {
+    if context_terms.is_empty() {
+        return 0;
+    }
+
+    let mut fields = emote.meaning.clone();
+    if let Some(usage) = emote.usage.as_deref() {
+        fields.push(' ');
+        fields.push_str(usage);
+    }
+    let emote_terms = searchable_terms(&fields);
+
+    context_terms
+        .iter()
+        .filter(|query| emote_terms.iter().any(|term| terms_match(query, term)))
+        .count()
+}
+
+fn searchable_terms(text: &str) -> Vec<String> {
+    let mut seen = HashSet::new();
+    text.split(|c: char| !c.is_alphanumeric())
+        .map(str::to_lowercase)
+        .filter(|term| term.len() >= 4 && !is_context_stopword(term))
+        .filter(|term| seen.insert(term.clone()))
+        .collect()
+}
+
+fn is_context_stopword(term: &str) -> bool {
+    matches!(
+        term,
+        "eine"
+            | "einer"
+            | "einem"
+            | "einen"
+            | "etwas"
+            | "wenn"
+            | "oder"
+            | "nicht"
+            | "bitte"
+            | "reply"
+            | "message"
+            | "author"
+            | "parent"
+            | "user"
+            | "chat"
+            | "channel"
+    )
+}
+
+fn terms_match(query: &str, term: &str) -> bool {
+    query == term
+        || (query.len() >= 5
+            && term.len() >= 5
+            && (query.starts_with(term) || term.starts_with(query)))
 }
 
 fn normalize_prompt_field(value: &str) -> String {
@@ -396,7 +544,8 @@ mod tests {
             Vec::new(),
         );
 
-        let prompt = build_prompt_block(&glossary, &available, 40).unwrap();
+        let emotes = build_available_prompt_emotes(&glossary, &available).unwrap();
+        let prompt = build_prompt_block(&emotes, 40, "", "").unwrap();
 
         assert!(prompt.contains("KEKW"));
         assert!(prompt.contains("meaning=lachen"));
@@ -483,7 +632,8 @@ mod tests {
         let subscriber = tracing_subscriber::registry().with(capture);
 
         tracing::subscriber::with_default(subscriber, || {
-            let prompt = build_prompt_block(&glossary, &available, 40).unwrap();
+            let emotes = build_available_prompt_emotes(&glossary, &available).unwrap();
+            let prompt = build_prompt_block(&emotes, 40, "", "").unwrap();
             assert!(prompt.contains("KEKW"));
             assert!(!prompt.contains("MissingA"));
             assert!(!prompt.contains("MissingB"));
@@ -536,9 +686,94 @@ mod tests {
             Vec::new(),
         );
 
-        let prompt = build_prompt_block(&glossary, &available, 1).unwrap();
+        let emotes = build_available_prompt_emotes(&glossary, &available).unwrap();
+        let prompt = build_prompt_block(&emotes, 1, "", "").unwrap();
 
         assert!(prompt.contains("A"));
         assert!(!prompt.contains("B"));
+    }
+
+    #[test]
+    fn prompt_prioritizes_emotes_seen_in_recent_chat() {
+        let glossary = vec![
+            GlossaryEmote {
+                name: "KEKW".into(),
+                meaning: "lachen".into(),
+                usage: Some("wenn etwas lustig ist".into()),
+                avoid: None,
+            },
+            GlossaryEmote {
+                name: "LocalEmote".into(),
+                meaning: "lokaler Channel-Insider".into(),
+                usage: Some("wenn der Chat den Insider anspricht".into()),
+                avoid: None,
+            },
+        ];
+        let available = merge_emote_sets(
+            vec![
+                SevenTvEmote {
+                    name: "KEKW".into(),
+                },
+                SevenTvEmote {
+                    name: "LocalEmote".into(),
+                },
+            ],
+            Vec::new(),
+        );
+        let emotes = build_available_prompt_emotes(&glossary, &available).unwrap();
+
+        let prompt = build_prompt_block(
+            &emotes,
+            2,
+            "sag etwas lustiges",
+            "## Recent chat (#main)\n[13:37] bob: LocalEmote",
+        )
+        .unwrap();
+
+        let local_pos = prompt.find("- LocalEmote:").unwrap();
+        let kekw_pos = prompt.find("- KEKW:").unwrap();
+        assert!(
+            local_pos < kekw_pos,
+            "recent chat emote should rank first:\n{prompt}"
+        );
+    }
+
+    #[test]
+    fn prompt_prioritizes_context_matches_when_chat_is_neutral() {
+        let glossary = vec![
+            GlossaryEmote {
+                name: "LocalEmote".into(),
+                meaning: "lokaler Channel-Insider".into(),
+                usage: Some("wenn der Chat den Insider anspricht".into()),
+                avoid: None,
+            },
+            GlossaryEmote {
+                name: "KEKW".into(),
+                meaning: "lachen, etwas ist lustig".into(),
+                usage: Some("bei Witzen oder Fail-Momenten".into()),
+                avoid: None,
+            },
+        ];
+        let available = merge_emote_sets(
+            vec![
+                SevenTvEmote {
+                    name: "LocalEmote".into(),
+                },
+                SevenTvEmote {
+                    name: "KEKW".into(),
+                },
+            ],
+            Vec::new(),
+        );
+        let emotes = build_available_prompt_emotes(&glossary, &available).unwrap();
+
+        let prompt = build_prompt_block(&emotes, 2, "sag etwas lustiges", "").unwrap();
+
+        let local_pos = prompt.find("- LocalEmote:").unwrap();
+        let kekw_pos = prompt.find("- KEKW:").unwrap();
+        assert!(
+            kekw_pos < local_pos,
+            "context-matching emote should outrank TOML order:\n{prompt}"
+        );
     }
 }

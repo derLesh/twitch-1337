@@ -55,7 +55,7 @@ async fn ai_command_injects_7tv_emote_glossary() {
         .with_ai()
         .with_config(|c| {
             if let Some(ai) = c.ai.as_mut() {
-                ai.history_length = 0;
+                ai.history_length = 10;
                 ai.emotes.enabled = true;
                 ai.emotes.include_global = true;
             }
@@ -112,6 +112,9 @@ meaning = "steht nicht im aktuellen 7TV-Katalog"
         .mount(&bot.seventv_mock)
         .await;
 
+    bot.send("bob", "LocalEmote heute stark").await;
+    tokio::time::sleep(Duration::from_millis(50)).await;
+
     bot.llm.push_tool_message("passt KEKW");
     bot.send("alice", "!ai sag etwas lustiges").await;
     let body = bot.expect_reply(Duration::from_secs(2)).await;
@@ -129,6 +132,13 @@ meaning = "steht nicht im aktuellen 7TV-Katalog"
     assert!(system_msg.content.contains("meaning=lachen"));
     assert!(system_msg.content.contains("LocalEmote"));
     assert!(!system_msg.content.contains("MissingEmote"));
+    let local_pos = system_msg.content.find("- LocalEmote:").unwrap();
+    let kekw_pos = system_msg.content.find("- KEKW:").unwrap();
+    assert!(
+        local_pos < kekw_pos,
+        "recent chat emote should rank before generic context match:\n{}",
+        system_msg.content
+    );
 
     bot.shutdown().await;
 }

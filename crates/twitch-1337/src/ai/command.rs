@@ -328,19 +328,6 @@ where
             date: &now_berlin,
         };
         let mut system_prompt_head = inject::substitute(&system_template, vars);
-        if let Some(ref emotes) = self.emotes
-            && let Some(block) = emotes.prompt_block(&ctx.privmsg.channel_id).await
-        {
-            system_prompt_head.push_str(&block);
-        }
-        if grok_alias {
-            system_prompt_head.push_str(GROK_SYSTEM_APPENDIX);
-            if self.web.is_some() {
-                system_prompt_head.push_str(GROK_WEB_SYSTEM_APPENDIX);
-            }
-        } else if self.web.is_some() {
-            system_prompt_head.push_str(WEB_TOOLS_SYSTEM_APPENDIX);
-        }
         let instructions_head = inject::substitute(&instructions_template, vars);
 
         let invocation_channel = if cc.is_some_and(|c| c.is_ai_channel(&ctx.privmsg.channel_login))
@@ -369,9 +356,29 @@ where
             },
         )
         .await?;
-        let system_prompt = format!("{system_prompt_head}\n\n{memory}");
 
         let instruction_for_prompt = instruction_with_reply_context(&instruction, &ctx, grok_alias);
+        if let Some(ref emotes) = self.emotes
+            && let Some(block) = emotes
+                .prompt_block_for_turn(
+                    &ctx.privmsg.channel_id,
+                    &instruction_for_prompt,
+                    &recent_chat,
+                )
+                .await
+        {
+            system_prompt_head.push_str(&block);
+        }
+        if grok_alias {
+            system_prompt_head.push_str(GROK_SYSTEM_APPENDIX);
+            if self.web.is_some() {
+                system_prompt_head.push_str(GROK_WEB_SYSTEM_APPENDIX);
+            }
+        } else if self.web.is_some() {
+            system_prompt_head.push_str(WEB_TOOLS_SYSTEM_APPENDIX);
+        }
+        let system_prompt = format!("{system_prompt_head}\n\n{memory}");
+
         let user_message = if recent_chat.is_empty() {
             format!("{instructions_head}\n\n{instruction_for_prompt}")
         } else {
