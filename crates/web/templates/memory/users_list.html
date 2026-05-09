@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Users — twitch-1337{% endblock %}
+{% block content %}
+<h2>User notes ({{ items.len() }})</h2>
+<table>
+  <thead><tr><th>User ID</th><th>Display name</th><th>Updated</th></tr></thead>
+  <tbody>
+  {% for u in items %}
+    <tr>
+      <td><a href="/memory/users/{{ u.user_id }}">{{ u.user_id }}</a></td>
+      <td>{{ u.display_name }}</td>
+      <td>{{ u.updated_at }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

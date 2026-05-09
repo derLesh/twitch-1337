@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Memory — twitch-1337{% endblock %}
+{% block content %}
+<h2>Memory</h2>
+<ul>
+  <li><a href="/memory/soul">SOUL</a></li>
+  <li><a href="/memory/lore">LORE</a></li>
+  <li><a href="/memory/users">users ({{ user_count }})</a></li>
+  <li><a href="/memory/state">state ({{ state_count }})</a></li>
+</ul>
+{% endblock %}

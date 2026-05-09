@@ -38,11 +38,11 @@ unmount-prod-data:
 
 # Run locally with data dir in current directory and debug logging
 dev:
-  DATA_DIR=./crates/twitch-1337/data RUST_LOG=info,twitch_1337=debug cargo run -p twitch-1337
+  DATA_DIR=./crates/core/data RUST_LOG=info,twitch_1337=debug,twitch_1337_core=debug cargo run -p twitch-1337
 
 # Run tests with minimal output
 test-brief:
-    @cargo test -p twitch-1337 --quiet 2>&1 | grep "test result" | awk ' \
+    @cargo test --workspace --quiet 2>&1 | grep "test result" | awk ' \
     BEGIN { status = "ok" } \
     /FAILED/ { status = "FAILED" } \
     { \

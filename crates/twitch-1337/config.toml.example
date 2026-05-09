@@ -168,3 +168,11 @@ client_secret = "your_client_secret"
 # active_time_start = "18:00"  # HH:MM format
 # active_time_end = "23:00"
 # enabled = true
+
+# [web]                            # uncomment to enable the dashboard
+# enabled = true
+# bind_addr = "0.0.0.0:8080"
+# public_url = "https://bot.example.com"
+# session_secret = "<32+ bytes of hex>"
+# session_ttl = "7d"
+# mod_check_refresh = "5m"

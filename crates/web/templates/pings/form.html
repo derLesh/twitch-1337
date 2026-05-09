@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}{% if is_new %}New ping{% else %}Edit {{ name }}{% endif %} — twitch-1337{% endblock %}
+{% block content %}
+<h2>{% if is_new %}New ping{% else %}Edit `{{ name }}`{% endif %}</h2>
+{% if let Some(e) = error %}<div class="error">{{ e }}</div>{% endif %}
+<form method="post" action="{% if is_new %}/pings{% else %}/pings/{{ name }}{% endif %}">
+  <input type="hidden" name="_csrf" value="{{ csrf }}">
+  {% if is_new %}<label>Name <input name="name" required></label>{% endif %}
+  <label>Template
+    <textarea name="template" required>{{ template_text }}</textarea>
+  </label>
+  <button type="submit">Save</button>
+  <a href="/pings" role="button" class="secondary">Cancel</a>
+</form>
+{% endblock %}

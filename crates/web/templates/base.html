@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{% block title %}twitch-1337{% endblock %}</title>
+  <link rel="stylesheet" href="/assets/pico.min.css">
+  <link rel="stylesheet" href="/assets/app.css">
+  <script src="/assets/htmx.min.js" defer></script>
+  <script src="/assets/app.js" defer></script>
+</head>
+<body>
+  {% block layout %}
+  <main class="content">
+    {% block content %}{% endblock %}
+  </main>
+  {% endblock %}
+</body>
+</html>

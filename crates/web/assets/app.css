@@ -1,0 +1,5 @@
+.layout { display: flex; min-height: 100vh; }
+.sidebar { width: 220px; padding: 1rem; border-right: 1px solid #333; }
+.content { flex: 1; padding: 1.5rem; }
+.flash { background: #2d4a2d; padding: .5rem 1rem; border-radius: 4px; }
+.error { background: #4a2d2d; padding: .5rem 1rem; border-radius: 4px; }

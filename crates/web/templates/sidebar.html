@@ -1,0 +1,23 @@
+<aside class="sidebar">
+  <header><strong>twitch-1337</strong></header>
+  <nav>
+    <ul>
+      <li><a href="/pings">Pings</a></li>
+      <li>Memory
+        <ul>
+          <li><a href="/memory/soul">SOUL</a></li>
+          <li><a href="/memory/lore">LORE</a></li>
+          <li><a href="/memory/users">Users</a></li>
+          <li><a href="/memory/state">State</a></li>
+        </ul>
+      </li>
+    </ul>
+  </nav>
+  <footer>
+    <small>{{ user_login }}</small>
+    <form method="post" action="/logout">
+      <input type="hidden" name="_csrf" value="{{ csrf }}">
+      <button type="submit" class="secondary">Logout</button>
+    </form>
+  </footer>
+</aside>

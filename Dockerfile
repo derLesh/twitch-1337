@@ -51,5 +51,8 @@ COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certifi
 # Copy the static binary
 COPY --from=builder /app/target/x86_64-unknown-linux-musl/release/twitch-1337 /twitch-1337
 
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+  CMD ["/twitch-1337", "--healthcheck"]
+
 # Run the bot
 ENTRYPOINT ["/twitch-1337"]

@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}State — twitch-1337{% endblock %}
+{% block content %}
+<h2>State notes ({{ items.len() }})</h2>
+<p><a href="/memory/state/new" role="button">+ New state note</a></p>
+<table>
+  <thead><tr><th>Slug</th><th>Updated</th><th>Created by</th></tr></thead>
+  <tbody>
+  {% for s in items %}
+    <tr>
+      <td><a href="/memory/state/{{ s.slug }}">{{ s.slug }}</a></td>
+      <td>{{ s.updated_at }}</td>
+      <td>{{ s.created_by }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

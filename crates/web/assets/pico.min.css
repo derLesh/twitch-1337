@@ -1,0 +1,4 @@
+/* TODO: replace with real pico v2 minified css from
+   https://unpkg.com/@picocss/pico@2/css/pico.min.css */
+:root { --pico-color: #fff; --pico-bg: #11161d; }
+body { font-family: -apple-system, sans-serif; background: var(--pico-bg); color: var(--pico-color); margin: 0; }

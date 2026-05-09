@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Pings — twitch-1337{% endblock %}
+{% block content %}
+<h2>Pings</h2>
+{% if let Some(msg) = flash %}<div class="flash">{{ msg }}</div>{% endif %}
+<p><a href="/pings/new" role="button">+ New ping</a></p>
+<table>
+  <thead><tr><th>Name</th><th>Template</th><th>Members</th><th>Created by</th><th></th></tr></thead>
+  <tbody>
+  {% for row in rows %}
+    <tr>
+      <td><a href="/pings/{{ row.name }}">{{ row.name }}</a></td>
+      <td><code>{{ row.template }}</code></td>
+      <td>{{ row.members }}</td>
+      <td>{{ row.created_by }}</td>
+      <td>
+        <button hx-post="/pings/{{ row.name }}/delete" hx-confirm="Delete ping {{ row.name }}?" hx-target="closest tr" hx-swap="outerHTML" hx-headers='{"X-Csrf-Token": "{{ csrf }}"}'>Delete</button>
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} — twitch-1337{% endblock %}
+{% block content %}
+<h2>{{ title }}</h2>
+{% if let Some(e) = error %}<div class="error">{{ e }}</div>{% endif %}
+<form method="post" action="{{ save_url }}">
+  <input type="hidden" name="_csrf" value="{{ csrf }}">
+  <input type="hidden" name="mtime" value="{{ mtime }}">
+  <label>Body (max {{ byte_cap }} bytes)
+    <textarea name="body" rows="20">{{ body }}</textarea>
+  </label>
+  <button type="submit">Save</button>
+</form>
+{% if let Some(url) = delete_url %}
+<form method="post" action="{{ url }}" onsubmit="return confirm('Delete?')">
+  <input type="hidden" name="_csrf" value="{{ csrf }}">
+  <button type="submit" class="secondary">Delete</button>
+</form>
+{% endif %}
+{% endblock %}

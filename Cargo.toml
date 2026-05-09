@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/twitch-1337", "crates/llm"]
+members = ["crates/core", "crates/llm", "crates/twitch-1337", "crates/web"]
 
 [workspace.package]
 version = "0.1.0"
@@ -8,7 +8,9 @@ edition = "2024"
 license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
+askama = { version = "0.14" }
 async-trait = "0.1.89"
+axum = { version = "0.8", default-features = false, features = ["form", "http1", "json", "query", "tokio", "tower-log", "tracing"] }
 base64 = "0.22"
 bytesize = { version = "2", features = ["serde"] }
 chrono = { version = "0.4.44", features = ["now", "serde"], default-features = false }
@@ -17,11 +19,15 @@ color-eyre = "0.6"
 csv = "1.4.0"
 eyre = "0.6.12"
 futures-util = "0.3"
+hex = "0.4"
+humantime-serde = "1"
 infer = { version = "0.19", default-features = false }
 notify-debouncer-mini = "0.7"
+oauth2 = { version = "5", default-features = false, features = ["reqwest", "rustls-tls"] }
 rand = "0.10.1"
 reqwest = { version = "0.13", default-features = false, features = ["json", "rustls-no-provider", "stream"] }
 ron = "0.12.1"
+rust-embed = { version = "8", features = ["axum-ex"] }
 rustls = { version = "0.23", default-features = false, features = ["ring"] }
 schemars = { version = "1.2", features = ["derive"] }
 scraper = "0.26"
@@ -31,9 +37,17 @@ serde_json = "1"
 thiserror = "2.0.18"
 tokio = { version = "1.52.1", features = ["macros", "rt-multi-thread", "signal", "time", "fs"] }
 toml = "1.1.2"
+tower = { version = "0.5", features = ["util"] }
+tower-cookies = { version = "0.11", features = ["signed", "private"] }
+tower-http = { version = "0.6", features = ["fs", "trace"] }
 tracing = "0.1"
 tracing-error = "0.2.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+url = "2"
+mime_guess = "2"
+urlencoding = "2"
+time = "0.3"
+wiremock = "0.6"
 
 [workspace.lints.clippy]
 cast_lossless = "warn"
