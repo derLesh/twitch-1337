@@ -1,39 +1,52 @@
 {% extends "base.html" %}
 {% block title %}{{ title }} — twitch-1337{% endblock %}
 {% block content %}
-<h2>{{ title }}</h2>
+<div class="page-head">
+  <div>
+    <h1>{{ title }}</h1>
+    <p class="page-sub">{{ subtitle }}</p>
+  </div>
+</div>
+
 {% if let Some(e) = error %}<div class="error">{{ e }}</div>{% endif %}
+
 <form method="post" action="{{ save_url }}">
   <input type="hidden" name="_csrf" value="{{ csrf }}">
   <input type="hidden" name="mtime" value="{{ mtime }}">
-  {% if show_user_fm %}
-  <fieldset>
-    <legend>Frontmatter</legend>
-    <label>username (Twitch login)
-      <input name="fm_username" value="{{ fm_username }}" placeholder="leave empty to preserve">
-    </label>
-    <label>display_name
-      <input name="fm_display_name" value="{{ fm_display_name }}" placeholder="leave empty to preserve">
-    </label>
-  </fieldset>
-  {% endif %}
-  {% if show_state_fm %}
-  <fieldset>
-    <legend>Frontmatter</legend>
-    <label>created_by (Twitch user id)
-      <input name="fm_created_by" value="{{ fm_created_by }}" placeholder="leave empty to preserve">
-    </label>
-  </fieldset>
-  {% endif %}
-  <label>Body (max {{ byte_cap }} bytes)
-    <textarea name="body" rows="20">{{ body }}</textarea>
-  </label>
-  <button type="submit">Save</button>
+  <div class="editor">
+    <div class="editor-meta">
+      <span class="meta-tag mono">{{ meta_path }}</span>
+      <span class="meta-dot"></span>
+      <span class="mono">mtime {{ mtime }}</span>
+    </div>
+    {% if show_user_fm %}
+    <input type="text" class="editor-input" name="fm_username" value="{{ fm_username }}" placeholder="username (Twitch login) — leave empty to preserve" autocomplete="off" spellcheck="false">
+    <input type="text" class="editor-input" name="fm_display_name" value="{{ fm_display_name }}" placeholder="display_name — leave empty to preserve" autocomplete="off" spellcheck="false">
+    {% endif %}
+    {% if show_state_fm %}
+    <input type="text" class="editor-input" name="fm_created_by" value="{{ fm_created_by }}" placeholder="created_by (Twitch user id) — leave empty to preserve" autocomplete="off" spellcheck="false">
+    {% endif %}
+    {% if title == "new state note" %}
+    <input type="text" class="editor-input" name="slug" placeholder="slug (1-64 chars: a-z, 0-9, ._-)" required autocomplete="off" spellcheck="false">
+    {% endif %}
+    <textarea name="body" rows="22" spellcheck="false">{{ body }}</textarea>
+    <div class="editor-foot">
+      <div class="bytes">
+        <span>{{ body.len() }} / {{ byte_cap }} B</span>
+        <div class="bytes-bar"><span style="width: {{ pct }}%"></span></div>
+      </div>
+      <span class="kbd-hint"><kbd>⌘</kbd><kbd>S</kbd> to save</span>
+    </div>
+  </div>
+  <div class="editor-actions">
+    <button type="submit" class="btn primary">Save</button>
+    <a href="/memory" class="btn ghost">Cancel</a>
+  </div>
 </form>
 {% if let Some(url) = delete_url %}
-<form method="post" action="{{ url }}" onsubmit="return confirm('Delete?')">
+<form method="post" action="{{ url }}" class="editor-actions" onsubmit="return confirm('Delete?')">
   <input type="hidden" name="_csrf" value="{{ csrf }}">
-  <button type="submit" class="secondary">Delete</button>
+  <button type="submit" class="btn danger">Delete</button>
 </form>
 {% endif %}
 {% endblock %}

@@ -1,20 +1,29 @@
 {% extends "base.html" %}
 {% block title %}Conflict — twitch-1337{% endblock %}
 {% block content %}
-<h2>Edit conflict — {{ kind }}{% if !id.is_empty() %} / {{ id }}{% endif %}</h2>
-<p class="error">File changed since you opened it (dreamer ritual or AI tool wrote in between). Your draft is preserved on the right — copy what you need into the textarea and resubmit. The hidden mtime token has been refreshed to the current on-disk value, so the resubmit will overwrite.</p>
-<div style="display:flex;gap:1rem">
-  <div style="flex:1">
-    <h3>Current on-disk (mtime {{ current_mtime }})</h3>
-    <pre>{{ current_body }}</pre>
+<div class="page-head">
+  <div>
+    <h1>Edit conflict — {{ kind }}{% if !id.is_empty() %} / {{ id }}{% endif %}</h1>
+    <p class="page-sub">File changed on disk while you were editing — likely the dreamer ritual or an AI tool wrote in between. Your draft is preserved on the right; the hidden mtime token has been refreshed so resubmitting will overwrite the current contents.</p>
   </div>
-  <form method="post" action="" style="flex:1">
+</div>
+
+<div class="error">File changed since you opened it. Copy what you need from the left into the textarea on the right and resubmit.</div>
+
+<div class="conflict-grid">
+  <div>
+    <h3>Current on-disk (mtime {{ current_mtime }})</h3>
+    <pre class="conflict-pre">{{ current_body }}</pre>
+  </div>
+  <form method="post" action="">
+    <h3>Your draft (resubmit)</h3>
     <input type="hidden" name="_csrf" value="{{ csrf }}">
     <input type="hidden" name="mtime" value="{{ current_mtime }}">
-    <label>Your draft (resubmit)
-      <textarea name="body" rows="20">{{ draft }}</textarea>
-    </label>
-    <button type="submit">Save (overwrite current)</button>
+    <textarea class="input" name="body" rows="24" spellcheck="false">{{ draft }}</textarea>
+    <div class="form-actions">
+      <button type="submit" class="btn primary">Save (overwrite current)</button>
+      <a href="/memory" class="btn ghost">Cancel</a>
+    </div>
   </form>
 </div>
 {% endblock %}

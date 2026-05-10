@@ -4,18 +4,47 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>{% block title %}twitch-1337{% endblock %}</title>
-  <link rel="stylesheet" href="/assets/pico.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap">
   <link rel="stylesheet" href="/assets/app.css">
   <script src="/assets/htmx.min.js" defer></script>
   <script src="/assets/app.js" defer></script>
 </head>
 <body>
   {% block layout %}
-  <div class="dashboard">
+  <div class="shell">
     {% include "sidebar.html" %}
-    <main class="content">
-      {% block content %}{% endblock %}
-    </main>
+    <div class="main">
+      <header class="topbar">
+        <nav class="crumbs" aria-label="Breadcrumb">
+          <span class="crumb-root">~</span>
+          <span class="crumb-sep">/</span>
+          <span class="crumb-current">{% block crumb %}{{ current_page }}{% endblock %}</span>
+        </nav>
+        <div class="topbar-right">
+          <label class="search">
+            <span class="search-icon" aria-hidden="true">⌕</span>
+            <input id="page-search" type="search" placeholder="Search" autocomplete="off" spellcheck="false">
+            <kbd>/</kbd>
+          </label>
+          <div id="berlin-timer" class="timer-chip" data-armed="false">
+            <span class="timer-pulse" aria-hidden="true"></span>
+            <span class="timer-label">T-MINUS</span>
+            <span class="timer-clock">--:--:--</span>
+            <span class="timer-tz">CET</span>
+          </div>
+          <button type="button" class="cmdk" aria-label="Command palette" disabled>
+            <kbd>⌘</kbd><kbd>K</kbd>
+          </button>
+        </div>
+      </header>
+      <div class="scroll">
+        <div class="page">
+          {% block content %}{% endblock %}
+        </div>
+      </div>
+    </div>
   </div>
   {% endblock %}
 </body>

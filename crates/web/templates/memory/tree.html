@@ -1,11 +1,29 @@
 {% extends "base.html" %}
 {% block title %}Memory — twitch-1337{% endblock %}
 {% block content %}
-<h2>Memory</h2>
-<ul>
-  <li><a href="/memory/soul">SOUL</a></li>
-  <li><a href="/memory/lore">LORE</a></li>
-  <li><a href="/memory/users">users ({{ user_count }})</a></li>
-  <li><a href="/memory/state">state ({{ state_count }})</a></li>
-</ul>
+<div class="page-head">
+  <div>
+    <h1>Memory</h1>
+    <p class="page-sub">Markdown files under <code>$DATA_DIR/memories/</code>. users ({{ user_count }}) · state ({{ state_count }}).</p>
+  </div>
+</div>
+
+<div class="stat-strip">
+  <a class="stat" href="/memory/soul" style="text-decoration:none;color:inherit;">
+    <div class="stat-label">SOUL</div>
+    <div class="stat-value">— <span class="stat-unit">memories/SOUL.md</span></div>
+  </a>
+  <a class="stat" href="/memory/lore" style="text-decoration:none;color:inherit;">
+    <div class="stat-label">LORE</div>
+    <div class="stat-value">— <span class="stat-unit">memories/LORE.md</span></div>
+  </a>
+  <a class="stat" href="/memory/users" style="text-decoration:none;color:inherit;">
+    <div class="stat-label">Users</div>
+    <div class="stat-value">{{ user_count }} <span class="stat-unit">users ({{ user_count }})</span></div>
+  </a>
+  <a class="stat" href="/memory/state" style="text-decoration:none;color:inherit;">
+    <div class="stat-label">State</div>
+    <div class="stat-value">{{ state_count }} <span class="stat-unit">state ({{ state_count }})</span></div>
+  </a>
+</div>
 {% endblock %}

@@ -71,6 +71,7 @@ pub fn build_router(state: WebState) -> Router {
         )
         .merge(routes::pings::router())
         .merge(routes::memory::router())
+        .merge(routes::stubs::router())
         .route_layer(axum::middleware::from_fn_with_state(
             state.clone(),
             auth::require_mod,

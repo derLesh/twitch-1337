@@ -1,8 +1,12 @@
 {% extends "base.html" %}
+{% block title %}Login failed — twitch-1337{% endblock %}
 {% block layout %}
-<main class="content">
-  <h1>Login failed</h1>
-  <p>Something went wrong while signing you in. The login link may have expired or been used already &mdash; this often happens when the callback page is reloaded or opened in a second tab.</p>
-  <p><a href="/login" role="button">Try again</a></p>
-</main>
+<div class="shell-solo">
+  <div class="auth-card">
+    <div class="auth-mark" aria-hidden="true">⌬</div>
+    <h1>Login failed</h1>
+    <p>Something went wrong while signing you in. The login link may have expired or been used already &mdash; this often happens when the callback page is reloaded or opened in a second tab.</p>
+    <a href="/login" class="btn primary">Try again</a>
+  </div>
+</div>
 {% endblock %}

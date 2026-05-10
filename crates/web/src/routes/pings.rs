@@ -6,11 +6,13 @@
 //! Persistence + validation reuse `PingManager`'s existing checks
 //! (control-char rejection, duplicate detection, name allowlist).
 
+use std::collections::HashSet;
+
 use askama::Template;
 use axum::Router;
 use axum::extract::{Extension, Path, State};
 use axum::http::{HeaderMap, StatusCode};
-use axum::response::{Html, IntoResponse, Redirect, Response};
+use axum::response::{IntoResponse, Redirect, Response};
 use axum::routing::{get, post};
 use serde::Deserialize;
 use tower_cookies::Cookies;
@@ -21,6 +23,7 @@ use crate::auth::csrf;
 use crate::auth::session::Session;
 use crate::error::WebError;
 use crate::flash;
+use crate::routes::{initial_of, render, render_with};
 use crate::state::WebState;
 
 pub fn router() -> Router<WebState> {
@@ -42,12 +45,17 @@ struct RowView {
     template: String,
     members: usize,
     created_by: String,
+    created_initial: String,
 }
 
 #[derive(Template)]
 #[template(path = "pings/list.html")]
 struct ListTpl {
     rows: Vec<RowView>,
+    total_pings: usize,
+    total_members: usize,
+    with_variables: usize,
+    custom_cooldowns: usize,
     flash: Option<String>,
     csrf: String,
     user_login: String,
@@ -71,10 +79,6 @@ struct FormTpl<'a> {
     member_error: Option<String>,
 }
 
-fn render<T: Template>(tpl: &T) -> Result<Response, WebError> {
-    render_with(StatusCode::OK, tpl)
-}
-
 /// Snapshot a ping for the edit-form template: cloned template text + a
 /// sorted member list. Returns `None` when the ping doesn't exist so callers
 /// can map to a 4xx without re-borrowing the manager.
@@ -85,33 +89,45 @@ fn ping_snapshot(mgr: &PingManager, name: &str) -> Option<(String, Vec<String>)>
     Some((p.template.clone(), members))
 }
 
-fn render_with<T: Template>(status: StatusCode, tpl: &T) -> Result<Response, WebError> {
-    let body = tpl
-        .render()
-        .map_err(|e| WebError::Internal(eyre::eyre!("render: {e}")))?;
-    Ok((status, Html(body)).into_response())
-}
-
 async fn list(
     State(state): State<WebState>,
     Extension(session): Extension<Session>,
     cookies: Cookies,
 ) -> Result<Response, WebError> {
     let mgr = state.ping_manager.read().await;
-    let mut rows: Vec<RowView> = mgr
-        .iter()
-        .map(|(name, ping)| RowView {
+    let mut rows: Vec<RowView> = Vec::new();
+    let mut unique_members: HashSet<&str> = HashSet::new();
+    let mut with_variables: usize = 0;
+    let mut custom_cooldowns: usize = 0;
+    for (name, ping) in mgr.iter() {
+        rows.push(RowView {
             name: name.clone(),
             template: ping.template.clone(),
             members: ping.members.len(),
+            created_initial: initial_of(&ping.created_by),
             created_by: ping.created_by.clone(),
-        })
-        .collect();
-    rows.sort_by(|a, b| a.name.cmp(&b.name));
+        });
+        for m in &ping.members {
+            unique_members.insert(m.as_str());
+        }
+        if ping.template.contains("{mentions}") || ping.template.contains("{sender}") {
+            with_variables += 1;
+        }
+        if ping.cooldown.is_some() {
+            custom_cooldowns += 1;
+        }
+    }
+    let total_members = unique_members.len();
     drop(mgr);
 
+    rows.sort_by(|a, b| a.name.cmp(&b.name));
+    let total_pings = rows.len();
     let tpl = ListTpl {
         rows,
+        total_pings,
+        total_members,
+        with_variables,
+        custom_cooldowns,
         flash: flash::take(&cookies),
         csrf: csrf::encode(&session.csrf_value),
         user_login: session.user_login.clone(),

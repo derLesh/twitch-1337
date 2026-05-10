@@ -1,17 +1,34 @@
 {% extends "base.html" %}
 {% block title %}Users — twitch-1337{% endblock %}
 {% block content %}
-<h2>User notes ({{ items.len() }})</h2>
-<table>
-  <thead><tr><th>User ID</th><th>Display name</th><th>Updated</th></tr></thead>
-  <tbody>
+<div class="page-head">
+  <div>
+    <h1>Users <span class="count">({{ items.len() }})</span></h1>
+    <p class="page-sub">Per-user character sheets at <code>memories/users/&lt;id&gt;.md</code>. 4 KiB cap each.</p>
+  </div>
+</div>
+
+{% if items.is_empty() %}
+  <div class="empty">No user notes yet.</div>
+{% else %}
+<div class="user-grid">
   {% for u in items %}
-    <tr>
-      <td><a href="/memory/users/{{ u.user_id }}">{{ u.user_id }}</a></td>
-      <td>{{ u.display_name }}</td>
-      <td>{{ u.updated_at }}</td>
-    </tr>
+  <div class="user-card" data-filter="{{ u.user_id }} {{ u.display_name }} {{ u.note }}">
+    <div class="user-card-head">
+      <span class="avatar" style="width:36px;height:36px;font-size:13px;background:oklch(0.55 0.10 220);">{{ u.initial }}</span>
+      <div>
+        <div class="user-name">{{ u.display_name }}</div>
+        <div class="user-id">id {{ u.user_id }}</div>
+      </div>
+      <span class="user-updated">{{ u.updated_at }}</span>
+    </div>
+    <div class="user-note">{% if u.note.is_empty() %}<span class="muted">(empty)</span>{% else %}{{ u.note }}{% endif %}</div>
+    <div class="user-card-foot">
+      <a class="link" href="/memory/users/{{ u.user_id }}">Open</a>
+      <span class="link muted" title="Reset is not exposed via the dashboard">Reset</span>
+    </div>
+  </div>
   {% endfor %}
-  </tbody>
-</table>
+</div>
+{% endif %}
 {% endblock %}

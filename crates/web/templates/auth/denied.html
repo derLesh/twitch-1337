@@ -1,8 +1,12 @@
 {% extends "base.html" %}
+{% block title %}Access denied — twitch-1337{% endblock %}
 {% block layout %}
-<main class="content">
-  <h1>Access denied</h1>
-  <p>Only moderators of the configured channel may access this dashboard.</p>
-  <p><a href="/login">Try again with a different Twitch account</a></p>
-</main>
+<div class="shell-solo">
+  <div class="auth-card">
+    <div class="auth-mark" aria-hidden="true">⌬</div>
+    <h1>Access denied</h1>
+    <p>Only moderators of the configured channel may access this dashboard. Sign in with a Twitch account that has mod privileges to continue.</p>
+    <a href="/login" class="btn primary">Try a different account</a>
+  </div>
+</div>
 {% endblock %}

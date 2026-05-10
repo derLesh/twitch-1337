@@ -1,29 +1,19 @@
-//! `/memory` viewer + editor routes (Tasks 5–6).
+//! `/memory` viewer + editor routes.
 //!
-//! Mounts under the authed sub-router so every entry point is mod-gated.
-//! GET handlers render read-only viewers and create/edit forms; POST
-//! handlers save/create/delete with `MemoryStore::write_with_guard` so a
-//! stale mtime token surfaces as a conflict page instead of clobbering an
-//! AI/dreamer write.
+//! POST handlers go through `MemoryStore::write_with_guard` so a stale mtime
+//! token surfaces as a conflict page instead of clobbering an AI/dreamer write.
 //!
-//! ## Path validation
-//!
-//! `:user_id` is matched against `^[0-9]{1,32}$` and `:slug` is delegated
-//! to `validate_state_slug` (the same rule the store enforces) *before*
-//! any filesystem access — together they're the only barrier between an
-//! attacker-controlled URL and `MemoryStore::read_kind`. Any other shape
-//! returns `WebError::Validation` (400).
-//!
-//! ## Route precedence
-//!
-//! `/memory/state/new` is declared *before* `/memory/state/{slug}` so axum
-//! matches the literal first. A regression test pins this ordering.
+//! `:user_id` and `:slug` are validated *before* any filesystem access —
+//! together they're the only barrier between an attacker URL and
+//! `MemoryStore::read_kind`. `/memory/state/new` is declared *before*
+//! `/memory/state/{slug}` so axum matches the literal first; a regression
+//! test pins this ordering.
 
 use askama::Template;
 use axum::Router;
 use axum::extract::{Extension, Path, State};
 use axum::http::StatusCode;
-use axum::response::{Html, IntoResponse, Redirect, Response};
+use axum::response::{IntoResponse, Redirect, Response};
 use axum::routing::{get, post};
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
@@ -37,6 +27,7 @@ use crate::auth::csrf;
 use crate::auth::session::Session;
 use crate::error::{ConflictPayload, WebError};
 use crate::flash;
+use crate::routes::{initial_of, render, render_with};
 use crate::state::WebState;
 
 pub fn router() -> Router<WebState> {
@@ -69,10 +60,16 @@ struct TreeTpl {
 #[template(path = "memory/editor.html")]
 struct EditorTpl<'a> {
     title: &'a str,
+    subtitle: &'a str,
+    meta_path: String,
     body: &'a str,
     csrf: &'a str,
     mtime: u64,
     byte_cap: usize,
+    /// Pre-computed `body.len() * 100 / byte_cap`, clamped to 100.
+    /// Lives here (not the template) because Askama can't divide a
+    /// `usize` into a percentage cleanly.
+    pct: u8,
     save_url: &'a str,
     delete_url: Option<&'a str>,
     error: Option<String>,
@@ -91,6 +88,12 @@ struct StateRow {
     slug: String,
     updated_at: String,
     created_by: String,
+    /// Body byte count for the mini-bar in the state list.
+    bytes: usize,
+    /// `min(100, bytes * 100 / state_cap)` — pre-computed for the same
+    /// reason as `EditorTpl::pct`.
+    pct: u8,
+    created_initial: String,
 }
 
 #[derive(Template)]
@@ -106,6 +109,12 @@ struct UserRow {
     user_id: String,
     display_name: String,
     updated_at: String,
+    /// First non-frontmatter line, truncated to 140 chars — rendered in
+    /// the user card body excerpt.
+    note: String,
+    /// Uppercased first character of the display name (or `?` if empty)
+    /// for the avatar circle.
+    initial: String,
 }
 
 #[derive(Template)]
@@ -117,34 +126,54 @@ struct UsersListTpl {
     current_page: &'static str,
 }
 
-fn render<T: Template>(tpl: &T) -> Result<Response, WebError> {
-    render_with(StatusCode::OK, tpl)
-}
-
-fn render_with<T: Template>(status: StatusCode, tpl: &T) -> Result<Response, WebError> {
-    let body = tpl
-        .render()
-        .map_err(|e| WebError::Internal(eyre::eyre!("render: {e}")))?;
-    Ok((status, Html(body)).into_response())
-}
-
 fn fmt_ts(t: DateTime<Utc>) -> String {
     t.format("%Y-%m-%d %H:%M UTC").to_string()
 }
 
-/// `^[0-9]{1,32}$` without pulling in a regex crate — the only allowed
-/// shape is a positive-length, ≤32-char ASCII-digit string. This is the
-/// sole barrier between an attacker URL and `read_kind`, so it must reject
-/// dot-segments, slashes, and percent-encoded byte sequences alike.
+/// `(used * 100 / cap).min(100)` as a `u8`. Clamps to 100 on `cap == 0`.
+fn pct_of(used: usize, cap: usize) -> u8 {
+    if cap == 0 {
+        return 100;
+    }
+    let raw = used.saturating_mul(100) / cap;
+    raw.min(100) as u8
+}
+
+fn meta_path_for(kind: &FileKind) -> String {
+    format!("memories/{}", kind.relative_path().display())
+}
+
+fn subtitle_for_kind(kind: &FileKind) -> &'static str {
+    match kind {
+        FileKind::Soul => "The bot's stable self-description. Read on every `!ai` turn.",
+        FileKind::Lore => "Channel-wide history and running threads.",
+        FileKind::User { .. } => "Per-user character sheet.",
+        FileKind::State { .. } => "Persistent state note.",
+    }
+}
+
+/// First non-empty line, stripped of a leading `# `, truncated to 140 chars.
+/// Char-aware so we never slice mid-codepoint.
+fn note_excerpt(body: &str) -> String {
+    let line = body
+        .lines()
+        .map(str::trim)
+        .find(|l| !l.is_empty())
+        .unwrap_or("");
+    let line = line.strip_prefix("# ").unwrap_or(line);
+    line.chars().take(140).collect()
+}
+
+/// `^[0-9]{1,32}$` without a regex crate. Sole barrier between an attacker URL
+/// and `read_kind`, so it must reject dot-segments, slashes, and percent-encoded
+/// byte sequences alike.
 fn is_valid_user_id(s: &str) -> bool {
     !s.is_empty() && s.len() <= 32 && s.bytes().all(|b| b.is_ascii_digit())
 }
 
-/// Wraps `validate_state_slug` so the route layer rejects bad slugs with the
-/// same rule the store enforces (charset, length, `..`, reserved literals)
-/// — `..` is the security-critical case: without it a `/memory/state/..`
-/// URL would reach `read_kind` and could escape `memories/state/` to leak
-/// SOUL.md or LORE.md via the state viewer.
+/// `..` is the security-critical case: without it a `/memory/state/..` URL would
+/// reach `read_kind` and could escape `memories/state/` to leak SOUL.md or
+/// LORE.md via the state viewer.
 fn validate_slug(slug: &str) -> Result<(), WebError> {
     validate_state_slug(slug).map_err(|_| WebError::Validation {
         field: "slug".into(),
@@ -194,12 +223,16 @@ async fn view_kind(
         .map_err(|e| WebError::Internal(eyre::eyre!("current_mtime: {e}")))?;
     let byte_cap = state.memory_store.caps().limit_for(&kind);
     let csrf_hex = csrf::encode(&session.csrf_value);
+    let pct = pct_of(mf.body.len(), byte_cap);
     render(&EditorTpl {
         title: &title,
+        subtitle: subtitle_for_kind(&kind),
+        meta_path: meta_path_for(&kind),
         body: &mf.body,
         csrf: &csrf_hex,
         mtime,
         byte_cap,
+        pct,
         save_url: &save_url,
         delete_url: delete_url.as_deref(),
         error: None,
@@ -262,10 +295,18 @@ async fn list_users(
                 _ => String::new(),
             };
             let display_name = mf.frontmatter.display_name.unwrap_or_default();
+            let initial = initial_of(if display_name.is_empty() {
+                &user_id
+            } else {
+                &display_name
+            });
+            let note = note_excerpt(&mf.body);
             UserRow {
                 user_id,
                 display_name,
                 updated_at: fmt_ts(mf.frontmatter.updated_at),
+                note,
+                initial,
             }
         })
         .collect();
@@ -313,6 +354,7 @@ async fn list_state(
         .list_state()
         .await
         .map_err(|e| WebError::Internal(eyre::eyre!("list_state: {e}")))?;
+    let cap = state.memory_store.caps().state_bytes;
     let items = items
         .into_iter()
         .map(|mf| {
@@ -320,10 +362,16 @@ async fn list_state(
                 FileKind::State { slug } => slug.clone(),
                 _ => String::new(),
             };
+            let bytes = mf.body.len();
+            let created_by = mf.frontmatter.created_by.unwrap_or_default();
+            let created_initial = initial_of(&created_by);
             StateRow {
                 slug,
                 updated_at: fmt_ts(mf.frontmatter.updated_at),
-                created_by: mf.frontmatter.created_by.unwrap_or_default(),
+                created_by,
+                bytes,
+                pct: pct_of(bytes, cap),
+                created_initial,
             }
         })
         .collect();
@@ -339,25 +387,16 @@ async fn new_state_form(
     Extension(session): Extension<Session>,
     State(state): State<WebState>,
 ) -> Result<Response, WebError> {
-    let csrf_hex = csrf::encode(&session.csrf_value);
     let cap = state.memory_store.caps().state_bytes;
-    render(&EditorTpl {
-        title: "new state note",
-        body: "",
-        csrf: &csrf_hex,
-        mtime: 0,
-        byte_cap: cap,
-        save_url: "/memory/state",
-        delete_url: None,
-        error: None,
-        user_login: &session.user_login,
-        current_page: crate::nav::MEMORY_STATE,
-        show_user_fm: false,
-        show_state_fm: false,
-        fm_username: "",
-        fm_display_name: "",
-        fm_created_by: "",
-    })
+    let csrf_hex = csrf::encode(&session.csrf_value);
+    render_state_create(
+        StatusCode::OK,
+        "",
+        None,
+        cap,
+        &csrf_hex,
+        &session.user_login,
+    )
 }
 
 async fn view_state(
@@ -410,14 +449,9 @@ struct CsrfOnly {
     csrf: String,
 }
 
-/// Common save path for SOUL/LORE/users/state. Validates csrf, dispatches
-/// to `write_with_guard`, and on `WriteError::{Full,StateFull,InvalidSlug}`
-/// re-renders the originating editor with the user's draft + an inline
-/// error so they don't lose their work. `Io` keeps bubbling as 500;
-/// `CsrfMismatch` and the conflict path stay untouched.
-// Ten args: state + session + cookies + kind + label + id + form + redirect
-// + cap + delete_url. Splitting them into a struct would just rename the
-// noise without removing it.
+/// Validates csrf, dispatches to `write_with_guard`, and on
+/// `WriteError::{Full,StateFull,InvalidSlug}` re-renders the originating
+/// editor with the user's draft + an inline error so the work isn't lost.
 #[allow(clippy::too_many_arguments)]
 async fn save_kind(
     state: &WebState,
@@ -508,10 +542,13 @@ async fn save_kind(
                 StatusCode::BAD_REQUEST,
                 &EditorTpl {
                     title: &label,
+                    subtitle: subtitle_for_kind(&kind),
+                    meta_path: meta_path_for(&kind),
                     body: &form.body,
                     csrf: &csrf_hex,
                     mtime: form.mtime,
                     byte_cap: cap,
+                    pct: pct_of(form.body.len(), cap),
                     save_url: &redirect_to,
                     delete_url: delete_url.as_deref(),
                     error: Some(msg),
@@ -650,7 +687,14 @@ async fn create_state(
             // it with a wrong user-facing message.
             other => return Err(other),
         };
-        return render_state_create_error(&form, &csrf_hex, cap, msg, &session.user_login);
+        return render_state_create(
+            StatusCode::BAD_REQUEST,
+            &form.body,
+            Some(msg),
+            cap,
+            &csrf_hex,
+            &session.user_login,
+        );
     }
     let slug = form.slug.clone();
     match state
@@ -690,29 +734,40 @@ async fn create_state(
                 WriteError::InvalidSlug => "reserved or invalid slug".to_owned(),
                 WriteError::Io(e) => return Err(WebError::Internal(e)),
             };
-            render_state_create_error(&form, &csrf_hex, cap, msg, &session.user_login)
+            render_state_create(
+                StatusCode::BAD_REQUEST,
+                &form.body,
+                Some(msg),
+                cap,
+                &csrf_hex,
+                &session.user_login,
+            )
         }
     }
 }
 
-fn render_state_create_error(
-    form: &CreateStateForm,
-    csrf_hex: &str,
+fn render_state_create(
+    status: StatusCode,
+    body: &str,
+    error: Option<String>,
     cap: usize,
-    msg: String,
+    csrf_hex: &str,
     user_login: &str,
 ) -> Result<Response, WebError> {
     render_with(
-        StatusCode::BAD_REQUEST,
+        status,
         &EditorTpl {
             title: "new state note",
-            body: &form.body,
+            subtitle: "A persistent note keyed by slug.",
+            meta_path: "memories/state/<slug>.md".to_owned(),
+            body,
             csrf: csrf_hex,
             mtime: 0,
             byte_cap: cap,
+            pct: pct_of(body.len(), cap),
             save_url: "/memory/state",
             delete_url: None,
-            error: Some(msg),
+            error,
             user_login,
             current_page: crate::nav::MEMORY_STATE,
             show_user_fm: false,

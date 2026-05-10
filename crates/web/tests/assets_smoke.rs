@@ -1,5 +1,5 @@
-//! Smoke tests for the `/assets/*` route. Ensures htmx and pico bundles
-//! are real (not the development stubs) and served with the expected
+//! Smoke tests for the `/assets/*` route. Ensures the htmx bundle is real
+//! (not the development stub) and that assets ship with the expected
 //! cache-control header so deploy reviews catch a regression to placeholders.
 
 use std::collections::HashMap;
@@ -57,30 +57,6 @@ async fn htmx_bundle_is_real_not_a_stub() {
         "htmx still contains a TODO stub marker"
     );
     assert!(s.contains("htmx"), "htmx bundle must mention itself");
-}
-
-#[tokio::test]
-async fn pico_bundle_is_real_not_a_stub() {
-    let (status, _headers, bytes) = fetch_asset("/assets/pico.min.css").await;
-    assert_eq!(status, StatusCode::OK);
-    assert!(
-        bytes.len() > 40_000,
-        "pico bundle suspiciously small: {} bytes",
-        bytes.len()
-    );
-    let s = std::str::from_utf8(&bytes).expect("pico must be utf-8");
-    // The v1 stub started with "/* TODO: replace with real pico v2 ...". The
-    // real bundle ships a `Pico CSS` license banner and the `--pico-*` custom
-    // properties. We can't assert on the word "placeholder" because pico
-    // legitimately styles `::placeholder` selectors.
-    assert!(
-        !s.contains("TODO: replace"),
-        "pico still contains a TODO stub marker"
-    );
-    assert!(
-        s.contains("--pico"),
-        "pico bundle must define --pico custom properties"
-    );
 }
 
 #[tokio::test]

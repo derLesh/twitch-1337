@@ -1,18 +1,59 @@
 {% extends "base.html" %}
 {% block title %}State — twitch-1337{% endblock %}
 {% block content %}
-<h2>State notes ({{ items.len() }})</h2>
-<p><a href="/memory/state/new" role="button">+ New state note</a></p>
-<table>
-  <thead><tr><th>Slug</th><th>Updated</th><th>Created by</th></tr></thead>
-  <tbody>
-  {% for s in items %}
-    <tr>
-      <td><a href="/memory/state/{{ s.slug }}">{{ s.slug }}</a></td>
-      <td>{{ s.updated_at }}</td>
-      <td>{{ s.created_by }}</td>
-    </tr>
-  {% endfor %}
-  </tbody>
-</table>
+<div class="page-head">
+  <div>
+    <h1>State <span class="count">({{ items.len() }})</span></h1>
+    <p class="page-sub">State notes ({{ items.len() }}) at <code>memories/state/&lt;slug&gt;.md</code>. 2 KiB cap each, max 64 entries.</p>
+  </div>
+  <div class="page-actions">
+    <a class="btn primary" href="/memory/state/new">+ New state note</a>
+  </div>
+</div>
+
+<div class="table state">
+  <div class="thead">
+    <div class="th col-name">Slug</div>
+    <div class="th">Updated</div>
+    <div class="th">Created by</div>
+    <div class="th">Bytes</div>
+    <div class="th col-act"></div>
+  </div>
+  {% if items.is_empty() %}
+    <div class="empty">No state notes yet — create the first one.</div>
+  {% else %}
+  <div class="tbody">
+    {% for s in items %}
+    <div class="tr" data-filter="{{ s.slug }} {{ s.created_by }}">
+      <div class="td col-name">
+        <span class="ping-bullet">~</span>
+        <a class="ping-name" href="/memory/state/{{ s.slug }}">{{ s.slug }}</a>
+      </div>
+      <div class="td"><span class="muted mono">{{ s.updated_at }}</span></div>
+      <div class="td">
+        {% if s.created_by.is_empty() %}
+          <span class="muted">—</span>
+        {% else %}
+          <span class="by">
+            <span class="avatar" style="width:18px;height:18px;font-size:10px;background:oklch(0.55 0.10 220);">{{ s.created_initial }}</span>
+            <span class="mono">{{ s.created_by }}</span>
+          </span>
+        {% endif %}
+      </div>
+      <div class="td">
+        <span class="bytes-bar mini"><span style="width: {{ s.pct }}%"></span></span>
+        <span class="bytes-cell">{{ s.bytes }} B</span>
+      </div>
+      <div class="td col-act">
+        <a class="row-act" href="/memory/state/{{ s.slug }}" title="Edit">✎</a>
+        <form method="post" action="/memory/state/{{ s.slug }}/delete" style="display:inline" onsubmit="return confirm('Delete state {{ s.slug }}?')">
+          <input type="hidden" name="_csrf" value="{{ csrf }}">
+          <button type="submit" class="row-act danger" title="Delete">✕</button>
+        </form>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
 {% endblock %}
