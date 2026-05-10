@@ -80,7 +80,7 @@ body::before {
   pointer-events: none;
   background-image:
     radial-gradient(at 12% -10%, oklch(var(--accent-l) var(--accent-c) var(--accent-h) / 0.06), transparent 40%),
-    radial-gradient(at 110% 110%, oklch(0.6 0.08 280 / 0.06), transparent 50%);
+    radial-gradient(at 110% 110%, oklch(var(--accent-l) var(--accent-c) var(--accent-h) / 0.04), transparent 50%);
   z-index: 0;
 }
 

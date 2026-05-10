@@ -85,7 +85,7 @@
           <button type="button" class="row-act danger" title="Delete"
                   hx-post="/pings/{{ row.name }}/delete"
                   hx-confirm="Delete ping {{ row.name }}?"
-                  hx-target="closest tr"
+                  hx-target="closest .tr"
                   hx-swap="outerHTML"
                   hx-headers='{"X-Csrf-Token": "{{ csrf }}"}'>✕</button>
         </div>

@@ -90,6 +90,10 @@ async fn list_renders_existing_pings() {
         html.contains("Hey {mentions}"),
         "list should show template; got {html}"
     );
+    assert!(
+        html.contains(r#"hx-target="closest .tr""#),
+        "delete button must target the `.tr` div, not the absent <tr> element; got {html}"
+    );
 }
 
 #[tokio::test]
