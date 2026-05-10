@@ -1,7 +1,12 @@
 {% extends "base.html" %}
+{% block title %}Sign in — twitch-1337{% endblock %}
 {% block layout %}
-<main class="content">
-  <h1>twitch-1337 dashboard</h1>
-  <p><a href="/login" role="button">Login with Twitch</a></p>
-</main>
+<div class="shell-solo">
+  <div class="auth-card">
+    <div class="auth-mark" aria-hidden="true">⌬</div>
+    <h1>twitch-1337</h1>
+    <p>Moderator dashboard. Sign in with the Twitch account that mods the configured channel.</p>
+    <a href="{{ login_href }}" class="btn primary">Sign in with Twitch</a>
+  </div>
+</div>
 {% endblock %}

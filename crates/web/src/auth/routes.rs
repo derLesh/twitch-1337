@@ -156,7 +156,8 @@ fn redact_token_body(body: &[u8]) -> String {
 
 pub fn auth_router() -> Router<WebState> {
     Router::new()
-        .route("/login", get(login))
+        .route("/login", get(login_landing))
+        .route("/auth/start", get(auth_start))
         .route("/auth/callback", get(callback))
         .route("/logout", post(logout))
 }
@@ -166,7 +167,40 @@ struct LoginParams {
     next: Option<String>,
 }
 
-async fn login(
+#[derive(askama::Template)]
+#[template(path = "auth/login.html")]
+struct LoginTpl {
+    login_href: String,
+}
+
+/// Static landing page reached on first hit and after `/logout`. Without
+/// this stop, redirecting straight to Twitch's `/authorize` would silently
+/// re-authenticate via the still-active Twitch session and the user would
+/// appear to "fail to log out".
+async fn login_landing(Query(params): Query<LoginParams>) -> Response {
+    let login_href = match params
+        .next
+        .as_deref()
+        .filter(|p| crate::error::is_safe_redirect(p))
+    {
+        Some(next) => format!("/auth/start?next={}", urlencoding::encode(next)),
+        None => "/auth/start".to_owned(),
+    };
+    use askama::Template as _;
+    match (LoginTpl { login_href }).render() {
+        Ok(body) => axum::response::Html(body).into_response(),
+        Err(err) => {
+            tracing::error!(target: "twitch_1337_web", ?err, "login template render failed");
+            (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                "internal error",
+            )
+                .into_response()
+        }
+    }
+}
+
+async fn auth_start(
     State(state): State<WebState>,
     Query(params): Query<LoginParams>,
     cookies: Cookies,

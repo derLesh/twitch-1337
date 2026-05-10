@@ -65,6 +65,7 @@ struct EditorTpl<'a> {
     body: &'a str,
     csrf: &'a str,
     mtime: u64,
+    mtime_display: String,
     byte_cap: usize,
     /// Pre-computed `body.len() * 100 / byte_cap`, clamped to 100.
     /// Lives here (not the template) because Askama can't divide a
@@ -128,6 +129,20 @@ struct UsersListTpl {
 
 fn fmt_ts(t: DateTime<Utc>) -> String {
     t.format("%Y-%m-%d %H:%M UTC").to_string()
+}
+
+/// Render a `MemoryStore::current_mtime` value (millis since epoch) as a
+/// human date. The raw u64 stays threaded into the hidden form input so
+/// the optimistic-concurrency guard sees byte-identical millis after the
+/// round-trip; this is purely for human display.
+fn fmt_mtime_ms(ms: u64) -> String {
+    if ms == 0 {
+        return "new".to_owned();
+    }
+    let signed = i64::try_from(ms).unwrap_or(i64::MAX);
+    DateTime::<Utc>::from_timestamp_millis(signed)
+        .map(|t| t.format("%Y-%m-%d %H:%M:%S UTC").to_string())
+        .unwrap_or_else(|| "—".to_owned())
 }
 
 /// `(used * 100 / cap).min(100)` as a `u8`. Clamps to 100 on `cap == 0`.
@@ -203,6 +218,7 @@ async fn tree(
     })
 }
 
+#[allow(clippy::too_many_arguments)] // distinct view-shape inputs; bundling adds noise
 async fn view_kind(
     state: &WebState,
     session: &Session,
@@ -211,12 +227,16 @@ async fn view_kind(
     save_url: String,
     delete_url: Option<String>,
     current_page: &'static str,
+    preloaded: Option<MemoryFile>,
 ) -> Result<Response, WebError> {
     let store = &state.memory_store;
-    let mf = store
-        .read_kind(&kind)
-        .await
-        .map_err(|e| WebError::Internal(eyre::eyre!("read_kind: {e}")))?;
+    let mf = match preloaded {
+        Some(mf) => mf,
+        None => store
+            .read_kind(&kind)
+            .await
+            .map_err(|e| WebError::Internal(eyre::eyre!("read_kind: {e}")))?,
+    };
     let mtime = store
         .current_mtime(&kind)
         .await
@@ -231,6 +251,7 @@ async fn view_kind(
         body: &mf.body,
         csrf: &csrf_hex,
         mtime,
+        mtime_display: fmt_mtime_ms(mtime),
         byte_cap,
         pct,
         save_url: &save_url,
@@ -258,6 +279,7 @@ async fn view_soul(
         "/memory/soul".to_owned(),
         None,
         crate::nav::MEMORY_SOUL,
+        None,
     )
     .await
 }
@@ -274,6 +296,7 @@ async fn view_lore(
         "/memory/lore".to_owned(),
         None,
         crate::nav::MEMORY_LORE,
+        None,
     )
     .await
 }
@@ -329,18 +352,32 @@ async fn view_user(
             msg: "must be numeric, 1-32 digits".into(),
         });
     }
-    let title = format!("User {user_id}");
+    let kind = FileKind::User {
+        user_id: user_id.clone(),
+    };
+    let mf = state
+        .memory_store
+        .read_kind(&kind)
+        .await
+        .map_err(|e| WebError::Internal(eyre::eyre!("read_kind: {e}")))?;
+    let title = mf
+        .frontmatter
+        .display_name
+        .as_deref()
+        .filter(|s| !s.is_empty())
+        .or(mf.frontmatter.username.as_deref().filter(|s| !s.is_empty()))
+        .unwrap_or(&user_id)
+        .to_owned();
     let save_url = format!("/memory/users/{user_id}");
     view_kind(
         &state,
         &session,
-        FileKind::User {
-            user_id: user_id.clone(),
-        },
+        kind,
         title,
         save_url,
         None,
         crate::nav::MEMORY_USERS,
+        Some(mf),
     )
     .await
 }
@@ -416,6 +453,7 @@ async fn view_state(
         save_url,
         Some(delete_url),
         crate::nav::MEMORY_STATE,
+        None,
     )
     .await
 }
@@ -513,6 +551,7 @@ async fn save_kind(
                 kind: label,
                 id,
                 current_body,
+                current_mtime_display: fmt_mtime_ms(current_mtime),
                 current_mtime,
                 draft: form.body,
                 csrf: csrf_hex,
@@ -547,6 +586,7 @@ async fn save_kind(
                     body: &form.body,
                     csrf: &csrf_hex,
                     mtime: form.mtime,
+                    mtime_display: fmt_mtime_ms(form.mtime),
                     byte_cap: cap,
                     pct: pct_of(form.body.len(), cap),
                     save_url: &redirect_to,
@@ -763,6 +803,7 @@ fn render_state_create(
             body,
             csrf: csrf_hex,
             mtime: 0,
+            mtime_display: fmt_mtime_ms(0),
             byte_cap: cap,
             pct: pct_of(body.len(), cap),
             save_url: "/memory/state",

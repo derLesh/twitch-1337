@@ -4,12 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>{% block title %}twitch-1337{% endblock %}</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap">
-  <link rel="stylesheet" href="/assets/app.css">
-  <script src="/assets/htmx.min.js" defer></script>
-  <script src="/assets/app.js" defer></script>
+  <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg?v={{ env!("ASSET_V_FAVICON_SVG") }}">
+  <link rel="stylesheet" href="/assets/app.css?v={{ env!("ASSET_V_APP_CSS") }}">
+  <script src="/assets/htmx.min.js?v={{ env!("ASSET_V_HTMX_MIN_JS") }}" defer></script>
+  <script src="/assets/app.js?v={{ env!("ASSET_V_APP_JS") }}" defer></script>
 </head>
 <body>
   {% block layout %}

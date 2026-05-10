@@ -46,13 +46,57 @@ async fn root_redirects_to_pings_for_authed_request_only() {
 }
 
 #[tokio::test]
-async fn login_route_redirects_to_twitch() {
+async fn login_route_renders_landing_page() {
     install_crypto();
     let state = build_state(fake_helix()).await;
     let app = build_router(state);
 
     let req = Request::builder()
         .uri("/login")
+        .body(Body::empty())
+        .unwrap();
+    let res = app.oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(res.into_body(), 64 * 1024)
+        .await
+        .unwrap();
+    let html = std::str::from_utf8(&body).unwrap();
+    assert!(
+        html.contains("href=\"/auth/start\""),
+        "landing page must link to /auth/start, got: {html}"
+    );
+}
+
+#[tokio::test]
+async fn login_landing_threads_next_through_to_auth_start() {
+    install_crypto();
+    let state = build_state(fake_helix()).await;
+    let app = build_router(state);
+
+    let req = Request::builder()
+        .uri("/login?next=%2Fmemory%2Fsoul")
+        .body(Body::empty())
+        .unwrap();
+    let res = app.oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(res.into_body(), 64 * 1024)
+        .await
+        .unwrap();
+    let html = std::str::from_utf8(&body).unwrap();
+    assert!(
+        html.contains("/auth/start?next=%2Fmemory%2Fsoul"),
+        "landing button must forward `next` URL-encoded, got: {html}"
+    );
+}
+
+#[tokio::test]
+async fn auth_start_redirects_to_twitch() {
+    install_crypto();
+    let state = build_state(fake_helix()).await;
+    let app = build_router(state);
+
+    let req = Request::builder()
+        .uri("/auth/start")
         .body(Body::empty())
         .unwrap();
     let res = app.oneshot(req).await.unwrap();

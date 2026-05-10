@@ -60,6 +60,27 @@ async fn htmx_bundle_is_real_not_a_stub() {
 }
 
 #[tokio::test]
+async fn self_hosted_fonts_are_served() {
+    for path in [
+        "/assets/fonts/geist-latin.woff2",
+        "/assets/fonts/geist-mono-latin.woff2",
+    ] {
+        let (status, headers, bytes) = fetch_asset(path).await;
+        assert_eq!(status, StatusCode::OK, "{path} must serve");
+        assert!(
+            bytes.len() > 5_000,
+            "{path} suspiciously small: {} bytes",
+            bytes.len()
+        );
+        assert_eq!(
+            headers.get(header::CONTENT_TYPE).unwrap(),
+            "font/woff2",
+            "{path} must report woff2 mime",
+        );
+    }
+}
+
+#[tokio::test]
 async fn assets_emit_immutable_cache_control() {
     let (status, headers, _bytes) = fetch_asset("/assets/app.css").await;
     assert_eq!(status, StatusCode::OK);
