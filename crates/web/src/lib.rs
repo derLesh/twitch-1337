@@ -13,6 +13,8 @@
 pub mod auth;
 pub mod clock;
 pub mod config;
+#[cfg(feature = "dev-login")]
+pub mod dev;
 pub mod error;
 pub mod flash;
 pub mod helix;
@@ -59,10 +61,15 @@ pub async fn run_web(listener: TcpListener, deps: WebDeps, shutdown: Arc<Notify>
 }
 
 pub fn build_router(state: WebState) -> Router {
-    let public = Router::new()
+    #[allow(unused_mut)]
+    let mut public = Router::new()
         .merge(routes::health::router(state.irc_connected.clone()))
         .merge(routes::assets::router())
         .merge(auth::auth_router().with_state(state.clone()));
+    #[cfg(feature = "dev-login")]
+    {
+        public = public.merge(dev::router(state.clone()));
+    }
 
     let authed = Router::new()
         .route(

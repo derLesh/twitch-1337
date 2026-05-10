@@ -36,9 +36,12 @@ mount-prod-data:
 unmount-prod-data:
   fusermount -u prod-data
 
-# Run locally with data dir in current directory and debug logging
+# Run bot + dashboard locally with debug logging and OAuth bypass.
+# `dev-login` feature mounts /_dev/login on the dashboard — open it once to
+# mint a mod session without round-tripping Twitch OAuth. Production builds
+# (Dockerfile) compile without the feature, so the route does not exist.
 dev:
-  DATA_DIR=./crates/core/data RUST_LOG=info,twitch_1337=debug,twitch_1337_core=debug cargo run -p twitch-1337
+  DATA_DIR=./dev-data RUST_LOG=info,twitch_1337=debug,twitch_1337_core=debug,twitch_1337_web=debug cargo run -p twitch-1337 --features dev-login
 
 # Run tests with minimal output
 test-brief:

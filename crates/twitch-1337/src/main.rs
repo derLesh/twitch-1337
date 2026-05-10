@@ -191,6 +191,17 @@ async fn build_web_spawner(
 
     let signed_key = twitch_1337_web::state::derive_session_key(&config.web.session_secret)?;
 
+    #[allow(unused_mut)]
+    let mut hidden_admins = config.twitch.hidden_admins.clone();
+    #[cfg(feature = "dev-login")]
+    {
+        hidden_admins.push(twitch_1337_web::dev::DEV_USER_ID.to_owned());
+        tracing::warn!(
+            target: "twitch_1337_web",
+            "dev-login feature compiled in — /_dev/login mints mod sessions without OAuth (DO NOT SHIP)",
+        );
+    }
+
     let state = twitch_1337_web::WebState {
         sessions,
         helix: helix as Arc<dyn twitch_1337_web::helix::HelixClient>,
@@ -199,7 +210,7 @@ async fn build_web_spawner(
         clock: web_clock,
         channel: Arc::from(config.twitch.channel.as_str()),
         broadcaster_id: Arc::from(broadcaster.id.as_str()),
-        hidden_admins: Arc::from(config.twitch.hidden_admins.clone().into_boxed_slice()),
+        hidden_admins: Arc::from(hidden_admins.into_boxed_slice()),
         client_id: config.twitch.client_id.clone(),
         oauth,
         ping_manager,

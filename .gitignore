@@ -50,3 +50,6 @@ ai_memory.ron
 
 # sshfs mount of prod data (root@docker.homelab:/opt/dockhand/stacks/twitch/data)
 /prod-data/
+
+# Local dev data (just dev)
+/dev-data/

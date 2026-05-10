@@ -25,14 +25,14 @@ use oauth2::{
 use secrecy::{ExposeSecret as _, SecretString};
 use serde::Deserialize;
 use tower_cookies::cookie::SameSite;
-use tower_cookies::{Cookie, Cookies};
+use tower_cookies::{Cookie, Cookies, Key};
 
 use crate::auth::mod_check::{ModCheckOutcome, check_is_mod};
 use crate::error::WebError;
 use crate::state::WebState;
 
-const SID_COOKIE: &str = "tw1337_sid";
-const CSRF_COOKIE: &str = "tw1337_csrf";
+pub const SID_COOKIE: &str = "tw1337_sid";
+pub const CSRF_COOKIE: &str = "tw1337_csrf";
 const OAUTH_STATE_COOKIE: &str = "tw1337_oauth_state";
 /// Short-lived cookie that stashes the original requested path captured by
 /// `require_mod` into `?next=`. Consumed (and cleared) by the callback.
@@ -41,6 +41,34 @@ const NEXT_COOKIE: &str = "tw1337_next";
 /// Fully-configured `BasicClient` (auth/token/redirect endpoints all set).
 type ConfiguredClient =
     BasicClient<EndpointSet, EndpointNotSet, EndpointNotSet, EndpointNotSet, EndpointSet>;
+
+/// Set the signed sid + csrf cookies that mark a logged-in session. Shared
+/// between the OAuth callback (`secure = true`) and the dev-login bypass
+/// (`secure = false`, since dev runs over plain http on localhost).
+pub(crate) fn issue_session_cookies(
+    cookies: &Cookies,
+    key: &Key,
+    sid: String,
+    csrf_bytes: &[u8; 32],
+    secure: bool,
+) {
+    let signed = cookies.signed(key);
+    signed.add(
+        Cookie::build((SID_COOKIE, sid))
+            .http_only(true)
+            .secure(secure)
+            .same_site(SameSite::Lax)
+            .path("/")
+            .build(),
+    );
+    signed.add(
+        Cookie::build((CSRF_COOKIE, crate::auth::csrf::encode(csrf_bytes)))
+            .secure(secure)
+            .same_site(SameSite::Lax)
+            .path("/")
+            .build(),
+    );
+}
 
 pub struct OAuthCtx {
     pub basic: ConfiguredClient,
@@ -318,24 +346,7 @@ async fn callback(
         .sessions
         .insert(me.id.clone(), me.login.clone())
         .map_err(WebError::Internal)?;
-    let csrf_value_hex = hex::encode(csrf_value);
-
-    let signed = cookies.signed(&state.signed_key);
-    signed.add(
-        Cookie::build((SID_COOKIE, sid))
-            .http_only(true)
-            .secure(true)
-            .same_site(SameSite::Lax)
-            .path("/")
-            .build(),
-    );
-    signed.add(
-        Cookie::build((CSRF_COOKIE, csrf_value_hex))
-            .secure(true)
-            .same_site(SameSite::Lax)
-            .path("/")
-            .build(),
-    );
+    issue_session_cookies(&cookies, &state.signed_key, sid, &csrf_value, true);
 
     let next_path = cookies
         .get(NEXT_COOKIE)

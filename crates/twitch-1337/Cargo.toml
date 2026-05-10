@@ -22,5 +22,9 @@ twitch-irc = { git = "https://github.com/Chronophylos/twitch-irc-rs", branch = "
   "transport-tcp-rustls-webpki-roots",
 ] }
 
+[features]
+# Enable the web crate's dev-login bypass (`/_dev/login`). Local dev only.
+dev-login = ["twitch-1337-web/dev-login"]
+
 [lints]
 workspace = true
