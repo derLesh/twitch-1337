@@ -33,9 +33,9 @@ jobs:
         id: counts
         run: |
           {
-            echo "airlines=$(wc -l < crates/twitch-1337/data/airlines.csv)"
-            echo "airports=$(wc -l < crates/twitch-1337/data/airports.csv)"
-            echo "plz=$(wc -l < crates/twitch-1337/data/plz.csv)"
+            echo "airlines=$(wc -l < crates/core/data/airlines.csv)"
+            echo "airports=$(wc -l < crates/core/data/airports.csv)"
+            echo "plz=$(wc -l < crates/core/data/plz.csv)"
           } >> "$GITHUB_OUTPUT"
 
       - uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8
@@ -48,9 +48,9 @@ jobs:
             Automated weekly refresh of public-dataset CSVs.
 
             **Row counts**
-            - `crates/twitch-1337/data/airlines.csv`: ${{ steps.counts.outputs.airlines }} rows
-            - `crates/twitch-1337/data/airports.csv`: ${{ steps.counts.outputs.airports }} rows
-            - `crates/twitch-1337/data/plz.csv`: ${{ steps.counts.outputs.plz }} rows
+            - `crates/core/data/airlines.csv`: ${{ steps.counts.outputs.airlines }} rows
+            - `crates/core/data/airports.csv`: ${{ steps.counts.outputs.airports }} rows
+            - `crates/core/data/plz.csv`: ${{ steps.counts.outputs.plz }} rows
 
             Merge if the diff looks reasonable. If CI fails, a parser likely
             needs to be adjusted for an upstream schema change.

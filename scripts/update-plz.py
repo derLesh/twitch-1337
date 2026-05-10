@@ -1,7 +1,7 @@
 # /// script
 # requires-python = ">=3.11"
 # ///
-"""Download German postal code data from GeoNames and generate crates/twitch-1337/data/plz.csv."""
+"""Download German postal code data from GeoNames and generate crates/core/data/plz.csv."""
 
 import csv
 import io
@@ -11,7 +11,7 @@ from collections import defaultdict
 from pathlib import Path
 
 GEONAMES_URL = "https://download.geonames.org/export/zip/DE.zip"
-OUTPUT_PATH = Path(__file__).resolve().parent.parent / "crates" / "twitch-1337" / "data" / "plz.csv"
+OUTPUT_PATH = Path(__file__).resolve().parent.parent / "crates" / "core" / "data" / "plz.csv"
 
 
 def main():

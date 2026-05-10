@@ -1,7 +1,7 @@
 # /// script
 # requires-python = ">=3.11"
 # ///
-"""Download airport data from OurAirports and generate crates/twitch-1337/data/airports.csv."""
+"""Download airport data from OurAirports and generate crates/core/data/airports.csv."""
 
 import csv
 import io
@@ -9,7 +9,7 @@ import urllib.request
 from pathlib import Path
 
 OURAIRPORTS_URL = "https://raw.githubusercontent.com/davidmegginson/ourairports-data/main/airports.csv"
-OUTPUT_PATH = Path(__file__).resolve().parent.parent / "crates" / "twitch-1337" / "data" / "airports.csv"
+OUTPUT_PATH = Path(__file__).resolve().parent.parent / "crates" / "core" / "data" / "airports.csv"
 
 
 def main():
