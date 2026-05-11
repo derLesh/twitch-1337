@@ -37,10 +37,14 @@ jobs:
             type=sha,prefix=sha-,format=short
 
       - uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7
+        env:
+          GIT_SHA: ${{ github.sha }}
         with:
           context: .
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            GIT_SHA=${{ env.GIT_SHA }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

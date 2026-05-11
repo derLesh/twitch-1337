@@ -11,7 +11,7 @@
     <div class="brand-mark"><span class="brand-glyph">⌬</span></div>
     <div class="brand-text">
       <span class="brand-name">twitch-1337</span>
-      <span class="brand-meta">v{{ env!("CARGO_PKG_VERSION") }} · main</span>
+      <span class="brand-meta" title="commit {{ env!("GIT_SHA_SHORT") }}">v{{ env!("CARGO_PKG_VERSION") }} · {{ env!("GIT_SHA_SHORT") }}</span>
     </div>
   </div>
 
@@ -26,9 +26,8 @@
     </div>
 
     <div class="nav-group">
-      <div class="nav-group-label">Memory</div>
+      <a class="nav-group-label nav-group-link{% if current_page == "memory" %} active{% endif %}" href="/memory">Memory</a>
       <ul class="nav-list">
-        {% call nav_item("memory", "/memory", "Tree") %}{% endcall %}
         {% call nav_item("memory_soul", "/memory/soul", "SOUL") %}{% endcall %}
         {% call nav_item("memory_lore", "/memory/lore", "LORE") %}{% endcall %}
         {% call nav_item("memory_users", "/memory/users", "Users") %}{% endcall %}

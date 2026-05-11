@@ -5,6 +5,9 @@ use axum::Router;
 use axum::http::StatusCode;
 use axum::routing::get;
 
+pub const GIT_SHA: &str = env!("GIT_SHA_SHORT");
+pub const PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
+
 pub fn router(irc_connected: Arc<AtomicBool>) -> Router {
     Router::new().route(
         "/healthz",

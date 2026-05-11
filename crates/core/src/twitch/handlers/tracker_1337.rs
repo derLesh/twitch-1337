@@ -372,7 +372,6 @@ pub(crate) async fn monitor_1337_messages(
 ///
 /// Monitors messages during the 13:37 window, tracks unique users, and posts stats at 13:38.
 /// Runs continuously, resetting state daily.
-#[instrument(skip(broadcast_tx, client, channel, latency, leaderboard, clock))]
 pub async fn run_1337_handler<T, L>(
     broadcast_tx: broadcast::Sender<ServerMessage>,
     client: Arc<TwitchIRCClient<T, L>>,

@@ -1,12 +1,11 @@
 use tokio::sync::{broadcast, mpsc::UnboundedReceiver};
-use tracing::{debug, info, instrument, trace};
+use tracing::{debug, info, trace};
 use twitch_irc::message::ServerMessage;
 
 /// Message router task that broadcasts incoming IRC messages to all handlers.
 ///
 /// Reads from the twitch-irc receiver and broadcasts to all subscribed handlers.
 /// Exits when the incoming_messages channel is closed.
-#[instrument(skip(incoming_messages, broadcast_tx))]
 pub async fn run_message_router(
     mut incoming_messages: UnboundedReceiver<ServerMessage>,
     broadcast_tx: broadcast::Sender<ServerMessage>,

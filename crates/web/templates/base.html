@@ -3,6 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="darkreader-lock">
   <title>{% block title %}twitch-1337{% endblock %}</title>
   <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg?v={{ env!("ASSET_V_FAVICON_SVG") }}">
   <link rel="stylesheet" href="/assets/app.css?v={{ env!("ASSET_V_APP_CSS") }}">
@@ -17,8 +19,10 @@
       <header class="topbar">
         <nav class="crumbs" aria-label="Breadcrumb">
           <span class="crumb-root">~</span>
+          {% for seg in current_page.split('_') %}
           <span class="crumb-sep">/</span>
-          <span class="crumb-current">{% block crumb %}{{ current_page.replace('_', "/") }}{% endblock %}</span>
+          <span class="crumb-current">{{ seg }}</span>
+          {% endfor %}
         </nav>
         <div class="topbar-right">
           <label class="search">

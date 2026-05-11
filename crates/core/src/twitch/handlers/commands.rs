@@ -6,7 +6,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use llm::LlmClient;
 use tokio::{sync::broadcast, time::Duration};
-use tracing::{debug, error, info, instrument};
+use tracing::{debug, error, info};
 use twitch_irc::{
     TwitchIRCClient, login::LoginCredentials, message::ServerMessage, transport::Transport,
 };
@@ -53,7 +53,6 @@ pub struct CommandHandlerConfig<T: Transport, L: LoginCredentials> {
 }
 
 /// Handler for generic text commands that start with `!`.
-#[instrument(skip(cfg))]
 pub async fn run_generic_command_handler<T, L>(cfg: CommandHandlerConfig<T, L>)
 where
     T: Transport + Send + Sync + 'static,

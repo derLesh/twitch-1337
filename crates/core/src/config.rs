@@ -6,7 +6,7 @@
 use eyre::{Result, WrapErr, bail};
 use secrecy::{ExposeSecret as _, SecretString};
 use serde::Deserialize;
-use tracing::info;
+use tracing::{debug, info};
 
 use crate::{ai::prefill, database};
 
@@ -631,11 +631,7 @@ pub async fn load_configuration() -> Result<Configuration> {
 
     validate_config(&config)?;
 
-    if config.pings.public {
-        info!("Pings can be triggered by anyone");
-    } else {
-        info!("Pings can only be triggered by members");
-    }
+    debug!(public = config.pings.public, "Ping trigger policy");
 
     Ok(config)
 }

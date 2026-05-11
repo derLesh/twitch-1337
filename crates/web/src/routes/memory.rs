@@ -36,6 +36,9 @@ pub fn router() -> Router<WebState> {
         .route("/memory/soul", get(view_soul).post(save_soul))
         .route("/memory/lore", get(view_lore).post(save_lore))
         .route("/memory/users", get(list_users))
+        // `/memory/users/new` MUST precede `/memory/users/{user_id}` so the
+        // literal route wins over the dynamic capture.
+        .route("/memory/users/new", post(create_user))
         .route("/memory/users/{user_id}", get(view_user).post(save_user))
         // `/memory/state/new` MUST precede `/memory/state/{slug}` so the
         // literal route wins over the dynamic capture.
@@ -389,6 +392,34 @@ async fn view_user(
         .to_owned();
     let save_url = format!("/memory/users/{user_id}");
     view_kind(&state, &session, kind, title, save_url, None, Some(mf)).await
+}
+
+#[derive(Deserialize)]
+struct NewUserForm {
+    user_id: String,
+    #[serde(rename = "_csrf")]
+    csrf: String,
+}
+
+/// Reads a numeric `user_id` from the form, validates, and redirects to
+/// the editor at `/memory/users/{id}`. The editor renders an empty file
+/// on first GET because `read_kind` synthesizes a blank `MemoryFile` for
+/// missing paths, so no on-disk row is created until the user saves.
+async fn create_user(
+    Extension(session): Extension<Session>,
+    axum::Form(form): axum::Form<NewUserForm>,
+) -> Result<Response, WebError> {
+    if !csrf::verify(&form.csrf, &session.csrf_value) {
+        return Err(WebError::CsrfMismatch);
+    }
+    let user_id = form.user_id.trim();
+    if !is_valid_user_id(user_id) {
+        return Err(WebError::Validation {
+            field: "user_id".into(),
+            msg: "must be numeric, 1-32 digits".into(),
+        });
+    }
+    Ok(Redirect::to(&format!("/memory/users/{user_id}")).into_response())
 }
 
 async fn list_state(

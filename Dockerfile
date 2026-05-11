@@ -28,6 +28,12 @@ RUN cargo chef cook --release --target x86_64-unknown-linux-musl --recipe-path r
 # 3. Builder stage - builds the application
 FROM base AS builder
 
+# Build-arg: short commit SHA of the source tree. Required because
+# .dockerignore strips .git/, so the web crate's build.rs cannot derive
+# it itself. Defaults to "unknown" if the caller does not pass one.
+ARG GIT_SHA=unknown
+ENV GIT_SHA=${GIT_SHA}
+
 # Copy over cached dependencies
 COPY --from=cacher /app/target target
 COPY --from=cacher /usr/local/cargo /usr/local/cargo

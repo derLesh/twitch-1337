@@ -243,8 +243,6 @@ where
         TARGET_HOUR,
         TARGET_MINUTE - 1
     );
-    info!("Bot is running. Press Ctrl+C to stop.");
-
     crate::twitch::handlers::spawn::await_shutdown(handlers, shutdown).await;
 
     // After handler shutdown, drain the web task. The graceful shutdown future

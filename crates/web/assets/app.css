@@ -21,6 +21,12 @@
 
 /* ====================== Tokens ====================== */
 :root {
+  /* Tells the UA (and well-behaved injectors like Dark Reader) that this
+     page is already a dark theme — pairs with the `darkreader-lock` meta
+     in base.html so the extension stops re-tinting our own oklch palette
+     to its preset blue. */
+  color-scheme: dark;
+
   /* Accent: violet (curated alternate from design handoff) */
   --accent-h: 295;
   --accent-c: 0.18;
@@ -147,6 +153,7 @@ kbd {
 .nav { padding: 14px 10px; flex: 1; overflow: auto; }
 .nav-group + .nav-group { margin-top: 18px; }
 .nav-group-label {
+  display: block;
   font-family: var(--mono);
   font-size: 10px;
   text-transform: uppercase;
@@ -154,6 +161,14 @@ kbd {
   color: var(--fg-4);
   padding: 0 8px 6px;
 }
+.nav-group-link {
+  text-decoration: none;
+  cursor: pointer;
+  border-radius: var(--r-sm);
+  transition: color 0.12s ease;
+}
+.nav-group-link:hover { color: var(--fg-2); }
+.nav-group-link.active { color: var(--accent); }
 .nav-list { list-style: none; padding: 0; margin: 0; }
 .nav-list > li { padding: 0; }
 .nav-item {

@@ -8,7 +8,7 @@ use std::collections::HashSet;
 use eyre::{Context as _, Result, bail};
 use secrecy::ExposeSecret as _;
 use tokio::{sync::mpsc::UnboundedReceiver, time::Duration};
-use tracing::{debug, debug_span, error, info, instrument, trace};
+use tracing::{debug, debug_span, error, info, trace};
 use twitch_irc::{
     ClientConfig, SecureTCPTransport, TwitchIRCClient,
     login::{LoginCredentials as _, RefreshingLoginCredentials},
@@ -21,7 +21,6 @@ use crate::{
 };
 
 /// Create the Twitch IRC client and message receiver without connecting.
-#[instrument(skip(config))]
 pub async fn setup_twitch_client(
     config: &Configuration,
 ) -> Result<(
@@ -54,7 +53,6 @@ pub async fn setup_twitch_client(
 /// Connect, join channel(s), and verify authentication via `GlobalUserState`.
 ///
 /// Returns `Err` if connection times out (30 s) or authentication fails.
-#[instrument(skip(config))]
 pub async fn setup_and_verify_twitch_client(
     config: &Configuration,
 ) -> Result<(

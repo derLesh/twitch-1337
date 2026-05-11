@@ -8,7 +8,7 @@ use tokio::{
     sync::broadcast,
     time::{Duration, sleep},
 };
-use tracing::{debug, info, instrument, warn};
+use tracing::{debug, info, warn};
 use twitch_irc::{
     TwitchIRCClient, irc,
     login::LoginCredentials,
@@ -37,7 +37,6 @@ pub(crate) const LATENCY_LOG_THRESHOLD: u32 = 10;
 ///
 /// The handler is fully independent — PING failures or PONG timeouts are logged
 /// but never crash the handler or affect the EMA.
-#[instrument(skip(client, broadcast_tx, latency, irc_connected))]
 pub async fn run_latency_handler<T, L>(
     client: Arc<TwitchIRCClient<T, L>>,
     broadcast_tx: broadcast::Sender<ServerMessage>,
