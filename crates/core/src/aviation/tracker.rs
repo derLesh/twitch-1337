@@ -210,6 +210,20 @@ pub struct FlightTrackerState {
     pub flights: Vec<TrackedFlight>,
 }
 
+fn clear_pending_callsign_hexes(state: &mut FlightTrackerState) -> usize {
+    let mut cleared = 0;
+    for flight in &mut state.flights {
+        if matches!(flight.identifier, FlightIdentifier::Callsign(_))
+            && flight.last_seen.is_none()
+            && flight.hex.is_some()
+        {
+            flight.hex = None;
+            cleared += 1;
+        }
+    }
+    cleared
+}
+
 /// Loads tracked flights from the RON file.
 ///
 /// Returns an empty state if the file doesn't exist or is corrupted.
@@ -217,9 +231,11 @@ pub(crate) async fn load_tracker_state(data_dir: &Path) -> FlightTrackerState {
     let path = data_dir.join(FLIGHTS_FILENAME);
     match fs::read_to_string(&path).await {
         Ok(contents) => match ron::from_str::<FlightTrackerState>(&contents) {
-            Ok(state) => {
+            Ok(mut state) => {
+                let cleared_pending_hexes = clear_pending_callsign_hexes(&mut state);
                 info!(
                     flights = state.flights.len(),
+                    cleared_pending_hexes,
                     "Loaded flight tracker state from {}",
                     path.display()
                 );
@@ -505,11 +521,9 @@ fn apply_aviationstack_metadata(flight: &mut TrackedFlight, metadata: Aviationst
         set_route_from_iata(flight, origin, dest);
     }
 
-    if flight.hex.is_none()
-        && let Some(hex) = metadata.aircraft_icao24
-    {
-        flight.hex = Some(hex.to_uppercase());
-    }
+    // Aviationstack aircraft assignments are schedule metadata, not live ADS-B
+    // identity. Reused flight numbers can point at a future rotation, so only
+    // live ADS-B responses are allowed to set the tracking hex.
 
     if flight.aircraft_type.is_none()
         && let Some(aircraft_type) = metadata.aircraft_icao
@@ -700,6 +714,25 @@ fn add_duration(time: DateTime<Utc>, duration: Duration) -> DateTime<Utc> {
 
 fn is_pending_adsb(flight: &TrackedFlight) -> bool {
     flight.last_seen.is_none()
+}
+
+fn aircraft_callsign(ac: &NearbyAircraft) -> Option<&str> {
+    ac.flight
+        .as_deref()
+        .map(str::trim)
+        .filter(|callsign| !callsign.is_empty())
+}
+
+fn aircraft_matches_tracked_callsign(ac: &NearbyAircraft, flight: &TrackedFlight) -> bool {
+    let expected = match &flight.identifier {
+        FlightIdentifier::Callsign(identifier_callsign) => flight
+            .callsign
+            .as_deref()
+            .unwrap_or(identifier_callsign.as_str()),
+        FlightIdentifier::Hex(_) => return true,
+    };
+
+    aircraft_callsign(ac).is_some_and(|actual| actual.eq_ignore_ascii_case(expected))
 }
 
 fn live_poll_interval(flight: &TrackedFlight) -> Duration {
@@ -1334,9 +1367,10 @@ async fn poll_all_flights<T, L>(
     use crate::aviation::NearbyAircraft;
     type PollResult =
         Result<Result<Option<NearbyAircraft>, eyre::Report>, tokio::time::error::Elapsed>;
+    type PollAttempt = (bool, PollResult);
 
     let mut join_set = tokio::task::JoinSet::new();
-    let mut fetch_results: Vec<Option<PollResult>> =
+    let mut fetch_results: Vec<Option<PollAttempt>> =
         (0..state.flights.len()).map(|_| None).collect();
 
     for (idx, flight) in state.flights.iter().enumerate() {
@@ -1359,32 +1393,40 @@ async fn poll_all_flights<T, L>(
         let id = flight.identifier.clone();
         let hex = flight.hex.clone();
         let callsign = flight.callsign.clone();
+        let has_live_adsb_identity = flight.last_seen.is_some();
         join_set.spawn(async move {
-            let result: PollResult = match &id {
-                FlightIdentifier::Hex(h) => {
-                    tokio::time::timeout(POLL_TIMEOUT, ac.get_aircraft_by_hex(h)).await
-                }
+            let (used_hex, result): PollAttempt = match &id {
+                FlightIdentifier::Hex(h) => (
+                    true,
+                    tokio::time::timeout(POLL_TIMEOUT, ac.get_aircraft_by_hex(h)).await,
+                ),
                 FlightIdentifier::Callsign(cs) => {
-                    if let Some(h) = &hex {
-                        tokio::time::timeout(POLL_TIMEOUT, ac.get_aircraft_by_hex(h)).await
+                    if has_live_adsb_identity && let Some(h) = &hex {
+                        (
+                            true,
+                            tokio::time::timeout(POLL_TIMEOUT, ac.get_aircraft_by_hex(h)).await,
+                        )
                     } else {
                         let lookup_callsign = callsign.as_deref().unwrap_or(cs);
-                        tokio::time::timeout(
-                            POLL_TIMEOUT,
-                            ac.get_aircraft_by_callsign(lookup_callsign),
+                        (
+                            false,
+                            tokio::time::timeout(
+                                POLL_TIMEOUT,
+                                ac.get_aircraft_by_callsign(lookup_callsign),
+                            )
+                            .await,
                         )
-                        .await
                     }
                 }
             };
-            (idx, result)
+            (idx, used_hex, result)
         });
     }
 
     // Collect results indexed by flight position
     while let Some(res) = join_set.join_next().await {
-        if let Ok((idx, poll_result)) = res {
-            fetch_results[idx] = Some(poll_result);
+        if let Ok((idx, used_hex, poll_result)) = res {
+            fetch_results[idx] = Some((used_hex, poll_result));
         }
     }
 
@@ -1396,7 +1438,7 @@ async fn poll_all_flights<T, L>(
 
     #[allow(clippy::needless_range_loop)]
     for idx in 0..state.flights.len() {
-        let Some(ac_result) = fetch_results[idx].take() else {
+        let Some((used_hex, ac_result)) = fetch_results[idx].take() else {
             continue;
         };
         let flight = &mut state.flights[idx];
@@ -1440,6 +1482,18 @@ async fn poll_all_flights<T, L>(
             }
         };
 
+        if !aircraft_matches_tracked_callsign(&ac, flight) {
+            debug!(
+                identifier = %flight.identifier,
+                aircraft_callsign = aircraft_callsign(&ac).unwrap_or("<missing>"),
+                "Ignoring ADS-B aircraft with mismatched callsign"
+            );
+            if used_hex && flight.hex.is_some() {
+                flight.hex = None;
+            }
+            continue;
+        }
+
         if was_pending {
             messages.push(msg_adsb_visible(flight));
         }
@@ -1474,7 +1528,7 @@ async fn poll_all_flights<T, L>(
                 flight.route = Some((origin, dest));
             }
         }
-        if flight.hex.is_none()
+        if (flight.hex.is_none() || was_pending)
             && let Some(hex) = &ac.hex
         {
             debug!(identifier = %flight.identifier, hex = %hex, "Resolved hex");
@@ -1653,6 +1707,58 @@ mod tests {
         }
     }
 
+    #[test]
+    fn clear_pending_callsign_hexes_drops_untrusted_hex_only_before_adsb_seen() {
+        let mut pending_callsign = tracked_flight();
+        pending_callsign.hex = Some("48C2A2".to_string());
+
+        let mut live_callsign = tracked_flight();
+        live_callsign.hex = Some("3C6589".to_string());
+        live_callsign.last_seen = Some(dt("2026-04-18T11:00:00Z"));
+
+        let mut pending_hex_identifier = tracked_flight();
+        pending_hex_identifier.identifier = FlightIdentifier::Hex("48C2A2".to_string());
+        pending_hex_identifier.hex = Some("48C2A2".to_string());
+
+        let mut state = FlightTrackerState {
+            flights: vec![pending_callsign, live_callsign, pending_hex_identifier],
+        };
+
+        assert_eq!(clear_pending_callsign_hexes(&mut state), 1);
+        assert_eq!(state.flights[0].hex, None);
+        assert_eq!(state.flights[1].hex.as_deref(), Some("3C6589"));
+        assert_eq!(state.flights[2].hex.as_deref(), Some("48C2A2"));
+    }
+
+    #[test]
+    fn aircraft_matches_tracked_callsign_rejects_reused_airframe() {
+        let mut flight = tracked_flight();
+        flight.identifier = FlightIdentifier::Callsign("FR196".to_string());
+        flight.callsign = Some("RYR196".to_string());
+        let matching = NearbyAircraft {
+            flight: Some(" RYR196 ".to_string()),
+            ..aircraft_at(34_000, 0)
+        };
+        let reused_airframe = NearbyAircraft {
+            flight: Some("RYR58JX ".to_string()),
+            ..aircraft_at(34_000, 0)
+        };
+        let missing_callsign = NearbyAircraft {
+            flight: None,
+            ..aircraft_at(34_000, 0)
+        };
+
+        assert!(aircraft_matches_tracked_callsign(&matching, &flight));
+        assert!(!aircraft_matches_tracked_callsign(
+            &reused_airframe,
+            &flight
+        ));
+        assert!(!aircraft_matches_tracked_callsign(
+            &missing_callsign,
+            &flight
+        ));
+    }
+
     fn aircraft_at(altitude_ft: i64, baro_rate: i64) -> NearbyAircraft {
         NearbyAircraft {
             hex: Some("4952c3".to_string()),
@@ -1749,7 +1855,7 @@ mod tests {
             Some(dt("2026-04-18T09:45:00Z"))
         );
         assert_eq!(flight.takeoff_at, Some(dt("2026-04-18T10:05:00Z")));
-        assert_eq!(flight.hex.as_deref(), Some("3C6589"));
+        assert_eq!(flight.hex.as_deref(), None);
         assert_eq!(flight.aircraft_type.as_deref(), Some("A320"));
     }
 

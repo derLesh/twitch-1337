@@ -333,7 +333,7 @@ async fn track_command_keeps_pending_flight_with_stale_scheduled_departure() {
                     "actual": null
                 },
                 "aircraft": {
-                    "icao24": null,
+                    "icao24": "48c2a2",
                     "icao": "B38M"
                 }
             }]
@@ -355,6 +355,7 @@ async fn track_command_keeps_pending_flight_with_stale_scheduled_departure() {
         ron::from_str(&persisted).unwrap();
     let flight = state.flights.first().expect("persisted flight");
     assert_eq!(flight.callsign.as_deref(), Some("RYR196"));
+    assert_eq!(flight.hex.as_deref(), None);
     assert_eq!(flight.route, Some(("BER".to_string(), "BUD".to_string())));
     assert_eq!(flight.aircraft_type.as_deref(), Some("B38M"));
     assert_eq!(flight.last_seen, None);
