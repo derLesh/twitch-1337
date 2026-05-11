@@ -88,7 +88,8 @@ client_secret = "your_client_secret"
 # enabled = true
 # include_global = true
 # refresh_interval_secs = 3600
-# max_prompt_emotes = 40
+# max_prompt_emotes = 12      # Hard cap on emotes injected per turn (1..=200)
+# min_baseline_emotes = 4     # Floor when scoring picks nothing; filled in glossary order (must be <= max_prompt_emotes)
 #
 # Optional: expose web tools to !ai (`web_search` + `read_url`) via SearXNG.
 # The model can search current events and fetch article text at runtime.

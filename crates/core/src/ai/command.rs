@@ -336,11 +336,14 @@ where
         } else {
             inject::InvocationChannel::Primary
         };
-        // Memory goes in the system message (cacheable across turns); recent
-        // chat goes in the user message (changes every turn).
+        // Durable memory (SOUL/LORE/users) goes in the system message so the
+        // prompt cache survives across turns. Volatile state and recent chat
+        // go in the user message: any state write or chat line would otherwise
+        // invalidate the system-message cache every turn.
         let inject::ChatTurnContext {
             recent_chat,
-            memory,
+            durable_memory,
+            volatile_state,
         } = inject::build_chat_turn_context(
             &mem.store,
             inject::BuildOpts {
@@ -377,13 +380,20 @@ where
         } else if self.web.is_some() {
             system_prompt_head.push_str(WEB_TOOLS_SYSTEM_APPENDIX);
         }
-        let system_prompt = format!("{system_prompt_head}\n\n{memory}");
+        let system_prompt = format!("{system_prompt_head}\n\n{durable_memory}");
 
-        let user_message = if recent_chat.is_empty() {
-            format!("{instructions_head}\n\n{instruction_for_prompt}")
-        } else {
-            format!("{recent_chat}\n\n{instructions_head}\n\n{instruction_for_prompt}")
-        };
+        let mut user_message = String::new();
+        if !volatile_state.is_empty() {
+            user_message.push_str(&volatile_state);
+            user_message.push_str("\n\n");
+        }
+        if !recent_chat.is_empty() {
+            user_message.push_str(&recent_chat);
+            user_message.push_str("\n\n");
+        }
+        user_message.push_str(&instructions_head);
+        user_message.push_str("\n\n");
+        user_message.push_str(&instruction_for_prompt);
 
         let exec = ChatTurnExecutor::new(ChatTurnExecutorOpts {
             store: mem.store.clone(),

@@ -91,6 +91,24 @@ pub fn parse_slug(slug: &str) -> Result<String, SlugError> {
     Ok(slug.to_string())
 }
 
+/// True iff `slug` ends in `-YYYY-MM-DD`. Forbidden on writes so memory
+/// entries get stable slugs the dreamer can rewrite in place, rather than
+/// one slug per day piling up indefinitely. Deletes still accept dated
+/// slugs so the dreamer can drain the existing backlog.
+pub fn has_trailing_iso_date(slug: &str) -> bool {
+    let bytes = slug.as_bytes();
+    if bytes.len() < 11 {
+        return false;
+    }
+    let tail = &bytes[bytes.len() - 11..];
+    tail[0] == b'-'
+        && tail[1..5].iter().all(u8::is_ascii_digit)
+        && tail[5] == b'-'
+        && tail[6..8].iter().all(u8::is_ascii_digit)
+        && tail[8] == b'-'
+        && tail[9..11].iter().all(u8::is_ascii_digit)
+}
+
 pub fn check_body(body: &str) -> Result<(), BodyError> {
     // Reject CR outright. CRLF would otherwise let `\r\n---\r\n` slip past the
     // LF-only frontmatter-reopen check below; markdown bodies have no need for
@@ -180,6 +198,26 @@ mod tests {
         assert!(parse_slug("a").is_ok());
         for bad in ["", "-foo", "Foo", "fo o", "a".repeat(65).as_str(), "../x"] {
             assert!(parse_slug(bad).is_err(), "should reject {bad}");
+        }
+    }
+
+    #[test]
+    fn has_trailing_iso_date_matches_yyyy_mm_dd_suffix() {
+        for s in [
+            "av-depot-2026-05-08",
+            "hantavirus-lockdown-2026-05-06",
+            "x-1999-12-31",
+        ] {
+            assert!(has_trailing_iso_date(s), "expected dated: {s}");
+        }
+        for s in [
+            "magie-023-schufa",
+            "quiz-2026",
+            "av-depot",
+            "av-depot-202-05-08",
+            "2026-05-08",
+        ] {
+            assert!(!has_trailing_iso_date(s), "expected not dated: {s}");
         }
     }
 

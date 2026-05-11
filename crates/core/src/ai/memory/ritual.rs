@@ -122,7 +122,16 @@ pub async fn run_ritual(
             date: &now_str,
         },
     );
-    let mem_block = mem_ctx.memory;
+    // The dreamer wants every memory file in one shot, so glue durable +
+    // volatile blocks back together for its system prompt. The cache-hygiene
+    // split only matters for the chat-turn loop.
+    let mut mem_block = mem_ctx.durable_memory;
+    if !mem_ctx.volatile_state.is_empty() {
+        if !mem_block.is_empty() {
+            mem_block.push('\n');
+        }
+        mem_block.push_str(&mem_ctx.volatile_state);
+    }
     let system_prompt = format!("{head}\n\n{mem_block}\n{transcript_block}");
 
     let exec = DreamerExecutor::new(DreamerExecutorOpts {

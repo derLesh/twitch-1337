@@ -29,6 +29,7 @@ pub struct SevenTvEmoteProvider {
     include_global: bool,
     refresh_interval: Duration,
     max_prompt_emotes: usize,
+    min_baseline_emotes: usize,
     cache: Mutex<PromptCache>,
 }
 
@@ -107,6 +108,7 @@ impl SevenTvEmoteProvider {
             include_global: config.include_global,
             refresh_interval: Duration::from_secs(config.refresh_interval_secs),
             max_prompt_emotes: config.max_prompt_emotes,
+            min_baseline_emotes: config.min_baseline_emotes.min(config.max_prompt_emotes),
             cache: Mutex::new(PromptCache::default()),
         })
     }
@@ -123,7 +125,13 @@ impl SevenTvEmoteProvider {
         recent_chat: &str,
     ) -> Option<String> {
         let emotes = self.prompt_emotes(twitch_channel_id).await?;
-        build_prompt_block(&emotes, self.max_prompt_emotes, instruction, recent_chat)
+        build_prompt_block(
+            &emotes,
+            self.max_prompt_emotes,
+            self.min_baseline_emotes,
+            instruction,
+            recent_chat,
+        )
     }
 
     async fn prompt_emotes(&self, twitch_channel_id: &str) -> Option<Vec<PromptEmote>> {
@@ -322,14 +330,20 @@ fn build_available_prompt_emotes(
 fn build_prompt_block(
     emotes: &[PromptEmote],
     max_prompt_emotes: usize,
+    min_baseline_emotes: usize,
     instruction: &str,
     recent_chat: &str,
 ) -> Option<String> {
-    let lines = rank_prompt_emotes(emotes, instruction, recent_chat)
-        .into_iter()
-        .take(max_prompt_emotes)
-        .map(format_prompt_emote_line)
-        .collect::<Vec<_>>();
+    let lines = select_prompt_emotes(
+        emotes,
+        max_prompt_emotes,
+        min_baseline_emotes,
+        instruction,
+        recent_chat,
+    )
+    .into_iter()
+    .map(format_prompt_emote_line)
+    .collect::<Vec<_>>();
 
     if lines.is_empty() {
         return None;
@@ -341,13 +355,24 @@ fn build_prompt_block(
     ))
 }
 
-fn rank_prompt_emotes<'a>(
+/// Pick which emotes to inject this turn. Scoring emotes (anything seen in
+/// recent chat, or whose meaning/usage shares 4+ char terms with the current
+/// instruction) come first, capped by `max_prompt_emotes`. If fewer than
+/// `min_baseline_emotes` made the cut, fill the gap with glossary-order
+/// fallbacks so the model always has a baseline vocabulary. The whole list
+/// stays capped by `max_prompt_emotes`.
+fn select_prompt_emotes<'a>(
     emotes: &'a [PromptEmote],
+    max_prompt_emotes: usize,
+    min_baseline_emotes: usize,
     instruction: &str,
     recent_chat: &str,
 ) -> Vec<&'a PromptEmote> {
+    if max_prompt_emotes == 0 {
+        return Vec::new();
+    }
     let context_terms = searchable_terms(instruction);
-    let mut ranked = emotes
+    let scored: Vec<(usize, usize, usize, &PromptEmote)> = emotes
         .iter()
         .enumerate()
         .map(|(index, emote)| {
@@ -355,15 +380,36 @@ fn rank_prompt_emotes<'a>(
             let context_score = context_match_score(emote, &context_terms);
             (index, recent_count, context_score, emote)
         })
-        .collect::<Vec<_>>();
+        .collect();
 
-    ranked.sort_by(|a, b| {
+    let mut scoring: Vec<&(usize, usize, usize, &PromptEmote)> = scored
+        .iter()
+        .filter(|(_, r, c, _)| *r > 0 || *c > 0)
+        .collect();
+    scoring.sort_by(|a, b| {
         b.1.cmp(&a.1)
             .then_with(|| b.2.cmp(&a.2))
             .then_with(|| a.0.cmp(&b.0))
     });
 
-    ranked.into_iter().map(|(_, _, _, emote)| emote).collect()
+    let baseline_floor = min_baseline_emotes.min(max_prompt_emotes);
+    let mut picked: Vec<&PromptEmote> = Vec::with_capacity(max_prompt_emotes);
+    let mut picked_indexes: HashSet<usize> = HashSet::new();
+    for entry in scoring.iter().take(max_prompt_emotes) {
+        picked.push(entry.3);
+        picked_indexes.insert(entry.0);
+    }
+    if picked.len() < baseline_floor {
+        for (index, _, _, emote) in &scored {
+            if picked.len() >= baseline_floor {
+                break;
+            }
+            if picked_indexes.insert(*index) {
+                picked.push(emote);
+            }
+        }
+    }
+    picked
 }
 
 fn format_prompt_emote_line(emote: &PromptEmote) -> String {
@@ -531,7 +577,7 @@ mod tests {
         );
 
         let emotes = build_available_prompt_emotes(&glossary, &available).unwrap();
-        let prompt = build_prompt_block(&emotes, 40, "", "").unwrap();
+        let prompt = build_prompt_block(&emotes, 40, 40, "", "").unwrap();
 
         assert!(prompt.contains("KEKW"));
         assert!(prompt.contains("meaning=lachen"));
@@ -619,7 +665,7 @@ mod tests {
 
         tracing::subscriber::with_default(subscriber, || {
             let emotes = build_available_prompt_emotes(&glossary, &available).unwrap();
-            let prompt = build_prompt_block(&emotes, 40, "", "").unwrap();
+            let prompt = build_prompt_block(&emotes, 40, 40, "", "").unwrap();
             assert!(prompt.contains("KEKW"));
             assert!(!prompt.contains("MissingA"));
             assert!(!prompt.contains("MissingB"));
@@ -673,7 +719,7 @@ mod tests {
         );
 
         let emotes = build_available_prompt_emotes(&glossary, &available).unwrap();
-        let prompt = build_prompt_block(&emotes, 1, "", "").unwrap();
+        let prompt = build_prompt_block(&emotes, 1, 1, "", "").unwrap();
 
         assert!(prompt.contains("A"));
         assert!(!prompt.contains("B"));
@@ -710,6 +756,7 @@ mod tests {
 
         let prompt = build_prompt_block(
             &emotes,
+            2,
             2,
             "sag etwas lustiges",
             "## Recent chat (#main)\n[13:37] bob: LocalEmote",
@@ -753,7 +800,7 @@ mod tests {
         );
         let emotes = build_available_prompt_emotes(&glossary, &available).unwrap();
 
-        let prompt = build_prompt_block(&emotes, 2, "sag etwas lustiges", "").unwrap();
+        let prompt = build_prompt_block(&emotes, 2, 2, "sag etwas lustiges", "").unwrap();
 
         let local_pos = prompt.find("- LocalEmote:").unwrap();
         let kekw_pos = prompt.find("- KEKW:").unwrap();
@@ -761,5 +808,106 @@ mod tests {
             kekw_pos < local_pos,
             "context-matching emote should outrank TOML order:\n{prompt}"
         );
+    }
+
+    #[test]
+    fn prompt_drops_zero_score_emotes_when_baseline_is_zero() {
+        let glossary = vec![
+            GlossaryEmote {
+                name: "Hit".into(),
+                meaning: "lustig".into(),
+                usage: None,
+                avoid: None,
+            },
+            GlossaryEmote {
+                name: "Idle".into(),
+                meaning: "nichts dergleichen".into(),
+                usage: None,
+                avoid: None,
+            },
+        ];
+        let available = merge_emote_sets(
+            vec![
+                SevenTvEmote { name: "Hit".into() },
+                SevenTvEmote {
+                    name: "Idle".into(),
+                },
+            ],
+            Vec::new(),
+        );
+        let emotes = build_available_prompt_emotes(&glossary, &available).unwrap();
+
+        // "lustig" matches the instruction terms; "Idle" scores zero.
+        let prompt = build_prompt_block(&emotes, 8, 0, "etwas lustiges", "").unwrap();
+
+        assert!(prompt.contains("- Hit:"));
+        assert!(
+            !prompt.contains("- Idle:"),
+            "zero-score emote leaked through:\n{prompt}"
+        );
+    }
+
+    #[test]
+    fn prompt_baseline_floor_fills_in_glossary_order_when_no_scoring_hits() {
+        let glossary = vec![
+            GlossaryEmote {
+                name: "First".into(),
+                meaning: "platzhalter".into(),
+                usage: None,
+                avoid: None,
+            },
+            GlossaryEmote {
+                name: "Second".into(),
+                meaning: "platzhalter".into(),
+                usage: None,
+                avoid: None,
+            },
+            GlossaryEmote {
+                name: "Third".into(),
+                meaning: "platzhalter".into(),
+                usage: None,
+                avoid: None,
+            },
+        ];
+        let available = merge_emote_sets(
+            vec![
+                SevenTvEmote {
+                    name: "First".into(),
+                },
+                SevenTvEmote {
+                    name: "Second".into(),
+                },
+                SevenTvEmote {
+                    name: "Third".into(),
+                },
+            ],
+            Vec::new(),
+        );
+        let emotes = build_available_prompt_emotes(&glossary, &available).unwrap();
+
+        // No instruction terms ≥4 chars and no recent chat → nothing scores.
+        let prompt = build_prompt_block(&emotes, 8, 2, "hi", "").unwrap();
+
+        // Exactly the baseline floor, in glossary order.
+        assert!(prompt.contains("- First:"));
+        assert!(prompt.contains("- Second:"));
+        assert!(
+            !prompt.contains("- Third:"),
+            "baseline floor exceeded:\n{prompt}"
+        );
+    }
+
+    #[test]
+    fn prompt_block_returns_none_when_max_prompt_emotes_is_zero() {
+        let glossary = vec![GlossaryEmote {
+            name: "A".into(),
+            meaning: "x".into(),
+            usage: None,
+            avoid: None,
+        }];
+        let available = merge_emote_sets(vec![SevenTvEmote { name: "A".into() }], Vec::new());
+        let emotes = build_available_prompt_emotes(&glossary, &available).unwrap();
+
+        assert!(build_prompt_block(&emotes, 0, 0, "hi", "").is_none());
     }
 }

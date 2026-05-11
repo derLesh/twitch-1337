@@ -9,7 +9,8 @@ use serde::Deserialize;
 use llm::{ToolCall, ToolDefinition, ToolExecutor, ToolResultMessage};
 
 use crate::ai::memory::sanitize::{
-    PathError, SlugError, WritePath, check_body, parse_slug, parse_write_path, write_path_to_kind,
+    PathError, SlugError, WritePath, check_body, has_trailing_iso_date, parse_slug,
+    parse_write_path, write_path_to_kind,
 };
 use crate::ai::memory::store::{MemoryStore, WriteError};
 use crate::ai::memory::types::{FileKind, Role};
@@ -187,6 +188,9 @@ impl ChatTurnExecutor {
             Err(SlugError::Invalid) => return "invalid_slug".into(),
             Err(SlugError::Reserved) => return "reserved_slug".into(),
         };
+        if has_trailing_iso_date(&slug) {
+            return "dated_slug".into();
+        }
         if check_body(&args.body).is_err() {
             return "invalid_body".into();
         }
@@ -447,6 +451,44 @@ mod exec_tests {
             ))
             .await;
         assert_eq!(r.content, "invalid_slug");
+    }
+
+    #[tokio::test]
+    async fn dated_slug_is_blocked_on_write_but_delete_is_allowed() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = MemoryStore::open(dir.path(), Caps::default())
+            .await
+            .unwrap();
+        let exec = make_executor(Role::Regular, store.clone(), 8).await;
+
+        // write rejects trailing -YYYY-MM-DD slugs so dated-suffix accumulation
+        // cannot recur via fresh writes.
+        let r = exec
+            .execute(&call(
+                "write_state",
+                serde_json::json!({"slug": "av-depot-2026-05-08", "body": "x"}),
+            ))
+            .await;
+        assert_eq!(r.content, "dated_slug");
+
+        // delete still accepts dated slugs so the dreamer can prune the backlog.
+        store
+            .write_state(
+                &FileKind::State {
+                    slug: "legacy-2026-05-08".into(),
+                },
+                "x",
+                Some("12345"),
+            )
+            .await
+            .unwrap();
+        let r = exec
+            .execute(&call(
+                "delete_state",
+                serde_json::json!({"slug": "legacy-2026-05-08"}),
+            ))
+            .await;
+        assert_eq!(r.content, "ok");
     }
 
     #[tokio::test]

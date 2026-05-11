@@ -56,7 +56,11 @@ fn default_emote_refresh_interval() -> u64 {
 }
 
 fn default_max_prompt_emotes() -> usize {
-    40
+    12
+}
+
+fn default_min_baseline_emotes() -> usize {
+    4
 }
 
 fn default_true() -> bool {
@@ -258,6 +262,12 @@ pub struct AiEmotesConfigSection {
     pub refresh_interval_secs: u64,
     #[serde(default = "default_max_prompt_emotes")]
     pub max_prompt_emotes: usize,
+    /// Floor for emotes injected even when nothing in the turn matches.
+    /// Filled in glossary order so the model always sees a baseline vocabulary;
+    /// scoring emotes (recent in chat or context-matched against the user
+    /// instruction) stack on top up to `max_prompt_emotes`.
+    #[serde(default = "default_min_baseline_emotes")]
+    pub min_baseline_emotes: usize,
     /// Optional override for tests or private mirrors. Defaults to
     /// `https://7tv.io/v3` when omitted.
     #[serde(default)]
@@ -271,6 +281,7 @@ impl Default for AiEmotesConfigSection {
             include_global: true,
             refresh_interval_secs: default_emote_refresh_interval(),
             max_prompt_emotes: default_max_prompt_emotes(),
+            min_baseline_emotes: default_min_baseline_emotes(),
             base_url: None,
         }
     }
@@ -824,6 +835,13 @@ pub fn validate_config(config: &Configuration) -> Result<()> {
         if !(1..=200).contains(&ai.emotes.max_prompt_emotes) {
             bail!(
                 "ai.emotes.max_prompt_emotes must be between 1 and 200 (got {})",
+                ai.emotes.max_prompt_emotes
+            );
+        }
+        if ai.emotes.min_baseline_emotes > ai.emotes.max_prompt_emotes {
+            bail!(
+                "ai.emotes.min_baseline_emotes ({}) must be <= max_prompt_emotes ({})",
+                ai.emotes.min_baseline_emotes,
                 ai.emotes.max_prompt_emotes
             );
         }

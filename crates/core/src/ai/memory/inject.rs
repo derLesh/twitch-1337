@@ -127,13 +127,24 @@ pub struct BuildOpts {
     pub invocation_channel: InvocationChannel,
 }
 
-/// Result of [`build_chat_turn_context`]. `recent_chat` holds the per-turn rolling
-/// chat sections (volatile, belongs in the user message for cache hygiene);
-/// `memory` holds SOUL/LORE/users/state nonce-fenced blocks (less volatile,
-/// belongs in the system message). Either may be empty.
+/// Result of [`build_chat_turn_context`].
+///
+/// The three fields exist so callers can route blocks to whichever message
+/// maximises prompt-cache hits:
+/// - `durable_memory` holds SOUL/LORE/users (changes on dreamer runs only).
+///   Lives in the system message so consecutive turns hit the prompt cache.
+/// - `volatile_state` holds the state/<slug> blocks (every `write_state` /
+///   `delete_state` mutates them). Lives in the user message so it can change
+///   freely without invalidating the system-message cache.
+/// - `recent_chat` holds the rolling per-turn chat history + mention table
+///   (volatile by definition). Lives in the user message.
+///
+/// Any field may be empty. Callers that want the legacy combined memory blob
+/// (dreamer) concatenate `durable_memory` + `volatile_state` themselves.
 pub struct ChatTurnContext {
     pub recent_chat: String,
-    pub memory: String,
+    pub durable_memory: String,
+    pub volatile_state: String,
 }
 
 /// Build the chat-turn injected context split into a recent-chat section and a
@@ -181,36 +192,51 @@ pub async fn build_chat_turn_context(
     // blocks, so users dropped by the byte budget still appear in the table.
     let mention_table = render_mention_table(&users, &mentioned);
 
-    let mut memory_blocks: Vec<String> = Vec::new();
-    memory_blocks.push(fence_block(FenceLabel::Soul, &opts.nonce, &soul.body));
-    memory_blocks.push(fence_block(FenceLabel::Lore, &opts.nonce, &lore.body));
+    let mut durable_blocks: Vec<String> = Vec::new();
+    durable_blocks.push(fence_block(FenceLabel::Soul, &opts.nonce, &soul.body));
+    durable_blocks.push(fence_block(FenceLabel::Lore, &opts.nonce, &lore.body));
 
-    let mut rest: Vec<MemoryFile> = users.drain(..).chain(states.drain(..)).collect();
-    rest.sort_by_key(|f| std::cmp::Reverse(f.frontmatter.updated_at));
+    users.sort_by_key(|f| std::cmp::Reverse(f.frontmatter.updated_at));
+    states.sort_by_key(|f| std::cmp::Reverse(f.frontmatter.updated_at));
 
-    let mut total: usize = memory_blocks.iter().map(String::len).sum();
-    for f in rest {
-        let label = match &f.kind {
-            FileKind::User { user_id } => FenceLabel::User {
-                id: user_id,
-                login: f.frontmatter.username.as_deref(),
-                display_name: f.frontmatter.display_name.as_deref(),
-            },
-            FileKind::State { slug } => FenceLabel::State { slug },
-            FileKind::Soul | FileKind::Lore => {
-                tracing::error!(?f.kind, "soul/lore in user/state list, skipping");
-                continue;
-            }
+    // Pack user blocks until the durable-memory budget is hit. State blocks get
+    // whatever budget is left over so heavy LORE/user nights don't crowd them
+    // out entirely; remaining state still pops as oldest-first drops.
+    let mut total: usize = durable_blocks.iter().map(String::len).sum();
+    for f in users.drain(..) {
+        let FileKind::User { user_id } = &f.kind else {
+            tracing::error!(?f.kind, "non-user file in user list, skipping");
+            continue;
+        };
+        let label = FenceLabel::User {
+            id: user_id,
+            login: f.frontmatter.username.as_deref(),
+            display_name: f.frontmatter.display_name.as_deref(),
         };
         let block = fence_block(label, &opts.nonce, &f.body);
         if total + block.len() + 1 > opts.inject_byte_budget {
             break;
         }
         total += block.len() + 1;
-        memory_blocks.push(block);
+        durable_blocks.push(block);
     }
 
-    let memory_body = memory_blocks.join("\n");
+    let mut state_blocks: Vec<String> = Vec::new();
+    for f in states.drain(..) {
+        let FileKind::State { slug } = &f.kind else {
+            tracing::error!(?f.kind, "non-state file in state list, skipping");
+            continue;
+        };
+        let block = fence_block(FenceLabel::State { slug }, &opts.nonce, &f.body);
+        if total + block.len() + 1 > opts.inject_byte_budget {
+            break;
+        }
+        total += block.len() + 1;
+        state_blocks.push(block);
+    }
+
+    let durable_memory = durable_blocks.join("\n");
+    let volatile_state = state_blocks.join("\n");
     let mut recent_chat = recent_sections.join("\n\n");
     if !mention_table.is_empty() {
         if !recent_chat.is_empty() {
@@ -220,7 +246,8 @@ pub async fn build_chat_turn_context(
     }
     Ok(ChatTurnContext {
         recent_chat,
-        memory: memory_body,
+        durable_memory,
+        volatile_state,
     })
 }
 
@@ -412,6 +439,61 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn build_chat_turn_context_routes_state_to_volatile_and_users_to_durable() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = MemoryStore::open(dir.path(), Caps::default())
+            .await
+            .unwrap();
+        store
+            .write(
+                &FileKind::User {
+                    user_id: "42".into(),
+                },
+                "alice body",
+                Some("alice"),
+                Some("Alice"),
+            )
+            .await
+            .unwrap();
+        store
+            .write_state(
+                &FileKind::State {
+                    slug: "quiz".into(),
+                },
+                "score: 3",
+                Some("42"),
+            )
+            .await
+            .unwrap();
+
+        let ctx = build_chat_turn_context(
+            &store,
+            BuildOpts {
+                inject_byte_budget: 24576,
+                nonce: "n00000000000000nn".into(),
+                primary_history: None,
+                primary_login: "main".into(),
+                ai_channel_history: None,
+                ai_channel_login: None,
+                invocation_channel: InvocationChannel::Primary,
+            },
+        )
+        .await
+        .unwrap();
+
+        assert!(ctx.durable_memory.contains("kind=soul"));
+        assert!(ctx.durable_memory.contains("kind=lore"));
+        assert!(ctx.durable_memory.contains("kind=user id=42"));
+        assert!(
+            !ctx.durable_memory.contains("kind=state"),
+            "state must not appear in durable memory: {}",
+            ctx.durable_memory
+        );
+        assert!(ctx.volatile_state.contains("kind=state slug=quiz"));
+        assert!(!ctx.volatile_state.contains("kind=user"));
+    }
+
+    #[tokio::test]
     async fn build_chat_turn_context_drops_oldest_users_when_over_budget() {
         let dir = tempfile::tempdir().unwrap();
         let store = MemoryStore::open(dir.path(), Caps::default())
@@ -447,8 +529,8 @@ mod tests {
         .await
         .unwrap();
         // Newest user retained, oldest dropped.
-        assert!(ctx.memory.contains("kind=user id=3"));
-        assert!(!ctx.memory.contains("kind=user id=1"));
+        assert!(ctx.durable_memory.contains("kind=user id=3"));
+        assert!(!ctx.durable_memory.contains("kind=user id=1"));
         assert!(ctx.recent_chat.is_empty());
     }
 
@@ -494,7 +576,8 @@ mod tests {
         assert!(ai_idx < pri_idx, "invocation channel must come first");
         assert!(body.recent_chat.contains("alice: hello primary"));
         assert!(body.recent_chat.contains("bob: hello ai"));
-        assert!(!body.memory.contains("Recent chat"));
+        assert!(!body.durable_memory.contains("Recent chat"));
+        assert!(!body.volatile_state.contains("Recent chat"));
     }
 
     #[tokio::test]
@@ -598,7 +681,8 @@ mod tests {
         // carol has no user file → no row.
         assert!(!body.recent_chat.contains("carol |"));
         // Memory section must not contain the table.
-        assert!(!body.memory.contains("Mentioned users"));
+        assert!(!body.durable_memory.contains("Mentioned users"));
+        assert!(!body.volatile_state.contains("Mentioned users"));
     }
 
     #[tokio::test]
@@ -635,7 +719,8 @@ mod tests {
         .unwrap();
 
         assert!(body.recent_chat.is_empty());
-        assert!(!body.memory.contains("Mentioned users"));
+        assert!(!body.durable_memory.contains("Mentioned users"));
+        assert!(!body.volatile_state.contains("Mentioned users"));
     }
 
     #[tokio::test]
