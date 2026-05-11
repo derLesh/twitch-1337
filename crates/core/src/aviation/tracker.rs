@@ -717,9 +717,38 @@ fn live_poll_interval(flight: &TrackedFlight) -> Duration {
     }
 }
 
+fn pending_unknown_poll_schedule(
+    flight: &TrackedFlight,
+    now: DateTime<Utc>,
+) -> PendingPollSchedule {
+    let expires_at = flight.tracked_at + chrono_seconds(PENDING_UNKNOWN_EXPIRE_AFTER);
+    if now >= expires_at {
+        return PendingPollSchedule::Expired;
+    }
+
+    let age = now.signed_duration_since(flight.tracked_at);
+    let interval = if age < chrono_seconds(PENDING_UNKNOWN_FAST_AFTER_TRACK) {
+        PENDING_POLL_2_MIN
+    } else if age < chrono_seconds(PENDING_UNKNOWN_NORMAL_AFTER_TRACK) {
+        PENDING_POLL_10_MIN
+    } else {
+        PENDING_POLL_30_MIN
+    };
+
+    PendingPollSchedule::Active {
+        interval,
+        expires_at,
+    }
+}
+
 fn pending_poll_schedule(flight: &TrackedFlight, now: DateTime<Utc>) -> PendingPollSchedule {
     if let Some(scheduled_departure_at) = flight.scheduled_departure_at {
         let expires_at = scheduled_departure_at + chrono_seconds(PENDING_SCHEDULED_EXPIRE_AFTER);
+        // Aviationstack can return an older occurrence of a reused flight
+        // number. Do not let stale metadata expire a fresh pending track.
+        if flight.tracked_at >= expires_at {
+            return pending_unknown_poll_schedule(flight, now);
+        }
         if now >= expires_at {
             return PendingPollSchedule::Expired;
         }
@@ -744,24 +773,7 @@ fn pending_poll_schedule(flight: &TrackedFlight, now: DateTime<Utc>) -> PendingP
         };
     }
 
-    let expires_at = flight.tracked_at + chrono_seconds(PENDING_UNKNOWN_EXPIRE_AFTER);
-    if now >= expires_at {
-        return PendingPollSchedule::Expired;
-    }
-
-    let age = now.signed_duration_since(flight.tracked_at);
-    let interval = if age < chrono_seconds(PENDING_UNKNOWN_FAST_AFTER_TRACK) {
-        PENDING_POLL_2_MIN
-    } else if age < chrono_seconds(PENDING_UNKNOWN_NORMAL_AFTER_TRACK) {
-        PENDING_POLL_10_MIN
-    } else {
-        PENDING_POLL_30_MIN
-    };
-
-    PendingPollSchedule::Active {
-        interval,
-        expires_at,
-    }
+    pending_unknown_poll_schedule(flight, now)
 }
 
 fn next_due_after_last_poll(
