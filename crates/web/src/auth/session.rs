@@ -2,8 +2,8 @@
 //!
 //! Sessions sit behind a `RwLock<HashMap>` keyed by a 64-hex-char random
 //! id. TTL is sliding: every successful `get_and_touch` bumps `last_seen`,
-//! so an active user stays logged in indefinitely. The mod-gate middleware
-//! also stamps `last_mod_check` so it knows when to re-verify the helix
+//! so an active user stays logged in indefinitely. The role-gate middleware
+//! also stamps `last_role_check` so it knows when to re-verify the helix
 //! moderator list.
 
 use std::collections::HashMap;
@@ -14,6 +14,7 @@ use chrono::{DateTime, Utc};
 use eyre::Result;
 use rand::Rng as _;
 
+use crate::auth::role::Role;
 use crate::clock::Clock;
 
 pub type SessionId = String;
@@ -22,10 +23,17 @@ pub type SessionId = String;
 pub struct Session {
     pub user_id: String,
     pub user_login: String,
+    pub role: Role,
     pub issued_at: DateTime<Utc>,
     pub last_seen: DateTime<Utc>,
-    pub last_mod_check: DateTime<Utc>,
+    pub last_role_check: DateTime<Utc>,
     pub csrf_value: [u8; 32],
+}
+
+impl Session {
+    pub fn is_mod(&self) -> bool {
+        self.role == Role::Mod
+    }
 }
 
 pub struct SessionTable {
@@ -46,7 +54,12 @@ impl SessionTable {
     /// Returns the new session id together with the freshly-generated csrf
     /// value so the OAuth callback can set both cookies without a second
     /// lookup against the table.
-    pub fn insert(&self, user_id: String, user_login: String) -> Result<(SessionId, [u8; 32])> {
+    pub fn insert(
+        &self,
+        user_id: String,
+        user_login: String,
+        role: Role,
+    ) -> Result<(SessionId, [u8; 32])> {
         let now = self.clock.now();
         let mut rng = rand::rng();
         let mut id_bytes = [0u8; 32];
@@ -59,9 +72,10 @@ impl SessionTable {
             Session {
                 user_id,
                 user_login,
+                role,
                 issued_at: now,
                 last_seen: now,
-                last_mod_check: now,
+                last_role_check: now,
                 csrf_value: csrf,
             },
         );
@@ -85,10 +99,10 @@ impl SessionTable {
         self.inner.write().unwrap().remove(id);
     }
 
-    pub fn record_mod_check(&self, id: &str) {
+    pub fn record_role_check(&self, id: &str) {
         let now = self.clock.now();
         if let Some(s) = self.inner.write().unwrap().get_mut(id) {
-            s.last_mod_check = now;
+            s.last_role_check = now;
         }
     }
 }

@@ -2,6 +2,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use chrono::{DateTime, TimeZone, Utc};
+use twitch_1337_web::auth::Role;
 use twitch_1337_web::auth::session::SessionTable;
 use twitch_1337_web::clock::Clock;
 
@@ -30,7 +31,7 @@ fn session_round_trips() {
     ));
     let table = SessionTable::new(Duration::from_secs(7 * 24 * 3600), clock.clone());
     let (id, _csrf) = table
-        .insert("12345".into(), "alice".into())
+        .insert("12345".into(), "alice".into(), Role::Mod)
         .expect("insert");
     let got = table.get_and_touch(&id).expect("present");
     assert_eq!(got.user_login, "alice");
@@ -43,7 +44,9 @@ fn session_expires_after_ttl() {
         Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap(),
     ));
     let table = SessionTable::new(Duration::from_secs(60), clock.clone());
-    let (id, _csrf) = table.insert("12345".into(), "alice".into()).unwrap();
+    let (id, _csrf) = table
+        .insert("12345".into(), "alice".into(), Role::Mod)
+        .unwrap();
     clock.advance(61);
     assert!(
         table.get_and_touch(&id).is_none(),
@@ -57,7 +60,9 @@ fn session_sliding_refresh_keeps_alive() {
         Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap(),
     ));
     let table = SessionTable::new(Duration::from_secs(120), clock.clone());
-    let (id, _csrf) = table.insert("12345".into(), "alice".into()).unwrap();
+    let (id, _csrf) = table
+        .insert("12345".into(), "alice".into(), Role::Mod)
+        .unwrap();
     clock.advance(60);
     assert!(table.get_and_touch(&id).is_some()); // bumps last_seen
     clock.advance(90);

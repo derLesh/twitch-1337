@@ -46,6 +46,7 @@ pub struct CommandHandlerConfig<T: Transport, L: LoginCredentials> {
     pub bot_username: String,
     pub channel: String,
     pub data_dir: std::path::PathBuf,
+    pub doener: Arc<crate::doener::DoenerClient>,
     pub suspension_manager: Arc<SuspensionManager>,
     pub suspend: SuspendConfig,
     /// Pre-built 7TV emote provider. `None` disables emote grounding for `!ai`.
@@ -80,6 +81,7 @@ where
         bot_username,
         channel,
         data_dir,
+        doener,
         suspension_manager,
         suspend,
         emote_provider,
@@ -158,9 +160,13 @@ where
             data_dir.clone(),
             Duration::from_secs(cooldowns.feedback),
         )),
-        Box::new(commands::doener::DoenerCommand::new(Duration::from_secs(
-            cooldowns.doener,
-        ))),
+        Box::new(commands::doener::DoenerCommand::new(
+            doener.clone(),
+            Duration::from_secs(cooldowns.doener),
+        )),
+        Box::new(commands::doeneratlas::DoeneratlasCommand::new(
+            Duration::from_secs(cooldowns.doeneratlas),
+        )),
     ];
 
     if let Some(tx) = tracker_tx {
@@ -241,6 +247,7 @@ where
                 web: web.clone(),
                 emotes: emote_provider,
                 bot_username: bot_username.clone(),
+                doener: doener.clone(),
             },
         )));
         cmd_list.push(Box::new(commands::news::NewsCommand::new(

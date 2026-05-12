@@ -8,6 +8,7 @@
 //! together at the top of `sidebar.html` and any drift is visible in
 //! a single file.
 
+pub const LEADERBOARD: &str = "leaderboard";
 pub const PINGS: &str = "pings";
 pub const MEMORY_TREE: &str = "memory";
 pub const MEMORY_SOUL: &str = "memory_soul";

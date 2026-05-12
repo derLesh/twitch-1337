@@ -213,6 +213,8 @@ Flights accepted from metadata before ADS-B visibility are pending (`last_seen =
 Pending flights expire without another ADS-B call after 12h past scheduled
 departure, or after 24h when no scheduled departure is known.
 
+If the scheduled departure was already expired when tracking started, treat it as stale metadata and use the no-scheduled-departure pending schedule instead.
+
 ## Persistence
 
 **File:** `flights.ron` in the data directory (alongside `leaderboard.ron`, `feedback.txt`).

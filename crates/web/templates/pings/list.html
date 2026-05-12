@@ -7,7 +7,9 @@
     <p class="page-sub">Template-based community shouts. Members can <code>!&lt;name&gt;</code> to fire.</p>
   </div>
   <div class="page-actions">
+    {% if is_mod %}
     <a class="btn primary" href="/pings/new">+ New ping</a>
+    {% endif %}
   </div>
 </div>
 
@@ -38,7 +40,9 @@
   <button type="button" class="chip">Public</button>
   <button type="button" class="chip">Recently fired</button>
   <div class="filters-spacer"></div>
+  {% if is_mod %}
   <button type="button" class="chip ghost">Sort: A → Z ↓</button>
+  {% endif %}
 </div>
 
 <div class="table pings">
@@ -81,6 +85,7 @@
         </div>
         <div class="td col-fired"><span class="muted">—</span></div>
         <div class="td col-act">
+          {% if is_mod %}
           <a class="row-act" href="/pings/{{ row.name }}" title="Edit">✎</a>
           <button type="button" class="row-act danger" title="Delete"
                   hx-post="/pings/{{ row.name }}/delete"
@@ -88,6 +93,7 @@
                   hx-target="closest .tr"
                   hx-swap="outerHTML"
                   hx-headers='{"X-Csrf-Token": "{{ csrf }}"}'>✕</button>
+          {% endif %}
         </div>
       </div>
     {% endfor %}

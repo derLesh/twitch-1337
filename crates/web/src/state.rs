@@ -4,6 +4,7 @@
 //! [`crate::build_router`]. Every handler clones individual `Arc`s out of
 //! this struct.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
@@ -13,6 +14,8 @@ use secrecy::SecretString;
 use tokio::sync::RwLock;
 use tower_cookies::Key;
 use twitch_1337_core::ai::memory::store::MemoryStore;
+use twitch_1337_core::aviation::TrackerCommand;
+use twitch_1337_core::commands::leaderboard::PersonalBest;
 use twitch_1337_core::ping::PingManager;
 
 use crate::auth::OAuthCtx;
@@ -33,6 +36,9 @@ pub struct WebState {
     /// resolved at startup via helix users by login.
     pub broadcaster_id: Arc<str>,
     pub hidden_admins: Arc<[String]>,
+    /// Twitch user IDs granted viewer-tier access. Sourced from
+    /// `[twitch].viewer_allowlist`.
+    pub viewer_allowlist: Arc<[String]>,
     /// Twitch developer-app client id (used in `Client-Id` headers when the
     /// callback fetches the caller's user record).
     pub client_id: SecretString,
@@ -51,6 +57,14 @@ pub struct WebState {
     /// `[web].session_secret` in the bin so tampering with sid is detected
     /// on the next request rather than handled by HashMap miss alone.
     pub signed_key: Key,
+    /// Shared 1337 leaderboard (same `Arc` the tracker handler writes
+    /// through). `None`-valued entries mean the user was removed. Read-only
+    /// from web handlers; mutations happen only inside the IRC tracker.
+    pub leaderboard: Arc<RwLock<HashMap<String, PersonalBest>>>,
+    /// Sender half of the flight-tracker command channel. `None` when
+    /// aviation is disabled at startup; the `/flights` handler then renders
+    /// the disabled placeholder instead of awaiting a snapshot.
+    pub tracker_tx: Option<Arc<tokio::sync::mpsc::Sender<TrackerCommand>>>,
 }
 
 /// Derive the signed-cookie [`Key`] from `[web].session_secret`.

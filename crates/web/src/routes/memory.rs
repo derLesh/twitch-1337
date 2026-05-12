@@ -57,6 +57,7 @@ struct TreeTpl {
     csrf: String,
     user_login: String,
     current_page: &'static str,
+    is_mod: bool,
 }
 
 #[derive(Template)]
@@ -80,6 +81,7 @@ struct EditorTpl<'a> {
     error: Option<String>,
     user_login: &'a str,
     current_page: &'static str,
+    is_mod: bool,
     /// Render the user-only frontmatter inputs (`username`, `display_name`).
     show_user_fm: bool,
     /// Render the state-only frontmatter input (`created_by`).
@@ -108,6 +110,7 @@ struct StateListTpl {
     csrf: String,
     user_login: String,
     current_page: &'static str,
+    is_mod: bool,
 }
 
 struct UserRow {
@@ -129,6 +132,7 @@ struct UsersListTpl {
     csrf: String,
     user_login: String,
     current_page: &'static str,
+    is_mod: bool,
 }
 
 fn fmt_ts(t: DateTime<Utc>) -> String {
@@ -238,6 +242,7 @@ async fn tree(
         csrf: csrf::encode(&session.csrf_value),
         user_login: session.user_login.clone(),
         current_page: crate::nav::MEMORY_TREE,
+        is_mod: session.is_mod(),
     })
 }
 
@@ -283,6 +288,7 @@ async fn view_kind(
         error: None,
         user_login: &session.user_login,
         current_page,
+        is_mod: session.is_mod(),
         show_user_fm: matches!(kind, FileKind::User { .. }),
         show_state_fm: matches!(kind, FileKind::State { .. }),
         fm_username: mf.frontmatter.username.as_deref().unwrap_or(""),
@@ -360,6 +366,7 @@ async fn list_users(
         csrf: csrf::encode(&session.csrf_value),
         user_login: session.user_login.clone(),
         current_page: crate::nav::MEMORY_USERS,
+        is_mod: session.is_mod(),
     })
 }
 
@@ -457,6 +464,7 @@ async fn list_state(
         csrf: csrf::encode(&session.csrf_value),
         user_login: session.user_login.clone(),
         current_page: crate::nav::MEMORY_STATE,
+        is_mod: session.is_mod(),
     })
 }
 
@@ -473,6 +481,7 @@ async fn new_state_form(
         cap,
         &csrf_hex,
         &session.user_login,
+        session.is_mod(),
     )
 }
 
@@ -591,6 +600,7 @@ async fn save_kind(
                 draft: form.body,
                 csrf: csrf_hex,
                 user_login: session.user_login.clone(),
+                is_mod: session.is_mod(),
                 current_page,
                 cancel_url,
             })))
@@ -631,6 +641,7 @@ async fn save_kind(
                     error: Some(msg),
                     user_login: &session.user_login,
                     current_page,
+                    is_mod: session.is_mod(),
                     show_user_fm: matches!(&kind, FileKind::User { .. }),
                     show_state_fm: matches!(&kind, FileKind::State { .. }),
                     fm_username: &form.fm_username,
@@ -771,6 +782,7 @@ async fn create_state(
             cap,
             &csrf_hex,
             &session.user_login,
+            session.is_mod(),
         );
     }
     let slug = form.slug.clone();
@@ -818,6 +830,7 @@ async fn create_state(
                 cap,
                 &csrf_hex,
                 &session.user_login,
+                session.is_mod(),
             )
         }
     }
@@ -830,6 +843,7 @@ fn render_state_create(
     cap: usize,
     csrf_hex: &str,
     user_login: &str,
+    is_mod: bool,
 ) -> Result<Response, WebError> {
     render_with(
         status,
@@ -849,6 +863,7 @@ fn render_state_create(
             error,
             user_login,
             current_page: crate::nav::MEMORY_STATE,
+            is_mod,
             show_user_fm: false,
             show_state_fm: false,
             fm_username: "",

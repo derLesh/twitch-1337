@@ -24,6 +24,9 @@ client_secret = "your_client_secret"
 # Twitch user IDs of hidden admins (can manage pings without being a mod)
 # hidden_admins = ["12345678"]
 
+# Twitch user IDs granted read-only viewer access to the web dashboard.
+# viewer_allowlist = ["12345678", "87654321"]
+
 # Optional: A separate channel for testing bot commands (broadcaster-only access)
 # admin_channel = "my_test_channel"
 
@@ -42,7 +45,8 @@ client_secret = "your_client_secret"
 # ai = 30        # !ai command (default: 30)
 # news = 60      # !news command (default: 60)
 # up = 30        # !up command (default: 30)
-# doener = 30    # !döner / !doener command (default: 30)
+# doener = 30       # !dpi command — Dönerindex API (default: 30)
+# doeneratlas = 30  # !döner / !doener — doeneratlas.de (default: 30)
 # feedback = 300 # !fb command (default: 300)
 
 # Optional: Aviationstack metadata enrichment for !track.

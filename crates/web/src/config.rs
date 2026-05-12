@@ -14,5 +14,5 @@ pub struct WebConfig {
     pub public_url: String,
     pub session_secret: SecretString,
     pub session_ttl: Duration,
-    pub mod_check_refresh: Duration,
+    pub role_check_refresh: Duration,
 }

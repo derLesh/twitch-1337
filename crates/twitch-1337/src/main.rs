@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
@@ -9,10 +10,10 @@ use secrecy::ExposeSecret as _;
 use tokio::sync::oneshot;
 use tracing::info;
 use twitch_1337_core::{
-    AuthenticatedLoginCredentials, Services,
+    AuthenticatedLoginCredentials, PersonalBest, Services,
     ai::{command::memory_caps_from_config, memory::store::MemoryStore},
-    aviation, ensure_data_dir, get_data_dir, install_crypto_provider, install_tracing, llm_factory,
-    load_configuration,
+    aviation, doener, ensure_data_dir, get_data_dir, install_crypto_provider, install_tracing,
+    llm_factory, load_configuration, load_leaderboard,
     ping::PingManager,
     run_bot, setup_and_verify_twitch_client,
     twitch::whisper,
@@ -72,6 +73,9 @@ pub async fn main() -> Result<()> {
         }
     };
 
+    let doener_client =
+        Arc::new(doener::DoenerClient::new().wrap_err("Failed to initialize Döner-index client")?);
+
     let whisper_credentials = credentials.clone();
     let whisper = whisper::HelixWhisperSender::new(
         whisper_credentials,
@@ -96,6 +100,21 @@ pub async fn main() -> Result<()> {
             .await
             .wrap_err("open memory store")?;
 
+    // Load the leaderboard before building the web spawner so the same Arc
+    // can be shared with WebState (dashboard read) and the IRC tracker (writes).
+    let leaderboard: Arc<tokio::sync::RwLock<HashMap<String, PersonalBest>>> = Arc::new(
+        tokio::sync::RwLock::new(load_leaderboard(&get_data_dir()).await),
+    );
+
+    // Pre-create the flight-tracker mpsc channel when aviation is enabled so
+    // the sender Arc can be wired into WebState before the handlers are spawned.
+    let (aviation_tracker_tx, aviation_tracker_rx) = if aviation_client.is_some() {
+        let (tx, rx) = tokio::sync::mpsc::channel::<aviation::TrackerCommand>(32);
+        (Some(Arc::new(tx)), Some(rx))
+    } else {
+        (None, None)
+    };
+
     let web_spawner = if config.web.enabled {
         let credentials_for_web = credentials.clone();
         Some(
@@ -105,6 +124,8 @@ pub async fn main() -> Result<()> {
                 irc_connected.clone(),
                 ping_manager.clone(),
                 memory_store.clone(),
+                leaderboard.clone(),
+                aviation_tracker_tx.clone(),
             )
             .await?,
         )
@@ -116,6 +137,7 @@ pub async fn main() -> Result<()> {
         clock: Arc::new(SystemClock),
         llm: llm_client,
         aviation: aviation_client,
+        doener: doener_client,
         whisper: Some(whisper),
         data_dir: get_data_dir(),
         emote_glossary_override: None,
@@ -123,6 +145,9 @@ pub async fn main() -> Result<()> {
         web_spawner,
         ping_manager,
         memory_store,
+        leaderboard,
+        aviation_tracker_tx,
+        aviation_tracker_rx,
     };
 
     let (shutdown_tx, shutdown_rx) = oneshot::channel();
@@ -144,6 +169,8 @@ async fn build_web_spawner(
     irc_connected: Arc<AtomicBool>,
     ping_manager: Arc<tokio::sync::RwLock<PingManager>>,
     memory_store: MemoryStore,
+    leaderboard: Arc<tokio::sync::RwLock<HashMap<String, PersonalBest>>>,
+    tracker_tx: Option<Arc<tokio::sync::mpsc::Sender<aviation::TrackerCommand>>>,
 ) -> Result<twitch_1337::WebSpawner> {
     let bind_addr: std::net::SocketAddr = config
         .web
@@ -186,7 +213,7 @@ async fn build_web_spawner(
         public_url: config.web.public_url.clone(),
         session_secret: config.web.session_secret.clone(),
         session_ttl: config.web.session_ttl,
-        mod_check_refresh: config.web.mod_check_refresh,
+        role_check_refresh: config.web.mod_check_refresh,
     });
 
     let signed_key = twitch_1337_web::state::derive_session_key(&config.web.session_secret)?;
@@ -211,11 +238,14 @@ async fn build_web_spawner(
         channel: Arc::from(config.twitch.channel.as_str()),
         broadcaster_id: Arc::from(broadcaster.id.as_str()),
         hidden_admins: Arc::from(hidden_admins.into_boxed_slice()),
+        viewer_allowlist: Arc::from(config.twitch.viewer_allowlist.clone().into_boxed_slice()),
         client_id: config.twitch.client_id.clone(),
         oauth,
         ping_manager,
         memory_store,
         signed_key,
+        leaderboard,
+        tracker_tx,
     };
 
     Ok(Box::new(move |shutdown| {

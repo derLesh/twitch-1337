@@ -17,6 +17,7 @@
 //! against the same dev-data the production bot is actively writing to
 //! unless you're aware of that.
 
+use std::collections::HashMap;
 use std::env;
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -84,7 +85,7 @@ async fn main() -> Result<()> {
         public_url,
         session_secret,
         session_ttl,
-        mod_check_refresh: Duration::from_secs(300),
+        role_check_refresh: Duration::from_secs(300),
     });
 
     let helix: Arc<dyn HelixClient> = Arc::new(StubHelix);
@@ -98,11 +99,14 @@ async fn main() -> Result<()> {
         channel: Arc::from(channel.as_str()),
         broadcaster_id: Arc::from("0"),
         hidden_admins: Arc::from(vec![DEV_USER_ID.to_owned()].into_boxed_slice()),
+        viewer_allowlist: Arc::from(Vec::<String>::new().into_boxed_slice()),
         client_id: SecretString::new("dev-client-id".to_owned().into()),
         oauth,
         ping_manager: Arc::new(RwLock::new(pings)),
         memory_store,
         signed_key,
+        leaderboard: Arc::new(RwLock::new(HashMap::new())),
+        tracker_tx: None,
     };
 
     let listener = bind(bind_addr).await?;

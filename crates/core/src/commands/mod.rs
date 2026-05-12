@@ -7,6 +7,7 @@ use twitch_irc::{
 };
 
 pub mod doener;
+pub mod doeneratlas;
 pub mod feedback;
 pub mod leaderboard;
 pub mod news;

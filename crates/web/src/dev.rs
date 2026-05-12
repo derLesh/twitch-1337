@@ -50,7 +50,11 @@ async fn login(
 ) -> Redirect {
     let (sid, csrf_bytes) = state
         .sessions
-        .insert(DEV_USER_ID.to_owned(), DEV_USER_LOGIN.to_owned())
+        .insert(
+            DEV_USER_ID.to_owned(),
+            DEV_USER_LOGIN.to_owned(),
+            crate::auth::role::Role::Mod,
+        )
         .expect("insert dev session");
     issue_session_cookies(&cookies, &state.signed_key, sid, &csrf_bytes, false);
     let target = q

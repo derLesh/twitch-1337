@@ -17,7 +17,8 @@ use twitch_1337_web::helix::{HelixClient, HelixUser};
 
 mod helpers;
 use helpers::{
-    FakeHelix, build_state_with_ping_dir, cookie_header, insert_session, install_crypto,
+    FakeHelix, build_state_with_ping_dir, cookie_header, insert_session, insert_session_as,
+    install_crypto,
 };
 
 /// FakeHelix flavored to admit the test admin during periodic mod rechecks.
@@ -466,5 +467,113 @@ async fn create_rejects_bad_form_csrf() {
     assert!(
         mgr.get("tampered").is_none(),
         "ping must not persist with mismatched _csrf",
+    );
+}
+
+/// Build a minimal router that mounts the pings viewer routes under
+/// `require_role(Viewer)` so tests can exercise viewer-rendered HTML via the
+/// real viewer sub-router surface.
+fn viewer_pings_app(state: twitch_1337_web::WebState) -> axum::Router {
+    use axum::Router;
+    use axum::middleware::from_fn_with_state;
+    use tower_cookies::CookieManagerLayer;
+    use twitch_1337_web::auth::{Role, require_role};
+    use twitch_1337_web::routes::pings::viewer_router;
+
+    Router::new()
+        .merge(viewer_router())
+        .route_layer(from_fn_with_state(state.clone(), move |s, c, r, n| {
+            require_role(Role::Viewer, s, c, r, n)
+        }))
+        .with_state(state)
+        .layer(CookieManagerLayer::new())
+}
+
+#[tokio::test]
+async fn viewer_pings_list_has_no_mutation_controls() {
+    install_crypto();
+    let helix = Arc::new(FakeHelix {
+        moderators: vec![],
+        users: Default::default(),
+    });
+    let (state, _td) = build_state_with_ping_dir(helix).await;
+
+    // Seed a ping so the table renders rows, not the empty state.
+    {
+        let mut mgr = state.ping_manager.write().await;
+        mgr.create_ping("alpha".into(), "{mentions}".into(), "creator".into(), None)
+            .unwrap();
+    }
+
+    let (sid, csrf, _bare_csrf) =
+        insert_session_as(&state, "42", "alice", twitch_1337_web::auth::Role::Viewer);
+
+    let app = viewer_pings_app(state);
+    let req = Request::builder()
+        .uri("/pings")
+        .method("GET")
+        .header(header::COOKIE, cookie_header(&sid, &csrf))
+        .body(Body::empty())
+        .unwrap();
+    let res = app.oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let html = body_string(res).await;
+
+    assert!(html.contains("alpha"), "ping name should render for viewer");
+    assert!(
+        !html.contains(r#"href="/pings/new""#),
+        "viewer must not see +New button; got {html}"
+    );
+    assert!(
+        !html.contains("hx-post=\"/pings/"),
+        "viewer must not see delete buttons; got {html}"
+    );
+    assert!(
+        !html.contains("Sort: A"),
+        "viewer must not see sort chip; got {html}"
+    );
+}
+
+#[tokio::test]
+async fn mod_pings_list_shows_mutation_controls() {
+    install_crypto();
+    let user_id = "9002";
+    let helix = Arc::new(FakeHelix {
+        moderators: vec![user_id.into()],
+        users: Default::default(),
+    });
+    let (state, _td) = build_state_with_ping_dir(helix).await;
+
+    {
+        let mut mgr = state.ping_manager.write().await;
+        mgr.create_ping("beta".into(), "{mentions}".into(), "creator".into(), None)
+            .unwrap();
+    }
+
+    let (sid, csrf, _bare_csrf) =
+        insert_session_as(&state, user_id, "moduser", twitch_1337_web::auth::Role::Mod);
+
+    let app = build_router(state);
+    let req = Request::builder()
+        .uri("/pings")
+        .header(header::COOKIE, cookie_header(&sid, &csrf))
+        .body(Body::empty())
+        .unwrap();
+    let res = app.oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let html = body_string(res).await;
+
+    assert!(html.contains("beta"), "ping name should render for mod");
+    assert!(
+        html.contains(r#"href="/pings/new""#),
+        "mod must see +New button; got {html}"
+    );
+    assert!(
+        html.contains("hx-post=\"/pings/"),
+        "mod must see delete buttons; got {html}"
+    );
+    assert!(
+        html.contains("Sort: A"),
+        "mod must see sort chip; got {html}"
     );
 }

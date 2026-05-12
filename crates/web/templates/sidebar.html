@@ -20,11 +20,15 @@
       <div class="nav-group-label">Operate</div>
       <ul class="nav-list">
         {% call nav_item("pings", "/pings", "Pings") %}{% endcall %}
-        {% call nav_item("schedules", "/schedules", "Schedules") %}{% endcall %}
+        {% call nav_item("leaderboard", "/leaderboard", "Leaderboard") %}{% endcall %}
         {% call nav_item("flights", "/flights", "Flights") %}{% endcall %}
+        {% if is_mod %}
+        {% call nav_item("schedules", "/schedules", "Schedules") %}{% endcall %}
+        {% endif %}
       </ul>
     </div>
 
+    {% if is_mod %}
     <div class="nav-group">
       <a class="nav-group-label nav-group-link{% if current_page == "memory" %} active{% endif %}" href="/memory">Memory</a>
       <ul class="nav-list">
@@ -42,6 +46,7 @@
         {% call nav_item("config", "/config", "Config") %}{% endcall %}
       </ul>
     </div>
+    {% endif %}
   </nav>
 
   <div class="side-footer">
@@ -49,7 +54,7 @@
       <span class="avatar" style="width:28px;height:28px;font-size:11px;background:oklch(0.6 0.12 280);">{{ user_login.chars().next().unwrap_or('?') }}</span>
       <div class="me-meta">
         <span class="me-name">{{ user_login }}</span>
-        <span class="me-role">broadcaster · mod</span>
+        <span class="me-role">{% if is_mod %}broadcaster · mod{% else %}viewer{% endif %}</span>
       </div>
     </div>
     <form class="logout-form" method="post" action="/logout">

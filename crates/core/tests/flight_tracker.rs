@@ -285,6 +285,107 @@ async fn track_command_accepts_aviationstack_flight_before_adsb_appears() {
 
 #[tokio::test]
 #[serial]
+async fn track_command_keeps_pending_flight_with_stale_scheduled_departure() {
+    let bot = TestBotBuilder::new()
+        .with_config(enable_aviationstack)
+        .spawn()
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/callsign/RYR196"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "ac": [],
+            "ctime": 0,
+            "now": 0,
+            "total": 0
+        })))
+        .mount(&bot.adsb_mock)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/flights"))
+        .and(query_param("access_key", "test-key"))
+        .and(query_param("flight_iata", "FR196"))
+        .and(query_param("limit", "1"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "data": [{
+                "flight": {
+                    "iata": "FR196",
+                    "icao": "RYR196",
+                    "number": "196"
+                },
+                "airline": {
+                    "iata": "FR",
+                    "icao": "RYR",
+                    "name": "Ryanair"
+                },
+                "departure": {
+                    "iata": "BER",
+                    "icao": "EDDB",
+                    "scheduled": "2026-04-17T10:30:00+00:00",
+                    "actual": null,
+                    "actual_runway": null
+                },
+                "arrival": {
+                    "iata": "BUD",
+                    "icao": "LHBP",
+                    "estimated": "2026-04-17T12:00:00+00:00",
+                    "actual": null
+                },
+                "aircraft": {
+                    "icao24": "48c2a2",
+                    "icao": "B38M"
+                }
+            }]
+        })))
+        .mount(&bot.adsb_mock)
+        .await;
+
+    let mut bot = bot;
+    bot.send("alice", "!track FR196").await;
+    let ack = bot.expect_say(Duration::from_secs(5)).await;
+    assert!(ack.contains("RYR196"), "got: {ack}");
+    assert!(ack.contains("BER") && ack.contains("BUD"), "got: {ack}");
+
+    bot.expect_silent(Duration::from_millis(200)).await;
+
+    let state_path = bot.data_dir.path().join("flights.ron");
+    let persisted = tokio::fs::read_to_string(state_path).await.unwrap();
+    let state: twitch_1337::aviation::tracker::FlightTrackerState =
+        ron::from_str(&persisted).unwrap();
+    let flight = state.flights.first().expect("persisted flight");
+    assert_eq!(flight.callsign.as_deref(), Some("RYR196"));
+    assert_eq!(flight.hex.as_deref(), None);
+    assert_eq!(flight.route, Some(("BER".to_string(), "BUD".to_string())));
+    assert_eq!(flight.aircraft_type.as_deref(), Some("B38M"));
+    assert_eq!(flight.last_seen, None);
+    assert_eq!(
+        flight.scheduled_departure_at.map(|dt| dt.timestamp()),
+        Some(
+            chrono::DateTime::parse_from_rfc3339("2026-04-17T10:30:00+00:00")
+                .unwrap()
+                .timestamp()
+        )
+    );
+
+    let callsign_requests = bot
+        .adsb_mock
+        .received_requests()
+        .await
+        .unwrap()
+        .into_iter()
+        .filter(|request| request.url.path() == "/callsign/RYR196")
+        .count();
+    assert_eq!(
+        callsign_requests, 1,
+        "stale pending flight should not be repolled immediately"
+    );
+
+    bot.shutdown().await;
+}
+
+#[tokio::test]
+#[serial]
 async fn pending_flight_polls_when_due_and_becomes_visible() {
     let bot = TestBotBuilder::new()
         .with_config(enable_aviationstack)

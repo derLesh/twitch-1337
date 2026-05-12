@@ -9,7 +9,7 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
 use std::time::Duration;
 
 use async_trait::async_trait;
@@ -32,6 +32,31 @@ pub struct FixedClock(pub DateTime<Utc>);
 impl Clock for FixedClock {
     fn now(&self) -> DateTime<Utc> {
         self.0
+    }
+}
+
+/// A clock that advances by one second on every call to `now()`.
+/// The first call returns `T0`, the second `T0 + 1s`, etc.
+/// Used to ensure that `elapsed > role_check_refresh` evaluates to `true`
+/// even when `role_check_refresh` is `Duration::ZERO`.
+pub struct StepClock {
+    base: DateTime<Utc>,
+    counter: AtomicI64,
+}
+
+impl StepClock {
+    pub fn new(base: DateTime<Utc>) -> Self {
+        Self {
+            base,
+            counter: AtomicI64::new(0),
+        }
+    }
+}
+
+impl Clock for StepClock {
+    fn now(&self) -> DateTime<Utc> {
+        let n = self.counter.fetch_add(1, Ordering::Relaxed);
+        self.base + chrono::Duration::seconds(n)
     }
 }
 
@@ -78,6 +103,34 @@ pub async fn build_state_with_ping_dir(helix: Arc<dyn HelixClient>) -> (WebState
 /// Variant that returns both the ping and memory tempdirs so callers can
 /// keep them alive while exercising persistent CRUD paths.
 pub async fn build_state_with_dirs(helix: Arc<dyn HelixClient>) -> (WebState, TempDir, TempDir) {
+    let clock: Arc<dyn Clock> = Arc::new(FixedClock(
+        chrono::TimeZone::with_ymd_and_hms(&Utc, 2026, 1, 1, 0, 0, 0).unwrap(),
+    ));
+    build_state_inner(helix, Duration::from_secs(300), clock).await
+}
+
+/// Like [`build_state_with_dirs`] but lets the caller override the
+/// `role_check_refresh` window.
+///
+/// Uses a [`StepClock`] that increments by one second on each `now()` call so
+/// that `elapsed > role_check_refresh` evaluates to `true` even when
+/// `role_check_refresh` is `Duration::ZERO` — the session is inserted at `T0`
+/// and the first middleware check sees `T0 + Ns` where `N ≥ 1`.
+pub async fn build_state_with_overrides(
+    helix: Arc<dyn HelixClient>,
+    role_check_refresh: Duration,
+) -> (WebState, TempDir, TempDir) {
+    let clock: Arc<dyn Clock> = Arc::new(StepClock::new(
+        chrono::TimeZone::with_ymd_and_hms(&Utc, 2026, 1, 1, 0, 0, 0).unwrap(),
+    ));
+    build_state_inner(helix, role_check_refresh, clock).await
+}
+
+async fn build_state_inner(
+    helix: Arc<dyn HelixClient>,
+    role_check_refresh: Duration,
+    clock: Arc<dyn Clock>,
+) -> (WebState, TempDir, TempDir) {
     let pings_dir = TempDir::new().expect("pings tempdir");
     let memory_dir = TempDir::new().expect("memory tempdir");
     let pings = PingManager::load(pings_dir.path()).expect("load empty ping manager");
@@ -85,9 +138,6 @@ pub async fn build_state_with_dirs(helix: Arc<dyn HelixClient>) -> (WebState, Te
     let memory_store = MemoryStore::open(memory_dir.path(), Caps::default())
         .await
         .expect("open memory store");
-    let clock = Arc::new(FixedClock(
-        chrono::TimeZone::with_ymd_and_hms(&Utc, 2026, 1, 1, 0, 0, 0).unwrap(),
-    ));
     let sessions = Arc::new(SessionTable::new(Duration::from_secs(7200), clock.clone()));
     let oauth = Arc::new(
         OAuthCtx::new(
@@ -102,7 +152,7 @@ pub async fn build_state_with_dirs(helix: Arc<dyn HelixClient>) -> (WebState, Te
         public_url: "https://test.invalid".into(),
         session_secret: SecretString::new("0".repeat(64).into()),
         session_ttl: Duration::from_secs(7200),
-        mod_check_refresh: Duration::from_secs(300),
+        role_check_refresh,
     });
     // Tests don't need a real production secret; a fixed 32-byte key keeps
     // signed-cookie round-trips deterministic across reruns.
@@ -116,11 +166,14 @@ pub async fn build_state_with_dirs(helix: Arc<dyn HelixClient>) -> (WebState, Te
         channel: Arc::from("testchannel"),
         broadcaster_id: Arc::from("100"),
         hidden_admins: Arc::from(Vec::<String>::new().into_boxed_slice()),
+        viewer_allowlist: Arc::from(Vec::<String>::new().into_boxed_slice()),
         client_id: SecretString::new("test-client-id".to_owned().into()),
         oauth,
         ping_manager,
         memory_store,
         signed_key,
+        leaderboard: Arc::new(RwLock::new(HashMap::new())),
+        tracker_tx: None,
     };
     (state, pings_dir, memory_dir)
 }
@@ -138,9 +191,19 @@ pub fn insert_session(
     user_id: &str,
     user_login: &str,
 ) -> (String, String, String) {
+    insert_session_as(state, user_id, user_login, twitch_1337_web::auth::Role::Mod)
+}
+
+/// Like [`insert_session`] but lets the caller specify the role.
+pub fn insert_session_as(
+    state: &WebState,
+    user_id: &str,
+    user_login: &str,
+    role: twitch_1337_web::auth::Role,
+) -> (String, String, String) {
     let (sid, csrf) = state
         .sessions
-        .insert(user_id.to_owned(), user_login.to_owned())
+        .insert(user_id.to_owned(), user_login.to_owned(), role)
         .expect("insert session");
     let bare_csrf = hex::encode(csrf);
     let signed_sid = sign_for_tests(state, "tw1337_sid", &sid);

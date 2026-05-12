@@ -5,10 +5,11 @@
 //! - `/login`, `/auth/callback`, `/logout` (OAuth + post-login `?next=` deep-link)
 //! - `/assets/*` (embedded htmx + pico bundles, immutable cache)
 //!
-//! Mod-gated surfaces (sliding helix re-check via `require_mod`):
-//! - `/pings` — ping CRUD against the bot's `PingManager`
-//! - `/memory/{soul,lore,users,state}` — AI memory browse + edit with
-//!   `MemoryStore::write_with_guard` for mtime-aware conflict UX
+//! Auth tiers:
+//! - **Viewer** (allowlisted Twitch login): `/`, `/pings` (read), `/leaderboard`, `/flights`.
+//!   Read-only — non-GET/HEAD methods are rejected by `viewer_method_guard`.
+//! - **Mod** (broadcaster / hidden admins / helix moderators): pings mutations,
+//!   `/memory/{soul,lore,users,state}` CRUD, stubs.
 
 pub mod auth;
 pub mod clock;
@@ -69,6 +70,15 @@ pub async fn run_web(listener: TcpListener, deps: WebDeps, shutdown: Arc<Notify>
     Ok(())
 }
 
+async fn root_redirect(
+    axum::extract::Extension(session): axum::extract::Extension<auth::session::Session>,
+) -> axum::response::Redirect {
+    match session.role {
+        auth::role::Role::Mod => axum::response::Redirect::to("/pings"),
+        auth::role::Role::Viewer => axum::response::Redirect::to("/leaderboard"),
+    }
+}
+
 pub fn build_router(state: WebState) -> Router {
     #[allow(unused_mut)]
     let mut public = Router::new()
@@ -80,22 +90,33 @@ pub fn build_router(state: WebState) -> Router {
         public = public.merge(dev::router(state.clone()));
     }
 
-    let authed = Router::new()
-        .route(
-            "/",
-            axum::routing::get(|| async { axum::response::Redirect::to("/pings") }),
-        )
-        .merge(routes::pings::router())
+    let viewer_state = state.clone();
+    let viewer = Router::new()
+        .route("/", axum::routing::get(root_redirect))
+        .merge(routes::pings::viewer_router())
+        .merge(routes::leaderboard::router())
+        .merge(routes::flights::router())
+        .layer(axum::middleware::from_fn(auth::viewer_method_guard))
+        .route_layer(axum::middleware::from_fn_with_state(
+            viewer_state.clone(),
+            |s, c, r, n| auth::require_role(auth::role::Role::Viewer, s, c, r, n),
+        ))
+        .with_state(viewer_state);
+
+    let mod_state = state.clone();
+    let mod_only = Router::new()
+        .merge(routes::pings::mod_router())
         .merge(routes::memory::router())
         .merge(routes::stubs::router())
         .route_layer(axum::middleware::from_fn_with_state(
-            state.clone(),
+            mod_state.clone(),
             auth::require_mod,
         ))
-        .with_state(state);
+        .with_state(mod_state);
 
     public
-        .merge(authed)
+        .merge(viewer)
+        .merge(mod_only)
         .layer(CookieManagerLayer::new())
         .layer(TraceLayer::new_for_http())
 }

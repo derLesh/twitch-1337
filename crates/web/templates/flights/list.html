@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Flights — twitch-1337{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Flights <span class="count">({{ flights.len() }})</span></h1>
+    <p class="page-sub">Currently tracked aircraft.</p>
+  </div>
+</div>
+
+<div class="table flights">
+  <div class="thead">
+    <div class="th col-id">ID</div>
+    <div class="th col-cs">Callsign</div>
+    <div class="th col-by">Owner</div>
+    <div class="th col-phase">Phase</div>
+    <div class="th col-alt">Altitude</div>
+    <div class="th col-gs">Speed</div>
+    <div class="th col-age">Seen</div>
+  </div>
+  {% if aviation_disabled %}
+    <div class="empty">Aviation tracking is disabled.</div>
+  {% else if flights.is_empty() %}
+    <div class="empty">No flights tracked right now.</div>
+  {% else %}
+    <div class="tbody">
+    {% for f in flights %}
+      <div class="tr">
+        <div class="td col-id mono">{{ f.identifier }}</div>
+        <div class="td col-cs mono">{% match f.callsign %}{% when Some(v) %}{{ v }}{% when None %}—{% endmatch %}</div>
+        <div class="td col-by mono">{{ f.owner_login }}</div>
+        <div class="td col-phase mono">{{ f.phase }}</div>
+        <div class="td col-alt mono num">{% match f.altitude_ft %}{% when Some(v) %}{{ v }} ft{% when None %}—{% endmatch %}</div>
+        <div class="td col-gs mono num">{% match f.ground_speed_kts %}{% when Some(v) %}{{ v }} kt{% when None %}—{% endmatch %}</div>
+        <div class="td col-age mono num">{% match f.last_seen_secs_ago %}{% when Some(v) %}{{ v }}s{% when None %}—{% endmatch %}</div>
+      </div>
+    {% endfor %}
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

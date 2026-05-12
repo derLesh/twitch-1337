@@ -1,6 +1,9 @@
 //! `/pings` CRUD handlers.
 //!
-//! Mounted under the authed sub-router so every entry point is mod-gated.
+//! Surfaces split by auth tier:
+//! - [`viewer_router`]: `GET /pings` list — read-only, viewer-tier.
+//! - [`mod_router`]: everything else (create, edit, delete, member ops) — mod-tier.
+//!
 //! Form POSTs validate the `_csrf` field against the session csrf value;
 //! the HTMX delete uses an `X-Csrf-Token` header (no body to round-trip).
 //! Persistence + validation reuse `PingManager`'s existing checks
@@ -26,9 +29,17 @@ use crate::flash;
 use crate::routes::{initial_of, render, render_with};
 use crate::state::WebState;
 
-pub fn router() -> Router<WebState> {
+/// Viewer-tier surface: GET /pings list. Detail (`/pings/{name}` GET) and
+/// form (`/pings/new` GET) stay on the mod router because they target
+/// mutation flows the viewer can't initiate.
+pub fn viewer_router() -> Router<WebState> {
+    Router::new().route("/pings", get(list))
+}
+
+/// Mod-tier surface: everything that isn't the read-only list.
+pub fn mod_router() -> Router<WebState> {
     Router::new()
-        .route("/pings", get(list).post(create))
+        .route("/pings", post(create))
         .route("/pings/new", get(new_form))
         .route("/pings/{name}", get(edit_form).post(update))
         .route("/pings/{name}/delete", post(delete))
@@ -60,6 +71,7 @@ struct ListTpl {
     csrf: String,
     user_login: String,
     current_page: &'static str,
+    is_mod: bool,
 }
 
 #[derive(Template)]
@@ -72,6 +84,7 @@ struct FormTpl<'a> {
     error: Option<String>,
     user_login: &'a str,
     current_page: &'static str,
+    is_mod: bool,
     /// Sorted lowercase logins. Empty on the create form.
     members: Vec<String>,
     /// Inline error from a recent add/remove attempt, rendered above the
@@ -122,6 +135,7 @@ async fn list(
 
     rows.sort_by(|a, b| a.name.cmp(&b.name));
     let total_pings = rows.len();
+    let is_mod = session.is_mod();
     let tpl = ListTpl {
         rows,
         total_pings,
@@ -132,6 +146,7 @@ async fn list(
         csrf: csrf::encode(&session.csrf_value),
         user_login: session.user_login.clone(),
         current_page: crate::nav::PINGS,
+        is_mod,
     };
     render(&tpl)
 }
@@ -146,6 +161,7 @@ async fn new_form(Extension(session): Extension<Session>) -> Result<Response, We
         error: None,
         user_login: &session.user_login,
         current_page: crate::nav::PINGS,
+        is_mod: session.is_mod(),
         members: Vec::new(),
         member_error: None,
     })
@@ -191,6 +207,7 @@ async fn create(
                 error: Some(format!("ping `{name}` already exists")),
                 user_login: &session.user_login,
                 current_page: crate::nav::PINGS,
+                is_mod: session.is_mod(),
                 members: Vec::new(),
                 member_error: None,
             },
@@ -220,6 +237,7 @@ async fn create(
                 error: Some(e.to_string()),
                 user_login: &session.user_login,
                 current_page: crate::nav::PINGS,
+                is_mod: session.is_mod(),
                 members: Vec::new(),
                 member_error: None,
             },
@@ -260,6 +278,7 @@ async fn edit_form(
         error: None,
         user_login: &session.user_login,
         current_page: crate::nav::PINGS,
+        is_mod: session.is_mod(),
         members,
         member_error: None,
     })
@@ -308,6 +327,7 @@ async fn update(
                 error: Some(e.to_string()),
                 user_login: &session.user_login,
                 current_page: crate::nav::PINGS,
+                is_mod: session.is_mod(),
                 members,
                 member_error: None,
             },
@@ -403,6 +423,7 @@ async fn add_member(
                     error: None,
                     user_login: &session.user_login,
                     current_page: crate::nav::PINGS,
+                    is_mod: session.is_mod(),
                     members,
                     member_error: Some(msg),
                 },

@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Leaderboard — twitch-1337{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Leaderboard <span class="count">({{ rows.len() }})</span></h1>
+    <p class="page-sub">Sub-second 1337 personal bests. Fastest wins.</p>
+  </div>
+</div>
+
+<div class="table leaderboard">
+  <div class="thead">
+    <div class="th col-rank">#</div>
+    <div class="th col-user">User</div>
+    <div class="th col-best">Best</div>
+    <div class="th col-date">Date</div>
+  </div>
+  {% if rows.is_empty() %}
+    <div class="empty">No personal bests yet.</div>
+  {% else %}
+    <div class="tbody">
+    {% for row in rows %}
+      <div class="tr">
+        <div class="td col-rank mono">{{ row.rank }}</div>
+        <div class="td col-user mono">{{ row.login }}</div>
+        <div class="td col-best mono num">{{ row.ms }} ms</div>
+        <div class="td col-date mono">{{ row.date }}</div>
+      </div>
+    {% endfor %}
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

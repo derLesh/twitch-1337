@@ -69,6 +69,7 @@ pub(crate) struct SpawnDeps<T: Transport, L: LoginCredentials> {
     pub config: Configuration,
     pub clock: Arc<dyn Clock>,
     pub data_dir: PathBuf,
+    pub doener: Arc<crate::doener::DoenerClient>,
 
     // 1337 tracker.
     pub leaderboard: Arc<RwLock<HashMap<String, PersonalBest>>>,
@@ -84,6 +85,13 @@ pub(crate) struct SpawnDeps<T: Transport, L: LoginCredentials> {
     // Flight tracker.
     pub aviation: Option<AviationClient>,
     pub aviation_for_commands: Option<AviationClient>,
+    /// Pre-created sender half of the flight-tracker channel. Must be `Some`
+    /// when `aviation` is `Some`, and `None` otherwise.
+    pub aviation_tracker_tx: Option<mpsc::Sender<aviation::TrackerCommand>>,
+    /// Pre-created receiver half of the flight-tracker channel. Consumed by
+    /// `spawn_handlers` to start the flight-tracker task. Must be `Some` when
+    /// `aviation` is `Some`, and `None` otherwise.
+    pub aviation_tracker_rx: Option<mpsc::Receiver<aviation::TrackerCommand>>,
 
     // AI emote grounding.
     pub emote_provider: Option<Arc<crate::twitch::seventv::SevenTvEmoteProvider>>,
@@ -106,6 +114,7 @@ where
         config,
         clock,
         data_dir,
+        doener,
         leaderboard,
         ping_manager,
         suspension_manager,
@@ -115,6 +124,8 @@ where
         whisper,
         aviation,
         aviation_for_commands,
+        aviation_tracker_tx,
+        aviation_tracker_rx,
         emote_provider,
         irc_connected,
     } = deps;
@@ -122,9 +133,11 @@ where
     let schedules_enabled = !config.schedules.is_empty();
 
     // Flight tracker: spawned first so `tracker_tx` exists for the command handler.
-    let (tracker_tx, flight_tracker) = match aviation {
-        Some(av) => {
-            let (tx, rx) = mpsc::channel::<aviation::TrackerCommand>(32);
+    // The channel is pre-created by the caller (production: main.rs; tests: TestBotBuilder)
+    // so the sender Arc can be shared with WebState before handlers are spawned.
+    let (tracker_tx, flight_tracker) = match (aviation, aviation_tracker_rx) {
+        (Some(av), Some(rx)) => {
+            let tx = aviation_tracker_tx.expect("tracker_tx must be Some when aviation is Some");
             let handle = tokio::spawn({
                 let client = client.clone();
                 let channel = config.twitch.channel.clone();
@@ -136,7 +149,7 @@ where
             });
             (Some(tx), handle)
         }
-        None => (None, tokio::spawn(std::future::pending::<()>())),
+        _ => (None, tokio::spawn(std::future::pending::<()>())),
     };
 
     let (broadcast_tx, _) = broadcast::channel::<ServerMessage>(100);
@@ -245,6 +258,7 @@ where
                 bot_username: config.twitch.username.clone(),
                 channel: config.twitch.channel.clone(),
                 data_dir: data_dir.clone(),
+                doener: doener.clone(),
                 suspension_manager: suspension_manager.clone(),
                 suspend: config.suspend.clone(),
                 emote_provider,

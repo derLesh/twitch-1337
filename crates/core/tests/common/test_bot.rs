@@ -21,7 +21,7 @@ use twitch_1337::{
     PersonalBest, Services,
     aviation::AviationClient,
     config::{AiConfig, Configuration},
-    run_bot,
+    load_leaderboard, run_bot,
     twitch::whisper::{self, WhisperError, WhisperSender},
 };
 use twitch_irc::login::StaticLoginCredentials;
@@ -56,6 +56,7 @@ pub struct TestBotBuilder {
     seeded_leaderboard: Option<HashMap<String, PersonalBest>>,
     whisper_failure: bool,
     emote_glossary_override: Option<String>,
+    doener_base_url: Option<String>,
 }
 
 impl TestBotBuilder {
@@ -66,6 +67,7 @@ impl TestBotBuilder {
             seeded_leaderboard: None,
             whisper_failure: false,
             emote_glossary_override: None,
+            doener_base_url: None,
         }
     }
 
@@ -129,6 +131,12 @@ impl TestBotBuilder {
         self.config.web.bind_addr = bind.into();
         self.config.web.session_secret = secrecy::SecretString::new("0".repeat(64).into());
         self.config.web.public_url = "https://test.invalid".into();
+        self
+    }
+
+    /// Override the doener service base URL to point at a mock server.
+    pub fn with_doener_base_url(mut self, base: impl Into<String>) -> Self {
+        self.doener_base_url = Some(base.into());
         self
     }
 
@@ -240,6 +248,11 @@ impl TestBotBuilder {
             None
         };
 
+        let (aviation_tracker_tx, aviation_tracker_rx) = {
+            let (tx, rx) = tokio::sync::mpsc::channel::<twitch_1337::aviation::TrackerCommand>(32);
+            (Some(Arc::new(tx)), Some(rx))
+        };
+
         let services = Services {
             clock: clock.clone(),
             llm: self
@@ -248,6 +261,12 @@ impl TestBotBuilder {
                 .is_some()
                 .then(|| llm.clone() as Arc<dyn LlmClient>),
             aviation: Some(aviation),
+            doener: Arc::new(twitch_1337::doener::DoenerClient::with_base_url(
+                reqwest::Client::new(),
+                self.doener_base_url
+                    .clone()
+                    .unwrap_or_else(|| "http://127.0.0.1:1".to_string()),
+            )),
             whisper: Some(whisper.clone() as Arc<dyn WhisperSender>),
             data_dir: data_dir.path().to_path_buf(),
             emote_glossary_override: self.emote_glossary_override,
@@ -255,6 +274,11 @@ impl TestBotBuilder {
             web_spawner,
             ping_manager,
             memory_store,
+            leaderboard: Arc::new(tokio::sync::RwLock::new(
+                load_leaderboard(data_dir.path()).await,
+            )),
+            aviation_tracker_tx,
+            aviation_tracker_rx,
         };
 
         let (shutdown_tx, shutdown_rx) = oneshot::channel();
@@ -624,7 +648,7 @@ fn build_test_web_state(
         public_url: config.web.public_url.clone(),
         session_secret: config.web.session_secret.clone(),
         session_ttl: config.web.session_ttl,
-        mod_check_refresh: config.web.mod_check_refresh,
+        role_check_refresh: config.web.mod_check_refresh,
     });
     let signed_key = tower_cookies::Key::from(&[0x42u8; 64]);
     twitch_1337_web::WebState {
@@ -636,10 +660,13 @@ fn build_test_web_state(
         channel: Arc::from(config.twitch.channel.as_str()),
         broadcaster_id: Arc::from("0"),
         hidden_admins: Arc::from(Vec::<String>::new().into_boxed_slice()),
+        viewer_allowlist: Arc::from(Vec::<String>::new().into_boxed_slice()),
         client_id: secrecy::SecretString::new("test-client-id".to_owned().into()),
         oauth,
         ping_manager,
         memory_store,
         signed_key,
+        leaderboard: Arc::new(tokio::sync::RwLock::new(std::collections::HashMap::new())),
+        tracker_tx: None,
     }
 }

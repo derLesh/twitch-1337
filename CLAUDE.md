@@ -84,6 +84,12 @@ Others pinned to major tags; Dependabot keeps them current.
 
 `config.toml` (copy `config.toml.example`). Sections: `[twitch]`, `[pings]`, `[ai]` (optional), `[cooldowns]`, `[[schedules]]` (optional, repeatable). Schema + defaults in `config.toml.example` — treat as source of truth.
 
+**Dashboard viewer tier:** read-only viewer access is gated by a static
+allowlist at `[twitch].viewer_allowlist` (numeric Twitch user IDs, same shape
+as `hidden_admins`). Mods always pass. No additional Twitch scopes are
+required beyond the existing bot scopes (`chat:read`, `chat:edit`,
+`user:manage:whispers`).
+
 Schedules hot-reload on save (2s debounce via notify-debouncer-mini). No restart.
 
 `twitch.ai_channel` (optional): bot also joins this channel; only `!ai` is reachable there. Every other command, the 1337 tracker, and chat-history recording skip messages from it. AI memory and chat history remain global / primary-only.

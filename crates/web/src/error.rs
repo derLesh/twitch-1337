@@ -32,6 +32,8 @@ pub enum WebError {
     /// 502 has a matching server-side trace.
     #[error("oauth exchange: {0}")]
     OAuthExchange(eyre::Report),
+    #[error("method not allowed")]
+    MethodNotAllowed,
     #[error("internal: {0}")]
     Internal(#[from] eyre::Report),
 }
@@ -52,6 +54,9 @@ pub struct ConflictPayload {
     pub csrf: String,
     /// Logged-in user's login, threaded through to the sidebar.
     pub user_login: String,
+    /// Whether the session user holds a Mod role. Forwarded to the
+    /// conflict template so the sidebar gates correctly.
+    pub is_mod: bool,
     /// Sidebar highlight key matching the originating editor's section.
     pub current_page: &'static str,
     pub cancel_url: &'static str,
@@ -76,6 +81,7 @@ struct ConflictTpl<'a> {
     draft: &'a str,
     csrf: &'a str,
     user_login: &'a str,
+    is_mod: bool,
     current_page: &'static str,
     cancel_url: &'static str,
 }
@@ -139,6 +145,7 @@ impl IntoResponse for WebError {
                     draft: &payload.draft,
                     csrf: &payload.csrf,
                     user_login: &payload.user_login,
+                    is_mod: payload.is_mod,
                     current_page: payload.current_page,
                     cancel_url: payload.cancel_url,
                 },
@@ -151,6 +158,9 @@ impl IntoResponse for WebError {
                 );
                 // Almost always a stale/reused auth code (refresh, double-tab); offer retry instead of bare 502.
                 render(StatusCode::BAD_GATEWAY, &OAuthFailedTpl)
+            }
+            WebError::MethodNotAllowed => {
+                (StatusCode::METHOD_NOT_ALLOWED, "method not allowed").into_response()
             }
             WebError::Internal(err) => {
                 tracing::error!(

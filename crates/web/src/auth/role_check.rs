@@ -1,4 +1,4 @@
-//! Mod-gate decision: hidden_admins → broadcaster → helix moderators.
+//! Role-gate decision: hidden_admins → broadcaster → helix moderators.
 //!
 //! Hidden admins (configured in `[twitch].hidden_admins`) short-circuit the
 //! helix lookup so a debugging account always retains access. The broadcaster
@@ -10,20 +10,16 @@ use crate::helix::HelixClient;
 use crate::state::WebState;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ModCheckOutcome {
+pub enum GateOutcome {
     Allow,
     Deny,
 }
 
 /// Hidden_admins / broadcaster shortcuts shared by both check variants. Returns
 /// `Some(Allow)` iff a shortcut applies; `None` means the helix lookup runs.
-fn shortcut(
-    user_id: &str,
-    broadcaster_id: &str,
-    hidden_admins: &[String],
-) -> Option<ModCheckOutcome> {
+fn shortcut(user_id: &str, broadcaster_id: &str, hidden_admins: &[String]) -> Option<GateOutcome> {
     if hidden_admins.iter().any(|s| s == user_id) || user_id == broadcaster_id {
-        Some(ModCheckOutcome::Allow)
+        Some(GateOutcome::Allow)
     } else {
         None
     }
@@ -34,14 +30,14 @@ pub async fn check_is_mod(
     user_id: &str,
     broadcaster_id: &str,
     hidden_admins: &[String],
-) -> eyre::Result<ModCheckOutcome> {
+) -> eyre::Result<GateOutcome> {
     if let Some(o) = shortcut(user_id, broadcaster_id, hidden_admins) {
         return Ok(o);
     }
     if helix.is_moderator(broadcaster_id, user_id).await? {
-        Ok(ModCheckOutcome::Allow)
+        Ok(GateOutcome::Allow)
     } else {
-        Ok(ModCheckOutcome::Deny)
+        Ok(GateOutcome::Deny)
     }
 }
 
@@ -56,14 +52,14 @@ pub async fn check_is_mod_with_token(
     user_access_token: &str,
     broadcaster_id: &str,
     hidden_admins: &[String],
-) -> eyre::Result<ModCheckOutcome> {
+) -> eyre::Result<GateOutcome> {
     if let Some(o) = shortcut(user_id, broadcaster_id, hidden_admins) {
         return Ok(o);
     }
     if is_moderator_with_user_token(user_id, user_access_token, broadcaster_id, state).await? {
-        Ok(ModCheckOutcome::Allow)
+        Ok(GateOutcome::Allow)
     } else {
-        Ok(ModCheckOutcome::Deny)
+        Ok(GateOutcome::Deny)
     }
 }
 
@@ -83,4 +79,13 @@ async fn is_moderator_with_user_token(
         "helix moderated channels (user token)",
     )
     .await
+}
+
+/// Allow iff `user_id` appears in `allowlist`.
+pub fn check_in_allowlist(user_id: &str, allowlist: &[String]) -> GateOutcome {
+    if allowlist.iter().any(|id| id == user_id) {
+        GateOutcome::Allow
+    } else {
+        GateOutcome::Deny
+    }
 }

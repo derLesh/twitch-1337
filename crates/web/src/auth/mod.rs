@@ -1,13 +1,14 @@
-//! Web auth: OAuth + session + CSRF + mod-gate plumbing.
+//! Web auth: OAuth + session + CSRF + role-gate plumbing.
 //!
 //! Module map:
 //! - [`session`]: in-memory session table (TTL + sliding refresh)
 //! - [`csrf`]: hex-encoded double-submit token helpers
-//! - [`mod_check`]: hidden_admins → broadcaster → helix moderators
+//! - [`role_check`]: hidden_admins → broadcaster → helix moderators
 //! - [`routes`]: login / callback / logout handlers + middleware
 
 pub mod csrf;
-pub mod mod_check;
+pub mod role;
+pub mod role_check;
 pub mod session;
 
 pub(crate) mod routes;
@@ -16,4 +17,7 @@ pub(crate) mod routes;
 // per-handler (form-field `_csrf` path); the header-path middleware would
 // silently admit form-only POSTs by design, so exporting it would mislead
 // callers into thinking it provides blanket protection.
-pub use routes::{CSRF_COOKIE, OAuthCtx, SID_COOKIE, auth_router, require_mod};
+pub use role::Role;
+pub use routes::{
+    CSRF_COOKIE, OAuthCtx, SID_COOKIE, auth_router, require_mod, require_role, viewer_method_guard,
+};

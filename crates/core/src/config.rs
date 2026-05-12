@@ -25,6 +25,10 @@ pub struct TwitchConfiguration {
     pub expected_latency: u32,
     #[serde(default)]
     pub hidden_admins: Vec<String>,
+    /// Twitch user IDs granted read-only viewer access to the web dashboard.
+    /// IDs (not logins) so entries survive Twitch login renames.
+    #[serde(default)]
+    pub viewer_allowlist: Vec<String>,
     #[serde(default)]
     pub admin_channel: Option<String>,
     #[serde(default)]
@@ -447,6 +451,10 @@ fn default_doener_cooldown() -> u64 {
     30
 }
 
+fn default_doeneratlas_cooldown() -> u64 {
+    30
+}
+
 fn default_feedback_cooldown() -> u64 {
     300
 }
@@ -459,8 +467,12 @@ pub struct CooldownsConfig {
     pub news: u64,
     #[serde(default = "default_up_cooldown")]
     pub up: u64,
+    /// Cooldown for `!dpi` (Dönerindex API).
     #[serde(default = "default_doener_cooldown")]
     pub doener: u64,
+    /// Cooldown for `!döner` / `!doener` (doeneratlas.de HTML).
+    #[serde(default = "default_doeneratlas_cooldown")]
+    pub doeneratlas: u64,
     #[serde(default = "default_feedback_cooldown")]
     pub feedback: u64,
 }
@@ -472,6 +484,7 @@ impl Default for CooldownsConfig {
             news: default_news_cooldown(),
             up: default_up_cooldown(),
             doener: default_doener_cooldown(),
+            doeneratlas: default_doeneratlas_cooldown(),
             feedback: default_feedback_cooldown(),
         }
     }
@@ -616,6 +629,7 @@ impl Configuration {
                 client_secret: SecretString::new("test".into()),
                 expected_latency: 100,
                 hidden_admins: Vec::new(),
+                viewer_allowlist: Vec::new(),
                 admin_channel: None,
                 ai_channel: None,
             },
@@ -1326,5 +1340,29 @@ mod tests {
         assert_eq!(cfg.cap_for(Bucket::Audio), cfg.max_audio_size);
         assert_eq!(cfg.cap_for(Bucket::Video), cfg.max_video_size);
         assert_eq!(cfg.cap_for(Bucket::Text), cfg.max_text_size);
+    }
+
+    #[test]
+    fn cooldowns_doener_defaults_to_30() {
+        let c: CooldownsConfig = toml::from_str("").expect("empty cooldowns parses");
+        assert_eq!(c.doener, 30);
+    }
+
+    #[test]
+    fn cooldowns_doener_overrides_via_toml() {
+        let c: CooldownsConfig = toml::from_str("doener = 5").expect("parses");
+        assert_eq!(c.doener, 5);
+    }
+
+    #[test]
+    fn cooldowns_doeneratlas_defaults_to_30() {
+        let c: CooldownsConfig = toml::from_str("").expect("empty cooldowns parses");
+        assert_eq!(c.doeneratlas, 30);
+    }
+
+    #[test]
+    fn cooldowns_doeneratlas_overrides_via_toml() {
+        let c: CooldownsConfig = toml::from_str("doeneratlas = 7").expect("parses");
+        assert_eq!(c.doeneratlas, 7);
     }
 }

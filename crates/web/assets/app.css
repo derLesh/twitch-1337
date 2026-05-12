@@ -475,6 +475,12 @@ kbd {
 .table.state .thead, .table.state .tr {
   grid-template-columns: 1.6fr 1.4fr 1.4fr 1.2fr 80px;
 }
+.table.leaderboard .thead, .table.leaderboard .tr {
+  grid-template-columns: 60px 1.6fr 1fr 1fr;
+}
+.table.flights .thead, .table.flights .tr {
+  grid-template-columns: 1fr 1fr 1.2fr 1fr 1fr 1fr 0.8fr;
+}
 .thead {
   padding: 10px 18px;
   border-bottom: 1px solid var(--line);

@@ -30,14 +30,6 @@ const SCHEDULES: StubMeta = StubMeta {
     nav: crate::nav::SCHEDULES,
 };
 
-const FLIGHTS: StubMeta = StubMeta {
-    title: "Flights",
-    subtitle: "Active flight tracker subscriptions and last-seen ADS-B telemetry.",
-    slug: "flights",
-    note: "Tracker state is persisted in flights.ron and managed via !track / !untrack in chat.",
-    nav: crate::nav::FLIGHTS,
-};
-
 const LOGS: StubMeta = StubMeta {
     title: "Logs",
     subtitle: "Live event tail across handlers — 1337 pings, AI turns, dreamer rituals.",
@@ -57,7 +49,6 @@ const CONFIG: StubMeta = StubMeta {
 pub fn router() -> Router<WebState> {
     Router::new()
         .route("/schedules", get(|s| render_stub(SCHEDULES, s)))
-        .route("/flights", get(|s| render_stub(FLIGHTS, s)))
         .route("/logs", get(|s| render_stub(LOGS, s)))
         .route("/config", get(|s| render_stub(CONFIG, s)))
 }
@@ -72,6 +63,7 @@ struct StubTpl<'a> {
     csrf: String,
     user_login: &'a str,
     current_page: &'static str,
+    is_mod: bool,
 }
 
 async fn render_stub(
@@ -86,5 +78,6 @@ async fn render_stub(
         csrf: csrf::encode(&session.csrf_value),
         user_login: &session.user_login,
         current_page: meta.nav,
+        is_mod: session.is_mod(),
     })
 }
