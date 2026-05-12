@@ -348,8 +348,20 @@ async fn callback(
 
     let (sid, csrf_value) = state
         .sessions
-        .insert(me.id.clone(), me.login.clone(), role)
+        .insert(crate::auth::session::NewSession {
+            user_id: me.id.clone(),
+            user_login: me.login.clone(),
+            role,
+            avatar_url: me.profile_image_url.clone(),
+            is_broadcaster: me.id == *state.broadcaster_id,
+        })
         .map_err(WebError::Internal)?;
+    if let Some(url) = &me.profile_image_url {
+        state
+            .avatar_cache
+            .prime(&me.id, Some(url), state.clock.as_ref())
+            .await;
+    }
     issue_session_cookies(&cookies, &state.signed_key, sid, &csrf_value, true);
 
     let next_path = cookies
@@ -447,7 +459,13 @@ pub async fn require_role(
     mut req: Request,
     next: Next,
 ) -> Result<Response, WebError> {
-    let captured_next = req.uri().path_and_query().map(|pq| pq.as_str().to_owned());
+    // `/` already redirects post-login based on role, so capturing it as
+    // `next` produces a useless `/login?next=%2F` round-trip.
+    let captured_next = req
+        .uri()
+        .path_and_query()
+        .map(|pq| pq.as_str().to_owned())
+        .filter(|p| p != "/");
     let unauth = || WebError::Unauthenticated {
         next: captured_next.clone(),
     };

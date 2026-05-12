@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Flights — twitch-1337{% endblock %}
 {% block content %}
+{% if let Some(msg) = flash %}<div class="flash">{{ msg }}</div>{% endif %}
 <div class="page-head">
   <div>
     <h1>Flights <span class="count">({{ flights.len() }})</span></h1>
@@ -8,7 +9,7 @@
   </div>
 </div>
 
-<div class="table flights">
+<div class="table flights{% if is_mod %} with-act{% endif %}">
   <div class="thead">
     <div class="th col-id">ID</div>
     <div class="th col-cs">Callsign</div>
@@ -17,6 +18,7 @@
     <div class="th col-alt">Altitude</div>
     <div class="th col-gs">Speed</div>
     <div class="th col-age">Seen</div>
+    {% if is_mod %}<div class="th col-act"></div>{% endif %}
   </div>
   {% if aviation_disabled %}
     <div class="empty">Aviation tracking is disabled.</div>
@@ -33,6 +35,15 @@
         <div class="td col-alt mono num">{% match f.altitude_ft %}{% when Some(v) %}{{ v }} ft{% when None %}—{% endmatch %}</div>
         <div class="td col-gs mono num">{% match f.ground_speed_kts %}{% when Some(v) %}{{ v }} kt{% when None %}—{% endmatch %}</div>
         <div class="td col-age mono num">{% match f.last_seen_secs_ago %}{% when Some(v) %}{{ v }}s{% when None %}—{% endmatch %}</div>
+        {% if is_mod %}
+        <div class="td col-act">
+          <form method="post" action="/flights/delete" style="display:inline" onsubmit="return confirm('Untrack {{ f.identifier }}?')">
+            <input type="hidden" name="_csrf" value="{{ csrf }}">
+            <input type="hidden" name="identifier" value="{{ f.identifier }}">
+            <button type="submit" class="row-act danger" title="Untrack">✕</button>
+          </form>
+        </div>
+        {% endif %}
       </div>
     {% endfor %}
     </div>

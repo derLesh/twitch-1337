@@ -7,11 +7,9 @@
     <h1>Users <span class="count">({{ items.len() }})</span></h1>
     <p class="page-sub">Per-user character sheets at <code>memories/users/&lt;id&gt;.md</code>. 4 KiB cap each.</p>
   </div>
-  <form class="page-actions" method="post" action="/memory/users/new">
-    <input type="hidden" name="_csrf" value="{{ csrf }}">
-    <input type="text" class="input" name="user_id" placeholder="Twitch user id" pattern="[0-9]{1,32}" inputmode="numeric" required autocomplete="off" spellcheck="false" style="width:180px;">
-    <button type="submit" class="btn primary">+ New user note</button>
-  </form>
+  <div class="page-actions">
+    <a class="btn primary" href="/memory/users/new">+ New user note</a>
+  </div>
 </div>
 
 {% if items.is_empty() %}
@@ -21,7 +19,12 @@
   {% for u in items %}
   <div class="user-card" data-filter="{{ u.user_id }} {{ u.display_name }} {{ u.note }}">
     <div class="user-card-head">
-      <span class="avatar" style="width:36px;height:36px;font-size:13px;background:oklch(0.55 0.10 var(--accent-h));">{{ u.initial }}</span>
+      {% match u.profile_image_url %}
+      {% when Some(url) %}
+        <img class="avatar avatar-img" src="{{ url }}" alt="" loading="lazy" width="36" height="36">
+      {% when None %}
+        <span class="avatar" style="width:36px;height:36px;font-size:13px;background:oklch(0.55 0.10 var(--accent-h));">{{ u.initial }}</span>
+      {% endmatch %}
       <div>
         <div class="user-name">{{ u.display_name }}</div>
         <div class="user-id">id {{ u.user_id }}</div>

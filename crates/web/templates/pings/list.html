@@ -15,7 +15,7 @@
 
 {% if let Some(msg) = flash %}<div class="flash">{{ msg }}</div>{% endif %}
 
-<div class="stat-strip">
+<div class="stat-strip three">
   <div class="stat">
     <div class="stat-label">Total pings</div>
     <div class="stat-value">{{ total_pings }}</div>
@@ -23,10 +23,6 @@
   <div class="stat">
     <div class="stat-label">Total members</div>
     <div class="stat-value">{{ total_members }}</div>
-  </div>
-  <div class="stat">
-    <div class="stat-label">With variables</div>
-    <div class="stat-value">{{ with_variables }}</div>
   </div>
   <div class="stat">
     <div class="stat-label">Custom cooldowns</div>
@@ -51,7 +47,6 @@
     <div class="th col-tpl">Template</div>
     <div class="th col-members">Members</div>
     <div class="th col-by">Created by</div>
-    <div class="th col-fired">Last fired</div>
     <div class="th col-act"></div>
   </div>
   {% if rows.is_empty() %}
@@ -83,7 +78,6 @@
             {{ row.created_by }}
           </span>
         </div>
-        <div class="td col-fired"><span class="muted">—</span></div>
         <div class="td col-act">
           {% if is_mod %}
           <a class="row-act" href="/pings/{{ row.name }}" title="Edit">✎</a>

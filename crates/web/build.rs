@@ -25,10 +25,10 @@ fn git_sha() -> String {
     if let Ok(sha) = env::var("GIT_SHA")
         && !sha.is_empty()
     {
-        return sha;
+        return sha.chars().take(7).collect();
     }
     Command::new("git")
-        .args(["rev-parse", "--short=12", "HEAD"])
+        .args(["rev-parse", "--short=7", "HEAD"])
         .output()
         .ok()
         .filter(|o| o.status.success())

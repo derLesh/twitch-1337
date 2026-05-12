@@ -17,9 +17,11 @@ use crate::state::WebState;
 struct ListTpl {
     rows: Vec<RowView>,
     user_login: String,
+    user_avatar_url: Option<String>,
     csrf: String,
     current_page: &'static str,
     is_mod: bool,
+    is_broadcaster: bool,
 }
 
 struct RowView {
@@ -62,9 +64,11 @@ async fn list(
     let is_mod = session.is_mod();
     render(&ListTpl {
         rows,
+        user_avatar_url: session.avatar_url.clone(),
         user_login: session.user_login,
         csrf,
         current_page: crate::nav::LEADERBOARD,
         is_mod,
+        is_broadcaster: session.is_broadcaster,
     })
 }

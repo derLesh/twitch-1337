@@ -65,13 +65,14 @@ struct ListTpl {
     rows: Vec<RowView>,
     total_pings: usize,
     total_members: usize,
-    with_variables: usize,
     custom_cooldowns: usize,
     flash: Option<String>,
     csrf: String,
     user_login: String,
+    user_avatar_url: Option<String>,
     current_page: &'static str,
     is_mod: bool,
+    is_broadcaster: bool,
 }
 
 #[derive(Template)]
@@ -83,8 +84,10 @@ struct FormTpl<'a> {
     csrf: &'a str,
     error: Option<String>,
     user_login: &'a str,
+    user_avatar_url: Option<&'a str>,
     current_page: &'static str,
     is_mod: bool,
+    is_broadcaster: bool,
     /// Sorted lowercase logins. Empty on the create form.
     members: Vec<String>,
     /// Inline error from a recent add/remove attempt, rendered above the
@@ -110,7 +113,6 @@ async fn list(
     let mgr = state.ping_manager.read().await;
     let mut rows: Vec<RowView> = Vec::new();
     let mut unique_members: HashSet<&str> = HashSet::new();
-    let mut with_variables: usize = 0;
     let mut custom_cooldowns: usize = 0;
     for (name, ping) in mgr.iter() {
         rows.push(RowView {
@@ -122,9 +124,6 @@ async fn list(
         });
         for m in &ping.members {
             unique_members.insert(m.as_str());
-        }
-        if ping.template.contains("{mentions}") || ping.template.contains("{sender}") {
-            with_variables += 1;
         }
         if ping.cooldown.is_some() {
             custom_cooldowns += 1;
@@ -140,13 +139,14 @@ async fn list(
         rows,
         total_pings,
         total_members,
-        with_variables,
         custom_cooldowns,
         flash: flash::take(&cookies),
         csrf: csrf::encode(&session.csrf_value),
         user_login: session.user_login.clone(),
+        user_avatar_url: session.avatar_url.clone(),
         current_page: crate::nav::PINGS,
         is_mod,
+        is_broadcaster: session.is_broadcaster,
     };
     render(&tpl)
 }
@@ -160,8 +160,10 @@ async fn new_form(Extension(session): Extension<Session>) -> Result<Response, We
         csrf: &csrf_hex,
         error: None,
         user_login: &session.user_login,
+        user_avatar_url: session.avatar_url.as_deref(),
         current_page: crate::nav::PINGS,
         is_mod: session.is_mod(),
+        is_broadcaster: session.is_broadcaster,
         members: Vec::new(),
         member_error: None,
     })
@@ -206,8 +208,10 @@ async fn create(
                 csrf: &csrf_hex,
                 error: Some(format!("ping `{name}` already exists")),
                 user_login: &session.user_login,
+                user_avatar_url: session.avatar_url.as_deref(),
                 current_page: crate::nav::PINGS,
                 is_mod: session.is_mod(),
+                is_broadcaster: session.is_broadcaster,
                 members: Vec::new(),
                 member_error: None,
             },
@@ -236,8 +240,10 @@ async fn create(
                 csrf: &csrf_hex,
                 error: Some(e.to_string()),
                 user_login: &session.user_login,
+                user_avatar_url: session.avatar_url.as_deref(),
                 current_page: crate::nav::PINGS,
                 is_mod: session.is_mod(),
+                is_broadcaster: session.is_broadcaster,
                 members: Vec::new(),
                 member_error: None,
             },
@@ -277,8 +283,10 @@ async fn edit_form(
         csrf: &csrf_hex,
         error: None,
         user_login: &session.user_login,
+        user_avatar_url: session.avatar_url.as_deref(),
         current_page: crate::nav::PINGS,
         is_mod: session.is_mod(),
+        is_broadcaster: session.is_broadcaster,
         members,
         member_error: None,
     })
@@ -326,8 +334,10 @@ async fn update(
                 csrf: &csrf_hex,
                 error: Some(e.to_string()),
                 user_login: &session.user_login,
+                user_avatar_url: session.avatar_url.as_deref(),
                 current_page: crate::nav::PINGS,
                 is_mod: session.is_mod(),
+                is_broadcaster: session.is_broadcaster,
                 members,
                 member_error: None,
             },
@@ -422,8 +432,10 @@ async fn add_member(
                     csrf: &csrf_hex,
                     error: None,
                     user_login: &session.user_login,
+                    user_avatar_url: session.avatar_url.as_deref(),
                     current_page: crate::nav::PINGS,
                     is_mod: session.is_mod(),
+                    is_broadcaster: session.is_broadcaster,
                     members,
                     member_error: Some(msg),
                 },

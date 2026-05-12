@@ -89,8 +89,14 @@ async fn assets_emit_immutable_cache_control() {
         .unwrap()
         .to_str()
         .unwrap();
-    assert!(
-        cc.contains("immutable"),
-        "expected immutable cache-control, got `{cc}`"
-    );
+    // Debug builds emit `no-store` so asset edits show up without a
+    // rebuild; release builds emit the production `immutable` policy.
+    if cfg!(debug_assertions) {
+        assert_eq!(cc, "no-store", "debug build expects no-store");
+    } else {
+        assert!(
+            cc.contains("immutable"),
+            "expected immutable cache-control, got `{cc}`"
+        );
+    }
 }

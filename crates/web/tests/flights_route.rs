@@ -28,7 +28,8 @@ fn mod_helix() -> Arc<FakeHelix> {
 
 fn app(state: twitch_1337_web::WebState) -> Router {
     Router::new()
-        .merge(flights::router())
+        .merge(flights::viewer_router())
+        .merge(flights::mod_router())
         .route_layer(axum::middleware::from_fn_with_state(
             state.clone(),
             require_mod,

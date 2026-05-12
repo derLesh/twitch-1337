@@ -52,6 +52,19 @@ dev:
 dev-web bind="127.0.0.1:8761":
   DATA_DIR=./dev-data BIND_ADDR={{bind}} RUST_LOG=info,twitch_1337_web=debug cargo run -p twitch-1337-web --bin web-dev --features dev-login
 
+# Rebuild + restart dev-web on Rust/template changes. Requires
+# `cargo install cargo-watch`. Browser auto-refreshes via livereload
+# when the new server comes up.
+dev-web-watch bind="127.0.0.1:8761":
+  DATA_DIR=./dev-data BIND_ADDR={{bind}} RUST_LOG=info,twitch_1337_web=debug \
+    cargo watch -w crates/web/src -w crates/web/templates -w crates/core/src \
+      -x 'run -p twitch-1337-web --bin web-dev --features dev-login'
+
+# Kill the running web-dev binary (matches the compiled path so it
+# doesn't escape to the parent shell or to a cargo invocation elsewhere).
+dev-web-stop:
+  -pkill -f 'target/debug/web-dev' 2>/dev/null
+
 # One-shot: mint a dev session at /_dev/login + screenshot a path to PNG.
 # Requires `dev-web` already running on `base`. Reuses /tmp/wd-cprof so
 # the second+ shot skips the auth round-trip. Defaults: /pings →

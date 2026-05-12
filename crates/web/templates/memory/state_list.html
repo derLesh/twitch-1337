@@ -5,7 +5,7 @@
 <div class="page-head">
   <div>
     <h1>State <span class="count">({{ items.len() }})</span></h1>
-    <p class="page-sub">State notes ({{ items.len() }}) at <code>memories/state/&lt;slug&gt;.md</code>. 2 KiB cap each, max 64 entries.</p>
+    <p class="page-sub">State notes at <code>memories/state/&lt;slug&gt;.md</code>. 2 KiB cap each, max 64 entries.</p>
   </div>
   <div class="page-actions">
     <a class="btn primary" href="/memory/state/new">+ New state note</a>
@@ -36,7 +36,12 @@
           <span class="muted">—</span>
         {% else %}
           <span class="by">
-            <span class="avatar" style="width:18px;height:18px;font-size:10px;background:oklch(0.55 0.10 var(--accent-h));">{{ s.created_initial }}</span>
+            {% match s.profile_image_url %}
+            {% when Some(url) %}
+              <img class="avatar avatar-img" src="{{ url }}" alt="" loading="lazy" width="18" height="18">
+            {% when None %}
+              <span class="avatar" style="width:18px;height:18px;font-size:10px;background:oklch(0.55 0.10 var(--accent-h));">{{ s.created_initial }}</span>
+            {% endmatch %}
             <span class="mono">{{ s.created_by }}</span>
           </span>
         {% endif %}

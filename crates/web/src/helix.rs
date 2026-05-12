@@ -5,13 +5,19 @@
 //! with the helix `user_id` filter so a single round-trip resolves it
 //! regardless of how many mods the channel has.
 
+use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
 
 use async_trait::async_trait;
+use chrono::{DateTime, Utc};
 use eyre::{Result, WrapErr as _};
 use secrecy::{ExposeSecret as _, SecretString};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
+use tokio::sync::Mutex;
+
+use crate::clock::Clock;
 
 #[async_trait]
 pub trait HelixClient: Send + Sync {
@@ -19,6 +25,142 @@ pub trait HelixClient: Send + Sync {
     async fn fetch_user_by_login(&self, login: &str) -> Result<Option<HelixUser>>;
     /// Single helix call filtered by `user_id`; returns true iff the user is in the moderator list.
     async fn is_moderator(&self, broadcaster_id: &str, user_id: &str) -> Result<bool>;
+    /// Batched lookup. [`ReqwestHelixClient`] overrides to a single helix
+    /// call (up to 100 ids per request).
+    async fn fetch_users_by_ids(&self, ids: &[&str]) -> Result<Vec<HelixUser>> {
+        let mut out = Vec::with_capacity(ids.len());
+        for id in ids {
+            if let Some(u) = self.fetch_user_by_id(id).await? {
+                out.push(u);
+            }
+        }
+        Ok(out)
+    }
+}
+
+/// TTL cache for `profile_image_url` lookups keyed by Twitch user id.
+///
+/// Negative results (helix returned no avatar for an id) are cached
+/// alongside positive ones so a missing user doesn't refetch every page
+/// load. `lookup` returns the cached subset plus the ids that need a
+/// fresh helix call; the caller is expected to feed the helix response
+/// back into `insert`.
+pub struct AvatarCache {
+    entries: Mutex<HashMap<String, AvatarEntry>>,
+    ttl: chrono::Duration,
+    /// Hard cap on cached entries. When `insert` or `prime` would push
+    /// the map past this, expired entries are pruned first and the
+    /// oldest survivor is dropped if still over. Prevents unbounded
+    /// growth from churned-through user ids over the bot's lifetime.
+    max_entries: usize,
+}
+
+struct AvatarEntry {
+    url: Option<String>,
+    fetched_at: DateTime<Utc>,
+}
+
+pub struct AvatarLookup {
+    pub cached: HashMap<String, String>,
+    pub missing: Vec<String>,
+}
+
+/// Default upper bound on cached entries — generous enough for any
+/// reasonable channel's `memories/users/` directory.
+const DEFAULT_AVATAR_CACHE_CAP: usize = 4096;
+
+impl AvatarCache {
+    pub fn new(ttl: Duration) -> Self {
+        Self::with_capacity(ttl, DEFAULT_AVATAR_CACHE_CAP)
+    }
+
+    pub fn with_capacity(ttl: Duration, max_entries: usize) -> Self {
+        Self {
+            entries: Mutex::new(HashMap::new()),
+            ttl: chrono::Duration::from_std(ttl).unwrap_or(chrono::Duration::hours(1)),
+            max_entries: max_entries.max(1),
+        }
+    }
+
+    /// Drop expired entries; if still at-or-over cap, evict the
+    /// oldest-fetched survivor. Called from the insert paths.
+    fn evict_if_needed(
+        entries: &mut HashMap<String, AvatarEntry>,
+        now: DateTime<Utc>,
+        ttl: chrono::Duration,
+        cap: usize,
+    ) {
+        if entries.len() < cap {
+            return;
+        }
+        entries.retain(|_, e| now.signed_duration_since(e.fetched_at) < ttl);
+        while entries.len() >= cap {
+            let Some(oldest) = entries
+                .iter()
+                .min_by_key(|(_, e)| e.fetched_at)
+                .map(|(k, _)| k.clone())
+            else {
+                break;
+            };
+            entries.remove(&oldest);
+        }
+    }
+
+    pub async fn lookup(&self, ids: &[&str], clock: &dyn Clock) -> AvatarLookup {
+        let now = clock.now();
+        let entries = self.entries.lock().await;
+        let mut cached = HashMap::new();
+        let mut missing = Vec::new();
+        for id in ids {
+            match entries.get(*id) {
+                Some(e) if now.signed_duration_since(e.fetched_at) < self.ttl => {
+                    if let Some(url) = &e.url {
+                        cached.insert((*id).to_owned(), url.clone());
+                    }
+                }
+                _ => missing.push((*id).to_owned()),
+            }
+        }
+        AvatarLookup { cached, missing }
+    }
+
+    /// Records a single avatar entry. Used by the OAuth callback so the
+    /// caller's own avatar lands in the cache without an extra batch call.
+    pub async fn prime(&self, user_id: &str, url: Option<&str>, clock: &dyn Clock) {
+        let now = clock.now();
+        let mut entries = self.entries.lock().await;
+        Self::evict_if_needed(&mut entries, now, self.ttl, self.max_entries);
+        entries.insert(
+            user_id.to_owned(),
+            AvatarEntry {
+                url: url.map(str::to_owned),
+                fetched_at: now,
+            },
+        );
+    }
+
+    /// Records helix response. `queried` is the full set of ids that were
+    /// requested; ids absent from `users` are stored as negative entries
+    /// so repeated lookups for empty/unknown users don't refetch.
+    pub async fn insert(&self, queried: &[String], users: &[HelixUser], clock: &dyn Clock) {
+        let now = clock.now();
+        let by_id: HashMap<&str, Option<&str>> = users
+            .iter()
+            .map(|u| (u.id.as_str(), u.profile_image_url.as_deref()))
+            .collect();
+        let mut entries = self.entries.lock().await;
+        Self::evict_if_needed(&mut entries, now, self.ttl, self.max_entries);
+        for id in queried {
+            let url = by_id.get(id.as_str()).copied().flatten().map(str::to_owned);
+            entries.insert(
+                id.clone(),
+                AvatarEntry {
+                    url,
+                    fetched_at: now,
+                },
+            );
+        }
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -26,6 +168,8 @@ pub struct HelixUser {
     pub id: String,
     pub login: String,
     pub display_name: String,
+    #[serde(default)]
+    pub profile_image_url: Option<String>,
 }
 
 #[async_trait]
@@ -123,6 +267,33 @@ impl HelixClient for ReqwestHelixClient {
         self.fetch_user(&[("login", login)]).await
     }
 
+    async fn fetch_users_by_ids(&self, ids: &[&str]) -> Result<Vec<HelixUser>> {
+        if ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        #[derive(Deserialize)]
+        struct UserResp {
+            data: Vec<HelixUser>,
+        }
+        let token = self.access_token_provider.current_access_token().await?;
+        let mut out = Vec::with_capacity(ids.len());
+        // Twitch helix `/users` accepts up to 100 `id` query params per call.
+        for chunk in ids.chunks(100) {
+            let query: Vec<(&str, &str)> = chunk.iter().map(|id| ("id", *id)).collect();
+            let resp: UserResp = helix_get(
+                &self.http,
+                &self.helix_base,
+                "/helix/users",
+                &query,
+                &token,
+                self.client_id.expose_secret(),
+                "helix users (batch)",
+            )
+            .await?;
+            out.extend(resp.data);
+        }
+        Ok(out)
+    }
     async fn is_moderator(&self, broadcaster_id: &str, user_id: &str) -> Result<bool> {
         let token = self.access_token_provider.current_access_token().await?;
         helix_moderator_check(

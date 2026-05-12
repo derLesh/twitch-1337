@@ -50,11 +50,15 @@ pub async fn bind(addr: SocketAddr) -> Result<TcpListener> {
 }
 
 pub async fn run_web(listener: TcpListener, deps: WebDeps, shutdown: Arc<Notify>) -> Result<()> {
+    serve_app(listener, build_router(deps.state), shutdown).await
+}
+
+/// Serve a pre-built router with graceful shutdown.
+pub async fn serve_app(listener: TcpListener, app: Router, shutdown: Arc<Notify>) -> Result<()> {
     let url = listener
         .local_addr()
         .map(|a| format!("http://{a}/"))
         .unwrap_or_else(|_| "<unknown>".to_owned());
-    let app = build_router(deps.state);
     info!(
         target: "twitch_1337_web",
         version = routes::health::PKG_VERSION,
@@ -95,7 +99,7 @@ pub fn build_router(state: WebState) -> Router {
         .route("/", axum::routing::get(root_redirect))
         .merge(routes::pings::viewer_router())
         .merge(routes::leaderboard::router())
-        .merge(routes::flights::router())
+        .merge(routes::flights::viewer_router())
         .layer(axum::middleware::from_fn(auth::viewer_method_guard))
         .route_layer(axum::middleware::from_fn_with_state(
             viewer_state.clone(),
@@ -106,6 +110,7 @@ pub fn build_router(state: WebState) -> Router {
     let mod_state = state.clone();
     let mod_only = Router::new()
         .merge(routes::pings::mod_router())
+        .merge(routes::flights::mod_router())
         .merge(routes::memory::router())
         .merge(routes::stubs::router())
         .route_layer(axum::middleware::from_fn_with_state(

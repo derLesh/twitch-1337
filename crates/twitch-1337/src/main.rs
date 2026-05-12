@@ -246,6 +246,9 @@ async fn build_web_spawner(
         signed_key,
         leaderboard,
         tracker_tx,
+        avatar_cache: Arc::new(twitch_1337_web::helix::AvatarCache::new(
+            std::time::Duration::from_secs(3600),
+        )),
     };
 
     Ok(Box::new(move |shutdown| {

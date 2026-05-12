@@ -341,6 +341,12 @@ pub enum TrackerCommand {
     Snapshot {
         reply: tokio::sync::oneshot::Sender<Vec<TrackedFlightView>>,
     },
+    /// Remove a tracked flight from the dashboard. `reply` carries the
+    /// removed flight's label, or `None` if `identifier` didn't match.
+    DeleteFromWeb {
+        identifier: String,
+        reply: tokio::sync::oneshot::Sender<Option<String>>,
+    },
 }
 
 // --- Phase detection helpers ---
@@ -471,6 +477,28 @@ pub(crate) fn emergency_squawk_meaning(squawk: &str) -> Option<&'static str> {
 // --- Helpers ---
 
 /// Finds a tracked flight by searching identifier, callsign, and hex (case-insensitive).
+/// Remove the flight matching `query`, persist the new state, and log it.
+/// Returns the human label (callsign or identifier) of the removed flight,
+/// or `None` if no flight matched.
+async fn remove_flight_at(
+    state: &mut FlightTrackerState,
+    query: &str,
+    data_dir: &Path,
+    source: &str,
+) -> Option<String> {
+    let idx = find_flight_index(&state.flights, query)?;
+    let flight = &state.flights[idx];
+    let label = flight
+        .callsign
+        .as_deref()
+        .unwrap_or(flight.identifier.as_str())
+        .to_owned();
+    state.flights.remove(idx);
+    save_tracker_state(data_dir, state).await;
+    info!(identifier = %query, source = %source, "Flight untracked");
+    Some(label)
+}
+
 fn find_flight_index(flights: &[TrackedFlight], query: &str) -> Option<usize> {
     let upper = query.to_uppercase();
     flights.iter().position(|f| {
@@ -1092,6 +1120,10 @@ async fn process_command<T, L>(
             // Receiver may have dropped (web request timed out); ignore send failure.
             let _ = reply.send(build_flight_view(state, now));
         }
+        TrackerCommand::DeleteFromWeb { identifier, reply } => {
+            let removed = remove_flight_at(state, &identifier, data_dir, "web").await;
+            let _ = reply.send(removed);
+        }
     }
 }
 
@@ -1366,15 +1398,10 @@ async fn handle_untrack<T, L>(
         return;
     }
 
-    let name = flight
-        .callsign
-        .as_deref()
-        .unwrap_or(flight.identifier.as_str())
-        .to_string();
-    state.flights.remove(idx);
-    save_tracker_state(data_dir, state).await;
+    let name = remove_flight_at(state, identifier, data_dir, requested_by)
+        .await
+        .unwrap_or_else(|| identifier.to_owned());
 
-    info!(identifier = %identifier, requested_by = %requested_by, "Flight untracked");
     if let Err(e) = client
         .say_in_reply_to(reply_to, format!("{name} wird nicht mehr getrackt Okayge"))
         .await

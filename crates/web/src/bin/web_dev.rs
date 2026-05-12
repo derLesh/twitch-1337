@@ -36,10 +36,10 @@ use twitch_1337_web::auth::OAuthCtx;
 use twitch_1337_web::auth::session::SessionTable;
 use twitch_1337_web::clock::SystemClock;
 use twitch_1337_web::config::WebConfig;
-use twitch_1337_web::dev::{DEV_USER_ID, StubHelix};
+use twitch_1337_web::dev::{DEV_CSRF, DEV_SID, DEV_USER_ID, StubHelix, dev_new_session};
 use twitch_1337_web::helix::HelixClient;
 use twitch_1337_web::state::derive_session_key;
-use twitch_1337_web::{WebDeps, WebState, bind, run_web};
+use twitch_1337_web::{WebState, bind, build_router, serve_app};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -70,6 +70,10 @@ async fn main() -> Result<()> {
     let clock = Arc::new(SystemClock);
     let session_ttl = Duration::from_secs(7 * 24 * 3600);
     let sessions = Arc::new(SessionTable::new(session_ttl, clock.clone()));
+
+    // Pair with the fixed signed_key below: stable signed cookie across
+    // restarts means no re-login when iterating.
+    sessions.insert_with_id(DEV_SID, DEV_CSRF, dev_new_session());
 
     let session_secret = SecretString::new("0".repeat(64).into());
     let signed_key = derive_session_key(&session_secret)?;
@@ -107,6 +111,9 @@ async fn main() -> Result<()> {
         signed_key,
         leaderboard: Arc::new(RwLock::new(HashMap::new())),
         tracker_tx: None,
+        avatar_cache: Arc::new(twitch_1337_web::helix::AvatarCache::new(
+            Duration::from_secs(3600),
+        )),
     };
 
     let listener = bind(bind_addr).await?;
@@ -116,5 +123,43 @@ async fn main() -> Result<()> {
         tokio::signal::ctrl_c().await.ok();
         s.notify_one();
     });
-    run_web(listener, WebDeps { bind_addr, state }, shutdown).await
+
+    let mut app = build_router(state);
+    let livereload = tower_livereload::LiveReloadLayer::new();
+    let reloader = livereload.reloader();
+    app = app.layer(livereload);
+    install_asset_watcher(reloader);
+
+    serve_app(listener, app, shutdown).await
+}
+
+/// Watch `assets/` + `templates/` and ping the livereload SSE on
+/// change. The debouncer owns its internal worker thread; we `Box::leak`
+/// it because dropping the debouncer stops the watch — leaking is the
+/// honest signal that this lives for the program lifetime.
+fn install_asset_watcher(reloader: tower_livereload::Reloader) {
+    use notify_debouncer_mini::{DebounceEventResult, new_debouncer, notify::RecursiveMode};
+
+    let crate_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let mut debouncer = match new_debouncer(
+        Duration::from_millis(200),
+        move |res: DebounceEventResult| {
+            if res.is_ok() {
+                reloader.reload();
+            }
+        },
+    ) {
+        Ok(d) => d,
+        Err(e) => {
+            tracing::warn!(target: "twitch_1337_web", error = ?e, "livereload watcher init failed");
+            return;
+        }
+    };
+    for sub in ["assets", "templates"] {
+        let path = crate_dir.join(sub);
+        if let Err(e) = debouncer.watcher().watch(&path, RecursiveMode::Recursive) {
+            tracing::warn!(target: "twitch_1337_web", ?path, error = ?e, "livereload watch failed");
+        }
+    }
+    Box::leak(Box::new(debouncer));
 }

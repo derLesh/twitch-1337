@@ -174,6 +174,9 @@ async fn build_state_inner(
         signed_key,
         leaderboard: Arc::new(RwLock::new(HashMap::new())),
         tracker_tx: None,
+        avatar_cache: Arc::new(twitch_1337_web::helix::AvatarCache::new(
+            Duration::from_secs(3600),
+        )),
     };
     (state, pings_dir, memory_dir)
 }
@@ -203,7 +206,13 @@ pub fn insert_session_as(
 ) -> (String, String, String) {
     let (sid, csrf) = state
         .sessions
-        .insert(user_id.to_owned(), user_login.to_owned(), role)
+        .insert(twitch_1337_web::auth::session::NewSession {
+            user_id: user_id.to_owned(),
+            user_login: user_login.to_owned(),
+            role,
+            avatar_url: None,
+            is_broadcaster: false,
+        })
         .expect("insert session");
     let bare_csrf = hex::encode(csrf);
     let signed_sid = sign_for_tests(state, "tw1337_sid", &sid);

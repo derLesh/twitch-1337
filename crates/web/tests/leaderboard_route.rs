@@ -29,6 +29,7 @@ fn helix() -> Arc<FakeHelix> {
             id: "42".into(),
             login: "admin".into(),
             display_name: "admin".into(),
+            profile_image_url: None,
         },
     );
     Arc::new(FakeHelix {

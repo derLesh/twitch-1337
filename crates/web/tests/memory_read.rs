@@ -29,6 +29,7 @@ fn admin_helix(user_id: &str) -> Arc<dyn HelixClient> {
             id: user_id.to_owned(),
             login: "admin".into(),
             display_name: "admin".into(),
+            profile_image_url: None,
         },
     );
     Arc::new(FakeHelix {
@@ -95,11 +96,11 @@ async fn tree_renders_section_counts() {
     assert_eq!(res.status(), StatusCode::OK);
     let html = body_string(res).await;
     assert!(
-        html.contains("users (1)"),
+        html.contains(">1 <span class=\"stat-unit\">users</span>"),
         "expected users count; got {html}"
     );
     assert!(
-        html.contains("state (1)"),
+        html.contains(">1 <span class=\"stat-unit\">state</span>"),
         "expected state count; got {html}"
     );
 }
@@ -207,8 +208,8 @@ async fn state_list_renders_existing() {
     assert!(html.contains("alpha"), "expected slug alpha; got {html}");
     assert!(html.contains("bravo"), "expected slug bravo; got {html}");
     assert!(
-        html.contains("State notes (2)"),
-        "expected count; got {html}"
+        html.contains("State <span class=\"count\">(2)</span>"),
+        "expected count in title; got {html}"
     );
 }
 

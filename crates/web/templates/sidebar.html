@@ -11,7 +11,7 @@
     <div class="brand-mark"><span class="brand-glyph">⌬</span></div>
     <div class="brand-text">
       <span class="brand-name">twitch-1337</span>
-      <span class="brand-meta" title="commit {{ env!("GIT_SHA_SHORT") }}">v{{ env!("CARGO_PKG_VERSION") }} · {{ env!("GIT_SHA_SHORT") }}</span>
+      <span class="brand-meta">v{{ env!("CARGO_PKG_VERSION") }} · <a class="brand-sha" href="https://github.com/Chronophylos/twitch-1337/commit/{{ env!("GIT_SHA_SHORT") }}" target="_blank" rel="noopener noreferrer" title="commit {{ env!("GIT_SHA_SHORT") }}">{{ env!("GIT_SHA_SHORT") }}</a></span>
     </div>
   </div>
 
@@ -51,10 +51,15 @@
 
   <div class="side-footer">
     <div class="me">
-      <span class="avatar" style="width:28px;height:28px;font-size:11px;background:oklch(0.6 0.12 280);">{{ user_login.chars().next().unwrap_or('?') }}</span>
+      {% match user_avatar_url %}
+      {% when Some(url) %}
+        <img class="avatar avatar-img" src="{{ url }}" alt="" loading="lazy" width="28" height="28">
+      {% when None %}
+        <span class="avatar" style="width:28px;height:28px;font-size:11px;background:oklch(0.6 0.12 280);">{{ user_login.chars().next().unwrap_or('?') }}</span>
+      {% endmatch %}
       <div class="me-meta">
         <span class="me-name">{{ user_login }}</span>
-        <span class="me-role">{% if is_mod %}broadcaster · mod{% else %}viewer{% endif %}</span>
+        <span class="me-role">{% if is_broadcaster %}broadcaster{% else if is_mod %}mod{% endif %}</span>
       </div>
     </div>
     <form class="logout-form" method="post" action="/logout">

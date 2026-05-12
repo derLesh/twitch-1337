@@ -3281,6 +3281,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "121c2a6cda46980bb0fcd1647ffaf6cd3fc79a013de288782836f6df9c48780e"
 
 [[package]]
+name = "tower-livereload"
+version = "0.9.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5aa6b29b17d4540f2bd9ec304ad39d280c4bdf291d0ea6c4123eeba10939af84"
+dependencies = [
+ "bytes",
+ "http",
+ "http-body",
+ "pin-project-lite",
+ "tokio",
+ "tower",
+]
+
+[[package]]
 name = "tower-service"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3443,6 +3457,7 @@ dependencies = [
  "hex",
  "http",
  "mime_guess",
+ "notify-debouncer-mini",
  "oauth2",
  "rand 0.10.1",
  "reqwest 0.13.3",
@@ -3458,6 +3473,7 @@ dependencies = [
  "tower",
  "tower-cookies",
  "tower-http",
+ "tower-livereload",
  "tracing",
  "twitch-1337-core",
  "url",

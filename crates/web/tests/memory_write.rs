@@ -27,6 +27,7 @@ fn admin_helix(user_id: &str) -> Arc<dyn HelixClient> {
             id: user_id.to_owned(),
             login: "admin".into(),
             display_name: "admin".into(),
+            profile_image_url: None,
         },
     );
     Arc::new(FakeHelix {

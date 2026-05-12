@@ -22,7 +22,7 @@ use crate::auth::OAuthCtx;
 use crate::auth::session::SessionTable;
 use crate::clock::Clock;
 use crate::config::WebConfig;
-use crate::helix::HelixClient;
+use crate::helix::{AvatarCache, HelixClient};
 
 #[derive(Clone)]
 pub struct WebState {
@@ -65,6 +65,10 @@ pub struct WebState {
     /// aviation is disabled at startup; the `/flights` handler then renders
     /// the disabled placeholder instead of awaiting a snapshot.
     pub tracker_tx: Option<Arc<tokio::sync::mpsc::Sender<TrackerCommand>>>,
+    /// TTL cache for Twitch helix `profile_image_url` lookups. Shared
+    /// across handlers so repeat `/memory/users` loads don't re-issue
+    /// the same helix batch call.
+    pub avatar_cache: Arc<AvatarCache>,
 }
 
 /// Derive the signed-cookie [`Key`] from `[web].session_secret`.

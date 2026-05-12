@@ -30,12 +30,14 @@ tower-http = { workspace = true }
 tracing = { workspace = true }
 url = { workspace = true }
 urlencoding = { workspace = true }
+tower-livereload = { version = "0.9", optional = true }
+notify-debouncer-mini = { version = "0.7", optional = true }
 
 [features]
 # Mounts `/_dev/login` on the public router for local development. NEVER
 # compile this into a production binary — anyone reaching the bind addr
 # can mint a moderator session without OAuth.
-dev-login = []
+dev-login = ["dep:tower-livereload", "dep:notify-debouncer-mini"]
 
 # Standalone dashboard runner — skips IRC, uses StubHelix.
 # `cargo run -p twitch-1337-web --bin web-dev --features dev-login`
