@@ -56,6 +56,7 @@ pub struct TestBotBuilder {
     seeded_leaderboard: Option<HashMap<String, PersonalBest>>,
     whisper_failure: bool,
     emote_glossary_override: Option<String>,
+    doener_base_url: Option<String>,
 }
 
 impl TestBotBuilder {
@@ -66,6 +67,7 @@ impl TestBotBuilder {
             seeded_leaderboard: None,
             whisper_failure: false,
             emote_glossary_override: None,
+            doener_base_url: None,
         }
     }
 
@@ -129,6 +131,12 @@ impl TestBotBuilder {
         self.config.web.bind_addr = bind.into();
         self.config.web.session_secret = secrecy::SecretString::new("0".repeat(64).into());
         self.config.web.public_url = "https://test.invalid".into();
+        self
+    }
+
+    /// Override the doener service base URL to point at a mock server.
+    pub fn with_doener_base_url(mut self, base: impl Into<String>) -> Self {
+        self.doener_base_url = Some(base.into());
         self
     }
 
@@ -248,6 +256,12 @@ impl TestBotBuilder {
                 .is_some()
                 .then(|| llm.clone() as Arc<dyn LlmClient>),
             aviation: Some(aviation),
+            doener: Arc::new(twitch_1337::doener::DoenerClient::with_base_url(
+                reqwest::Client::new(),
+                self.doener_base_url
+                    .clone()
+                    .unwrap_or_else(|| "http://127.0.0.1:1".to_string()),
+            )),
             whisper: Some(whisper.clone() as Arc<dyn WhisperSender>),
             data_dir: data_dir.path().to_path_buf(),
             emote_glossary_override: self.emote_glossary_override,

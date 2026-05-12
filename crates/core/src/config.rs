@@ -447,6 +447,10 @@ fn default_feedback_cooldown() -> u64 {
     300
 }
 
+fn default_doener_cooldown() -> u64 {
+    30
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct CooldownsConfig {
     #[serde(default = "default_ai_cooldown")]
@@ -457,6 +461,8 @@ pub struct CooldownsConfig {
     pub up: u64,
     #[serde(default = "default_feedback_cooldown")]
     pub feedback: u64,
+    #[serde(default = "default_doener_cooldown")]
+    pub doener: u64,
 }
 
 impl Default for CooldownsConfig {
@@ -466,6 +472,7 @@ impl Default for CooldownsConfig {
             news: default_news_cooldown(),
             up: default_up_cooldown(),
             feedback: default_feedback_cooldown(),
+            doener: default_doener_cooldown(),
         }
     }
 }
@@ -1319,5 +1326,17 @@ mod tests {
         assert_eq!(cfg.cap_for(Bucket::Audio), cfg.max_audio_size);
         assert_eq!(cfg.cap_for(Bucket::Video), cfg.max_video_size);
         assert_eq!(cfg.cap_for(Bucket::Text), cfg.max_text_size);
+    }
+
+    #[test]
+    fn cooldowns_doener_defaults_to_30() {
+        let c: CooldownsConfig = toml::from_str("").expect("empty cooldowns parses");
+        assert_eq!(c.doener, 30);
+    }
+
+    #[test]
+    fn cooldowns_doener_overrides_via_toml() {
+        let c: CooldownsConfig = toml::from_str("doener = 5").expect("parses");
+        assert_eq!(c.doener, 5);
     }
 }

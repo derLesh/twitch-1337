@@ -91,6 +91,7 @@ pub struct AiCommand {
     web: Option<AiWeb>,
     emotes: Option<Arc<SevenTvEmoteProvider>>,
     bot_username: String,
+    doener: Arc<crate::doener::DoenerClient>,
 }
 
 pub struct AiCommandDeps {
@@ -103,6 +104,7 @@ pub struct AiCommandDeps {
     pub web: Option<AiWeb>,
     pub emotes: Option<Arc<SevenTvEmoteProvider>>,
     pub bot_username: String,
+    pub doener: Arc<crate::doener::DoenerClient>,
 }
 
 const GROK_ALIAS_TRIGGER: &str = "@grok";
@@ -139,22 +141,28 @@ impl AiCommand {
             web: deps.web,
             emotes: deps.emotes,
             bot_username: deps.bot_username,
+            doener: deps.doener,
         }
     }
 }
 
 /// Memory-v2 path executor that dispatches by tool name to the chat-turn
-/// executor (write_file/write_state/delete_state) or, when web tools are
-/// configured, the web search executor (web_search/read_url).
+/// executor (write_file/write_state/delete_state), the web search executor
+/// (web_search/read_url) when web tools are configured, or the always-on
+/// doener_index tool.
 struct V2Executor<'a> {
     chat: &'a ChatTurnExecutor,
     web: Option<&'a content::ContentToolExecutor>,
+    doener: &'a crate::doener::DoenerClient,
     trace: &'a TraceIds,
 }
 
 #[async_trait]
 impl ToolExecutor for V2Executor<'_> {
     async fn execute(&self, call: &ToolCall) -> ToolResultMessage {
+        if call.name == crate::ai::doener_tool::DOENER_TOOL_NAME {
+            return crate::ai::doener_tool::execute_doener_index(self.doener, call).await;
+        }
         if content::is_web_tool(&call.name) {
             match self.web {
                 Some(w) => w.execute_tool_call(call, self.trace).await,
@@ -405,6 +413,7 @@ where
         });
 
         let mut tools = chat_turn_tools();
+        tools.push(crate::ai::doener_tool::doener_tool());
         if self.web.is_some() {
             tools.extend(content::ai_tools());
         }
@@ -433,6 +442,7 @@ where
         let combined_exec = V2Executor {
             chat: &exec,
             web: self.web.as_ref().map(|w| w.executor.as_ref()),
+            doener: self.doener.as_ref(),
             trace: &trace,
         };
         let final_text = match run_agent(&*self.llm_client, req, &combined_exec, opts).await {
