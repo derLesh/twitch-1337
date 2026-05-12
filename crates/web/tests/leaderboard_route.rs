@@ -33,7 +33,6 @@ fn helix() -> Arc<FakeHelix> {
     );
     Arc::new(FakeHelix {
         moderators: vec!["42".into()],
-        followers: tokio::sync::RwLock::new(vec![]),
         users,
     })
 }

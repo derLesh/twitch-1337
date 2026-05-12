@@ -17,7 +17,6 @@ use helpers::{FakeHelix, build_state, install_crypto};
 fn fake_helix() -> Arc<dyn HelixClient> {
     Arc::new(FakeHelix {
         moderators: vec![],
-        followers: tokio::sync::RwLock::new(vec![]),
         users: HashMap::new(),
     })
 }

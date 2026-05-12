@@ -81,40 +81,11 @@ async fn is_moderator_with_user_token(
     .await
 }
 
-pub async fn check_is_follower(
-    helix: &dyn HelixClient,
-    broadcaster_id: &str,
-    user_id: &str,
-) -> eyre::Result<GateOutcome> {
-    if helix.is_follower(broadcaster_id, user_id).await? {
-        Ok(GateOutcome::Allow)
+/// Allow iff `user_id` appears in `allowlist`.
+pub fn check_in_allowlist(user_id: &str, allowlist: &[String]) -> GateOutcome {
+    if allowlist.iter().any(|id| id == user_id) {
+        GateOutcome::Allow
     } else {
-        Ok(GateOutcome::Deny)
-    }
-}
-
-/// Variant used during the OAuth callback to check follower status using the
-/// viewer's own user token. Calls `GET /helix/channels/followed` (scope
-/// `user:read:follows`) and returns `Allow` iff `total > 0`.
-pub async fn check_is_follower_with_token(
-    state: &WebState,
-    user_id: &str,
-    user_access_token: &str,
-    broadcaster_id: &str,
-) -> eyre::Result<GateOutcome> {
-    if crate::helix::user_follows_channel(
-        &state.oauth.http,
-        "https://api.twitch.tv",
-        state.client_id.expose_secret(),
-        user_access_token,
-        user_id,
-        broadcaster_id,
-        "helix channels/followed (user token)",
-    )
-    .await?
-    {
-        Ok(GateOutcome::Allow)
-    } else {
-        Ok(GateOutcome::Deny)
+        GateOutcome::Deny
     }
 }

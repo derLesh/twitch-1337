@@ -20,9 +20,6 @@ impl HelixClient for FakeHelix {
     async fn is_moderator(&self, _broadcaster: &str, user_id: &str) -> eyre::Result<bool> {
         Ok(self.moderators.iter().any(|m| m == user_id))
     }
-    async fn is_follower(&self, _broadcaster: &str, _user_id: &str) -> eyre::Result<bool> {
-        Ok(false)
-    }
 }
 
 #[tokio::test]

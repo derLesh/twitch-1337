@@ -94,7 +94,4 @@ impl HelixClient for StubHelix {
     async fn is_moderator(&self, _broadcaster: &str, user_id: &str) -> eyre::Result<bool> {
         Ok(user_id == DEV_USER_ID)
     }
-    async fn is_follower(&self, _broadcaster: &str, user_id: &str) -> eyre::Result<bool> {
-        Ok(user_id == DEV_USER_ID)
-    }
 }

@@ -19,8 +19,6 @@ pub trait HelixClient: Send + Sync {
     async fn fetch_user_by_login(&self, login: &str) -> Result<Option<HelixUser>>;
     /// Single helix call filtered by `user_id`; returns true iff the user is in the moderator list.
     async fn is_moderator(&self, broadcaster_id: &str, user_id: &str) -> Result<bool>;
-    /// Single helix call filtered by `user_id`; returns true iff the user follows the broadcaster.
-    async fn is_follower(&self, broadcaster_id: &str, user_id: &str) -> Result<bool>;
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -138,25 +136,6 @@ impl HelixClient for ReqwestHelixClient {
         )
         .await
     }
-
-    async fn is_follower(&self, broadcaster_id: &str, user_id: &str) -> Result<bool> {
-        #[derive(Deserialize)]
-        struct Resp {
-            total: u64,
-        }
-        let token = self.access_token_provider.current_access_token().await?;
-        let resp: Resp = helix_get(
-            &self.http,
-            &self.helix_base,
-            "/helix/channels/followers",
-            &[("broadcaster_id", broadcaster_id), ("user_id", user_id)],
-            &token,
-            self.client_id.expose_secret(),
-            "helix /channels/followers",
-        )
-        .await?;
-        Ok(resp.total > 0)
-    }
 }
 
 /// Single helix moderator-list call filtered by `user_id`. Returns true iff
@@ -188,37 +167,6 @@ pub async fn helix_moderator_check(
     )
     .await?;
     Ok(!resp.data.is_empty())
-}
-
-/// Used during OAuth callback to check follows using the viewer's own user token.
-///
-/// `GET /helix/channels/followed?user_id=…&broadcaster_id=…` requires the
-/// `user:read:follows` scope on the **user token** (not the broadcaster's).
-/// Returns `true` iff `total > 0`.
-pub async fn user_follows_channel(
-    http: &reqwest::Client,
-    helix_base: &str,
-    client_id: &str,
-    user_access_token: &str,
-    user_id: &str,
-    broadcaster_id: &str,
-    context: &'static str,
-) -> Result<bool> {
-    #[derive(Deserialize)]
-    struct Resp {
-        total: u64,
-    }
-    let resp: Resp = helix_get(
-        http,
-        helix_base,
-        "/helix/channels/followed",
-        &[("user_id", user_id), ("broadcaster_id", broadcaster_id)],
-        user_access_token,
-        client_id,
-        context,
-    )
-    .await?;
-    Ok(resp.total > 0)
 }
 
 /// Used during OAuth callback because `helix/moderation/moderators`

@@ -631,9 +631,6 @@ fn build_test_web_state(
         async fn is_moderator(&self, _b: &str, _u: &str) -> eyre::Result<bool> {
             Ok(false)
         }
-        async fn is_follower(&self, _b: &str, _u: &str) -> eyre::Result<bool> {
-            Ok(false)
-        }
     }
 
     let web_clock = Arc::new(WebSystemClock);
@@ -663,6 +660,7 @@ fn build_test_web_state(
         channel: Arc::from(config.twitch.channel.as_str()),
         broadcaster_id: Arc::from("0"),
         hidden_admins: Arc::from(Vec::<String>::new().into_boxed_slice()),
+        viewer_allowlist: Arc::from(Vec::<String>::new().into_boxed_slice()),
         client_id: secrecy::SecretString::new("test-client-id".to_owned().into()),
         oauth,
         ping_manager,

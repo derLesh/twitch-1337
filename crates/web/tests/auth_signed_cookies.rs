@@ -13,7 +13,6 @@ async fn tampered_sid_redirects_to_login() {
     install_crypto();
     let state = build_state(std::sync::Arc::new(FakeHelix {
         moderators: vec!["12345".into()],
-        followers: tokio::sync::RwLock::new(vec![]),
         users: std::collections::HashMap::new(),
     }))
     .await;
@@ -57,7 +56,6 @@ async fn untampered_sid_passes_through() {
     install_crypto();
     let state = build_state(std::sync::Arc::new(FakeHelix {
         moderators: vec!["12345".into()],
-        followers: tokio::sync::RwLock::new(vec![]),
         users: std::collections::HashMap::new(),
     }))
     .await;

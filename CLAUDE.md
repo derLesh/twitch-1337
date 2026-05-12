@@ -84,13 +84,11 @@ Others pinned to major tags; Dependabot keeps them current.
 
 `config.toml` (copy `config.toml.example`). Sections: `[twitch]`, `[pings]`, `[ai]` (optional), `[cooldowns]`, `[[schedules]]` (optional, repeatable). Schema + defaults in `config.toml.example` — treat as source of truth.
 
-**Dashboard viewer tier (added 2026-05-12):** the bot's Twitch token must
-carry `moderator:read:followers` in addition to its existing scopes — the
-web dashboard uses it to gate read-only access for followers via a sliding
-recheck. The Twitch developer-console OAuth app must additionally allow
-`user:read:follows` as a requestable scope on user logins (no
-broadcaster-token configuration is required). Startup logs a `warn` if the
-`/channels/followers` probe fails.
+**Dashboard viewer tier:** read-only viewer access is gated by a static
+allowlist at `[twitch].viewer_allowlist` (numeric Twitch user IDs, same shape
+as `hidden_admins`). Mods always pass. No additional Twitch scopes are
+required beyond the existing bot scopes (`chat:read`, `chat:edit`,
+`user:manage:whispers`).
 
 Schedules hot-reload on save (2s debounce via notify-debouncer-mini). No restart.
 

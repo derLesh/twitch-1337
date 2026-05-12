@@ -27,7 +27,7 @@ use serde::Deserialize;
 use tower_cookies::cookie::SameSite;
 use tower_cookies::{Cookie, Cookies, Key};
 
-use crate::auth::role_check::{GateOutcome, check_is_follower, check_is_mod};
+use crate::auth::role_check::{GateOutcome, check_in_allowlist, check_is_mod};
 use crate::error::WebError;
 use crate::state::WebState;
 
@@ -267,7 +267,6 @@ async fn auth_start(
         .authorize_url(move || csrf_for_url.clone())
         .add_scope(Scope::new("user:read:email".to_owned()))
         .add_scope(Scope::new("user:read:moderated_channels".to_owned()))
-        .add_scope(Scope::new("user:read:follows".to_owned()))
         .url();
     Redirect::to(auth_url.as_ref()).into_response()
 }
@@ -321,9 +320,6 @@ async fn callback(
         .await
         .map_err(|e| WebError::OAuthExchange(e.wrap_err("user lookup")))?;
 
-    // Initial role check uses the user's own access token (granted
-    // `user:read:moderated_channels` and `user:read:follows` via OAuth
-    // scopes). Try mod first, then follower, then deny.
     let role = match crate::auth::role_check::check_is_mod_with_token(
         &state,
         &me.id,
@@ -335,15 +331,7 @@ async fn callback(
     .map_err(|e| WebError::OAuthExchange(e.wrap_err("mod check")))?
     {
         GateOutcome::Allow => crate::auth::role::Role::Mod,
-        GateOutcome::Deny => match crate::auth::role_check::check_is_follower_with_token(
-            &state,
-            &me.id,
-            &user_token,
-            &state.broadcaster_id,
-        )
-        .await
-        .map_err(|e| WebError::OAuthExchange(e.wrap_err("follower check")))?
-        {
+        GateOutcome::Deny => match check_in_allowlist(&me.id, &state.viewer_allowlist) {
             GateOutcome::Allow => crate::auth::role::Role::Viewer,
             GateOutcome::Deny => {
                 tracing::info!(
@@ -483,7 +471,7 @@ pub async fn require_role(
         .to_std()
         .unwrap_or_default();
     if elapsed > state.config.role_check_refresh {
-        let outcome = match session.role {
+        let outcome: eyre::Result<GateOutcome> = match session.role {
             crate::auth::role::Role::Mod => {
                 check_is_mod(
                     state.helix.as_ref(),
@@ -493,14 +481,10 @@ pub async fn require_role(
                 )
                 .await
             }
-            crate::auth::role::Role::Viewer => {
-                check_is_follower(
-                    state.helix.as_ref(),
-                    &state.broadcaster_id,
-                    &session.user_id,
-                )
-                .await
-            }
+            crate::auth::role::Role::Viewer => Ok(check_in_allowlist(
+                &session.user_id,
+                &state.viewer_allowlist,
+            )),
         };
         match outcome {
             Ok(GateOutcome::Allow) => state.sessions.record_role_check(sid_cookie.value()),

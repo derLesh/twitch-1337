@@ -36,6 +36,9 @@ pub struct WebState {
     /// resolved at startup via helix users by login.
     pub broadcaster_id: Arc<str>,
     pub hidden_admins: Arc<[String]>,
+    /// Twitch user IDs granted viewer-tier access. Sourced from
+    /// `[twitch].viewer_allowlist`.
+    pub viewer_allowlist: Arc<[String]>,
     /// Twitch developer-app client id (used in `Client-Id` headers when the
     /// callback fetches the caller's user record).
     pub client_id: SecretString,

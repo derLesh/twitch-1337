@@ -1,4 +1,4 @@
-//! Viewer-tier (follower) integration scenarios.
+//! Viewer-tier (allowlist) integration scenarios.
 
 mod helpers;
 
@@ -14,10 +14,9 @@ use helpers::{
 use tower::ServiceExt as _;
 use twitch_1337_web::auth::Role;
 
-fn viewer_helix(user_id: &str) -> Arc<FakeHelix> {
+fn empty_helix() -> Arc<FakeHelix> {
     Arc::new(FakeHelix {
         moderators: vec![],
-        followers: tokio::sync::RwLock::new(vec![user_id.into()]),
         users: Default::default(),
     })
 }
@@ -25,7 +24,7 @@ fn viewer_helix(user_id: &str) -> Arc<FakeHelix> {
 #[tokio::test]
 async fn viewer_can_read_pings_leaderboard_flights() {
     install_crypto();
-    let (state, _td_p, _td_m) = build_state_with_dirs(viewer_helix("42")).await;
+    let (state, _td_p, _td_m) = build_state_with_dirs(empty_helix()).await;
     let (sid, csrf, _bare) = insert_session_as(&state, "42", "alice", Role::Viewer);
     let cookie = cookie_header(&sid, &csrf);
     let app = twitch_1337_web::build_router(state.clone());
@@ -50,7 +49,7 @@ async fn viewer_can_read_pings_leaderboard_flights() {
 #[tokio::test]
 async fn viewer_blocked_from_memory_and_mutations() {
     install_crypto();
-    let (state, _td_p, _td_m) = build_state_with_dirs(viewer_helix("42")).await;
+    let (state, _td_p, _td_m) = build_state_with_dirs(empty_helix()).await;
     let (sid, csrf, _bare) = insert_session_as(&state, "42", "alice", Role::Viewer);
     let cookie = cookie_header(&sid, &csrf);
     let app = twitch_1337_web::build_router(state.clone());
@@ -98,7 +97,6 @@ async fn root_redirects_by_role() {
     install_crypto();
     let helix = Arc::new(FakeHelix {
         moderators: vec!["9".into()],
-        followers: tokio::sync::RwLock::new(vec!["42".into()]),
         users: Default::default(),
     });
     let (state, _td_p, _td_m) = build_state_with_dirs(helix).await;
@@ -145,22 +143,16 @@ async fn root_redirects_by_role() {
 }
 
 #[tokio::test]
-async fn viewer_loses_follow_after_recheck_window() {
+async fn viewer_dropped_from_allowlist_after_recheck_window() {
     install_crypto();
-    let helix = Arc::new(FakeHelix {
-        moderators: vec![],
-        followers: tokio::sync::RwLock::new(vec!["42".into()]),
-        users: Default::default(),
-    });
-    // Keep a typed handle for mutation; pass a dyn handle to build_state.
-    let helix_typed = helix.clone();
-    let helix_dyn: Arc<dyn twitch_1337_web::helix::HelixClient> = helix.clone();
-    let (state, _td_p, _td_m) = build_state_with_overrides(helix_dyn, Duration::from_secs(0)).await;
+    let (mut state, _td_p, _td_m) =
+        build_state_with_overrides(empty_helix(), Duration::from_secs(0)).await;
+    state.viewer_allowlist = Arc::from(vec!["42".to_owned()].into_boxed_slice());
+
     let (sid, csrf, _bare) = insert_session_as(&state, "42", "alice", Role::Viewer);
     let cookie = cookie_header(&sid, &csrf);
     let app = twitch_1337_web::build_router(state.clone());
 
-    // First request: still a follower — should pass.
     let resp = app
         .clone()
         .oneshot(
@@ -175,11 +167,13 @@ async fn viewer_loses_follow_after_recheck_window() {
         .unwrap();
     assert_eq!(resp.status(), StatusCode::OK, "first request should be 200");
 
-    // Drop the follow so the next recheck denies.
-    helix_typed.followers.write().await.clear();
+    // Clone reuses the same SessionTable Arc, so the existing sid is still
+    // valid after we clear the allowlist on the new state.
+    let mut state2 = state.clone();
+    state2.viewer_allowlist = Arc::from(Vec::<String>::new().into_boxed_slice());
+    let app2 = twitch_1337_web::build_router(state2);
 
-    // Second request: recheck fires (refresh=0, elapsed > 0) → Deny → 403.
-    let resp = app
+    let resp = app2
         .oneshot(
             Request::builder()
                 .uri("/leaderboard")
@@ -193,6 +187,6 @@ async fn viewer_loses_follow_after_recheck_window() {
     assert_eq!(
         resp.status(),
         StatusCode::FORBIDDEN,
-        "second request after follow dropped should be 403"
+        "viewer dropped from allowlist should be 403 on next recheck",
     );
 }

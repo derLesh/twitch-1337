@@ -99,6 +99,7 @@ async fn main() -> Result<()> {
         channel: Arc::from(channel.as_str()),
         broadcaster_id: Arc::from("0"),
         hidden_admins: Arc::from(vec![DEV_USER_ID.to_owned()].into_boxed_slice()),
+        viewer_allowlist: Arc::from(Vec::<String>::new().into_boxed_slice()),
         client_id: SecretString::new("dev-client-id".to_owned().into()),
         oauth,
         ping_manager: Arc::new(RwLock::new(pings)),

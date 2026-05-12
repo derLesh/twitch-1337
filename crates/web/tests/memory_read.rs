@@ -33,7 +33,6 @@ fn admin_helix(user_id: &str) -> Arc<dyn HelixClient> {
     );
     Arc::new(FakeHelix {
         moderators: vec![user_id.to_owned()],
-        followers: tokio::sync::RwLock::new(vec![]),
         users,
     })
 }

@@ -62,7 +62,6 @@ impl Clock for StepClock {
 
 pub struct FakeHelix {
     pub moderators: Vec<String>,
-    pub followers: RwLock<Vec<String>>,
     pub users: HashMap<String, HelixUser>,
 }
 
@@ -76,10 +75,6 @@ impl HelixClient for FakeHelix {
     }
     async fn is_moderator(&self, _broadcaster: &str, user_id: &str) -> eyre::Result<bool> {
         Ok(self.moderators.iter().any(|m| m == user_id))
-    }
-    async fn is_follower(&self, _broadcaster: &str, user_id: &str) -> eyre::Result<bool> {
-        let g = self.followers.read().await;
-        Ok(g.iter().any(|f| f == user_id))
     }
 }
 
@@ -171,6 +166,7 @@ async fn build_state_inner(
         channel: Arc::from("testchannel"),
         broadcaster_id: Arc::from("100"),
         hidden_admins: Arc::from(Vec::<String>::new().into_boxed_slice()),
+        viewer_allowlist: Arc::from(Vec::<String>::new().into_boxed_slice()),
         client_id: SecretString::new("test-client-id".to_owned().into()),
         oauth,
         ping_manager,

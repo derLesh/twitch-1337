@@ -54,7 +54,7 @@
       <span class="avatar" style="width:28px;height:28px;font-size:11px;background:oklch(0.6 0.12 280);">{{ user_login.chars().next().unwrap_or('?') }}</span>
       <div class="me-meta">
         <span class="me-name">{{ user_login }}</span>
-        <span class="me-role">{% if is_mod %}broadcaster · mod{% else %}follower · viewer{% endif %}</span>
+        <span class="me-role">{% if is_mod %}broadcaster · mod{% else %}viewer{% endif %}</span>
       </div>
     </div>
     <form class="logout-form" method="post" action="/logout">
