@@ -76,6 +76,7 @@ pub struct Services {
     pub llm: Option<Arc<dyn LlmClient>>,
     pub aviation: Option<AviationClient>,
     pub doener: Arc<crate::doener::DoenerClient>,
+    pub doeneratlas: Arc<crate::doener::DoeneratlasClient>,
     pub whisper: Option<Arc<dyn WhisperSender>>,
     pub data_dir: PathBuf,
     /// Optional override for the 7TV emote glossary TOML. Production leaves
@@ -150,6 +151,7 @@ where
         llm,
         aviation,
         doener,
+        doeneratlas,
         whisper,
         data_dir,
         emote_glossary_override,
@@ -206,6 +208,7 @@ where
         clock,
         data_dir,
         doener,
+        doeneratlas,
         leaderboard,
         ping_manager,
         suspension_manager,

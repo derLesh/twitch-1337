@@ -75,6 +75,9 @@ pub async fn main() -> Result<()> {
 
     let doener_client =
         Arc::new(doener::DoenerClient::new().wrap_err("Failed to initialize Döner-index client")?);
+    let doeneratlas_client = Arc::new(
+        doener::DoeneratlasClient::new().wrap_err("Failed to initialize Döneratlas client")?,
+    );
 
     let whisper_credentials = credentials.clone();
     let whisper = whisper::HelixWhisperSender::new(
@@ -138,6 +141,7 @@ pub async fn main() -> Result<()> {
         llm: llm_client,
         aviation: aviation_client,
         doener: doener_client,
+        doeneratlas: doeneratlas_client,
         whisper: Some(whisper),
         data_dir: get_data_dir(),
         emote_glossary_override: None,

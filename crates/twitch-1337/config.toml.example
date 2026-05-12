@@ -46,7 +46,7 @@ client_secret = "your_client_secret"
 # news = 60      # !news command (default: 60)
 # up = 30        # !up command (default: 30)
 # doener = 30       # !dpi command — Dönerindex API (default: 30)
-# doeneratlas = 30  # !döner / !doener — doeneratlas.de (default: 30)
+# doeneratlas = 30  # !döner / !doener — Döneratlas API (default: 30)
 # feedback = 300 # !fb command (default: 300)
 
 # Optional: Aviationstack metadata enrichment for !track.
