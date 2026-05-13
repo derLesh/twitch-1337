@@ -13,8 +13,9 @@ use twitch_irc::{
 
 use crate::{
     ChatHistory, ChatHistoryBuffer, PersonalBest, ai, aviation, commands,
-    config::{AiConfig, CooldownsConfig, SuspendConfig},
+    config::{AiConfig, SuspendConfig},
     ping,
+    settings::SettingsHandle,
     suspend::SuspensionManager,
     twitch::{seventv::SevenTvEmoteProvider, whisper::WhisperSender},
 };
@@ -35,9 +36,7 @@ pub struct CommandHandlerConfig<T: Transport, L: LoginCredentials> {
     pub leaderboard: Arc<tokio::sync::RwLock<HashMap<String, PersonalBest>>>,
     pub ping_manager: Arc<tokio::sync::RwLock<ping::PingManager>>,
     pub hidden_admin_ids: Vec<String>,
-    pub default_cooldown: Duration,
-    pub pings_public: bool,
-    pub cooldowns: CooldownsConfig,
+    pub settings: SettingsHandle,
     pub tracker_tx: Option<tokio::sync::mpsc::Sender<aviation::TrackerCommand>>,
     pub aviation_client: Option<aviation::AviationClient>,
     pub whisper: Option<Arc<dyn WhisperSender>>,
@@ -70,9 +69,7 @@ where
         leaderboard,
         ping_manager,
         hidden_admin_ids,
-        default_cooldown,
-        pings_public,
-        cooldowns,
+        settings,
         tracker_tx,
         aviation_client,
         whisper,
@@ -86,6 +83,10 @@ where
         suspend,
         emote_provider,
     } = cfg;
+
+    // Snapshot of the dashboard-managed settings at startup. Reads below use
+    // these values; Tasks 6+ make selected commands consume the handle live.
+    let snapshot = settings.load_full();
 
     let default_suspend_duration = Duration::from_secs(suspend.default_duration_secs);
 
@@ -150,7 +151,7 @@ where
         Box::new(aviation::commands::random_flight::RandomFlightCommand),
         Box::new(aviation::commands::flights_above::FlightsAboveCommand::new(
             aviation_client,
-            Duration::from_secs(cooldowns.up),
+            Duration::from_secs(snapshot.cooldowns.up),
         )),
         Box::new(commands::leaderboard::LeaderboardCommand::new(
             leaderboard.clone(),
@@ -158,11 +159,11 @@ where
         Box::new(commands::pb::PbCommand::new(leaderboard)),
         Box::new(commands::feedback::FeedbackCommand::new(
             data_dir.clone(),
-            Duration::from_secs(cooldowns.feedback),
+            Duration::from_secs(snapshot.cooldowns.feedback),
         )),
         Box::new(commands::doener::DoenerCommand::new(
             doener.clone(),
-            Duration::from_secs(cooldowns.doener),
+            Duration::from_secs(snapshot.cooldowns.doener),
         )),
     ];
 
@@ -238,7 +239,7 @@ where
                 llm_client: llm.clone(),
                 model: cfg.model.clone(),
                 reasoning_effort: cfg.reasoning_effort.clone(),
-                cooldown: Duration::from_secs(cooldowns.ai),
+                cooldown: Duration::from_secs(snapshot.cooldowns.ai),
                 chat_ctx: chat_ctx.clone(),
                 memory: ai_memory_v2,
                 web: web.clone(),
@@ -252,7 +253,7 @@ where
             cfg.model.clone(),
             commands::news::NewsMode::News,
             Duration::from_secs(cfg.timeout),
-            Duration::from_secs(cooldowns.news),
+            Duration::from_secs(snapshot.cooldowns.news),
             chat_ctx.clone(),
             whisper.clone(),
         )));
@@ -261,7 +262,7 @@ where
             cfg.model,
             commands::news::NewsMode::Tldr,
             Duration::from_secs(cfg.timeout),
-            Duration::from_secs(cooldowns.news),
+            Duration::from_secs(snapshot.cooldowns.news),
             chat_ctx,
             whisper,
         )));
@@ -271,8 +272,7 @@ where
     // so built-in commands earlier in the list take priority and can't be shadowed.
     cmd_list.push(Box::new(commands::ping_trigger::PingTriggerCommand::new(
         ping_manager,
-        default_cooldown,
-        pings_public,
+        settings.clone(),
     )));
 
     run_command_dispatcher(

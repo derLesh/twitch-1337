@@ -7,6 +7,7 @@
 pub enum Role {
     Viewer,
     Mod,
+    Owner,
 }
 
 impl Role {
@@ -14,6 +15,7 @@ impl Role {
         match self {
             Role::Viewer => "viewer",
             Role::Mod => "mod",
+            Role::Owner => "owner",
         }
     }
 }
@@ -33,5 +35,16 @@ mod tests {
     fn labels_match_tracing_fields() {
         assert_eq!(Role::Viewer.label(), "viewer");
         assert_eq!(Role::Mod.label(), "mod");
+    }
+
+    #[test]
+    fn owner_is_above_mod() {
+        assert!(Role::Owner > Role::Mod);
+        assert!(Role::Owner > Role::Viewer);
+    }
+
+    #[test]
+    fn owner_label() {
+        assert_eq!(Role::Owner.label(), "owner");
     }
 }

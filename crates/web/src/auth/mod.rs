@@ -19,5 +19,6 @@ pub(crate) mod routes;
 // callers into thinking it provides blanket protection.
 pub use role::Role;
 pub use routes::{
-    CSRF_COOKIE, OAuthCtx, SID_COOKIE, auth_router, require_mod, require_role, viewer_method_guard,
+    CSRF_COOKIE, OAuthCtx, SID_COOKIE, auth_router, require_mod, require_owner, require_role,
+    viewer_method_guard,
 };

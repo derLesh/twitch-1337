@@ -73,6 +73,7 @@ struct ListTpl {
     current_page: &'static str,
     is_mod: bool,
     is_broadcaster: bool,
+    is_owner: bool,
 }
 
 #[derive(Template)]
@@ -88,6 +89,7 @@ struct FormTpl<'a> {
     current_page: &'static str,
     is_mod: bool,
     is_broadcaster: bool,
+    is_owner: bool,
     /// Sorted lowercase logins. Empty on the create form.
     members: Vec<String>,
     /// Inline error from a recent add/remove attempt, rendered above the
@@ -135,6 +137,7 @@ async fn list(
     rows.sort_by(|a, b| a.name.cmp(&b.name));
     let total_pings = rows.len();
     let is_mod = session.is_mod();
+    let is_owner = matches!(session.role, crate::auth::Role::Owner);
     let tpl = ListTpl {
         rows,
         total_pings,
@@ -147,6 +150,7 @@ async fn list(
         current_page: crate::nav::PINGS,
         is_mod,
         is_broadcaster: session.is_broadcaster,
+        is_owner,
     };
     render(&tpl)
 }
@@ -164,6 +168,7 @@ async fn new_form(Extension(session): Extension<Session>) -> Result<Response, We
         current_page: crate::nav::PINGS,
         is_mod: session.is_mod(),
         is_broadcaster: session.is_broadcaster,
+        is_owner: matches!(session.role, crate::auth::Role::Owner),
         members: Vec::new(),
         member_error: None,
     })
@@ -212,6 +217,7 @@ async fn create(
                 current_page: crate::nav::PINGS,
                 is_mod: session.is_mod(),
                 is_broadcaster: session.is_broadcaster,
+                is_owner: matches!(session.role, crate::auth::Role::Owner),
                 members: Vec::new(),
                 member_error: None,
             },
@@ -244,6 +250,7 @@ async fn create(
                 current_page: crate::nav::PINGS,
                 is_mod: session.is_mod(),
                 is_broadcaster: session.is_broadcaster,
+                is_owner: matches!(session.role, crate::auth::Role::Owner),
                 members: Vec::new(),
                 member_error: None,
             },
@@ -287,6 +294,7 @@ async fn edit_form(
         current_page: crate::nav::PINGS,
         is_mod: session.is_mod(),
         is_broadcaster: session.is_broadcaster,
+        is_owner: matches!(session.role, crate::auth::Role::Owner),
         members,
         member_error: None,
     })
@@ -338,6 +346,7 @@ async fn update(
                 current_page: crate::nav::PINGS,
                 is_mod: session.is_mod(),
                 is_broadcaster: session.is_broadcaster,
+                is_owner: matches!(session.role, crate::auth::Role::Owner),
                 members,
                 member_error: None,
             },
@@ -436,6 +445,7 @@ async fn add_member(
                     current_page: crate::nav::PINGS,
                     is_mod: session.is_mod(),
                     is_broadcaster: session.is_broadcaster,
+                    is_owner: matches!(session.role, crate::auth::Role::Owner),
                     members,
                     member_error: Some(msg),
                 },

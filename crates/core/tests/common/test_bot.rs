@@ -57,6 +57,7 @@ pub struct TestBotBuilder {
     whisper_failure: bool,
     emote_glossary_override: Option<String>,
     doener_base_url: Option<String>,
+    settings_overrides: Option<twitch_1337::settings::SettingsOverrides>,
 }
 
 impl TestBotBuilder {
@@ -68,6 +69,7 @@ impl TestBotBuilder {
             whisper_failure: false,
             emote_glossary_override: None,
             doener_base_url: None,
+            settings_overrides: None,
         }
     }
 
@@ -110,6 +112,17 @@ impl TestBotBuilder {
 
     pub fn with_config(mut self, f: impl FnOnce(&mut Configuration)) -> Self {
         f(&mut self.config);
+        self
+    }
+
+    /// Pre-populate settings.ron before the bot spawns.
+    pub fn with_settings(
+        mut self,
+        f: impl FnOnce(&mut twitch_1337::settings::SettingsOverrides),
+    ) -> Self {
+        let mut o = self.settings_overrides.take().unwrap_or_default();
+        f(&mut o);
+        self.settings_overrides = Some(o);
         self
     }
 
@@ -214,6 +227,21 @@ impl TestBotBuilder {
             twitch_1337::ping::PingManager::load(data_dir.path()).expect("load ping manager"),
         ));
 
+        let audit = Arc::new(twitch_1337::settings::MemoryAuditLog::new());
+        let (settings_store, settings_handle) =
+            twitch_1337::settings::SettingsStore::open(data_dir.path(), audit)
+                .expect("open settings");
+        if let Some(o) = self.settings_overrides.take() {
+            let actor = twitch_1337::settings::Actor {
+                user_id: "test".into(),
+                user_login: "test".into(),
+            };
+            settings_store
+                .apply(o, actor)
+                .await
+                .expect("apply test overrides");
+        }
+
         let memory_store = twitch_1337::ai::memory::store::MemoryStore::open(
             data_dir.path(),
             twitch_1337::ai::command::memory_caps_from_config(self.config.ai.as_ref()),
@@ -234,6 +262,8 @@ impl TestBotBuilder {
                 irc_connected.clone(),
                 ping_manager.clone(),
                 memory_store.clone(),
+                settings_handle.clone(),
+                settings_store.clone(),
             );
             let spawner: twitch_1337::WebSpawner = Box::new(move |shutdown| {
                 let deps = twitch_1337_web::WebDeps { bind_addr, state };
@@ -269,6 +299,8 @@ impl TestBotBuilder {
             )),
             whisper: Some(whisper.clone() as Arc<dyn WhisperSender>),
             data_dir: data_dir.path().to_path_buf(),
+            settings: settings_handle.clone(),
+            settings_store: settings_store.clone(),
             emote_glossary_override: self.emote_glossary_override,
             irc_connected: irc_connected.clone(),
             web_spawner,
@@ -612,6 +644,8 @@ fn build_test_web_state(
     irc_connected: Arc<AtomicBool>,
     ping_manager: Arc<tokio::sync::RwLock<twitch_1337::ping::PingManager>>,
     memory_store: twitch_1337::ai::memory::store::MemoryStore,
+    settings: twitch_1337::settings::SettingsHandle,
+    settings_store: Arc<twitch_1337::settings::SettingsStore>,
 ) -> twitch_1337_web::WebState {
     use twitch_1337_web::auth::OAuthCtx;
     use twitch_1337_web::auth::session::SessionTable;
@@ -671,5 +705,8 @@ fn build_test_web_state(
         avatar_cache: Arc::new(twitch_1337_web::helix::AvatarCache::new(
             std::time::Duration::from_secs(3600),
         )),
+        owner_id: None,
+        settings,
+        settings_store,
     }
 }

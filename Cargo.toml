@@ -8,6 +8,7 @@ edition = "2024"
 license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
+arc-swap = "1.7"
 askama = { version = "0.16" }
 async-trait = "0.1.89"
 axum = { version = "0.8", default-features = false, features = ["form", "http1", "json", "query", "tokio", "tower-log", "tracing"] }

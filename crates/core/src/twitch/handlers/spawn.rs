@@ -98,6 +98,9 @@ pub(crate) struct SpawnDeps<T: Transport, L: LoginCredentials> {
 
     // Shared IRC connectivity flag (latency monitor flips, web /healthz reads).
     pub irc_connected: Arc<AtomicBool>,
+
+    // Dashboard-managed runtime settings (cooldowns, pings.cooldown, pings.public).
+    pub settings: crate::settings::SettingsHandle,
 }
 
 /// Spawn every long-running handler task in the order they currently
@@ -128,6 +131,7 @@ where
         aviation_tracker_rx,
         emote_provider,
         irc_connected,
+        settings,
     } = deps;
 
     let schedules_enabled = !config.schedules.is_empty();
@@ -247,9 +251,7 @@ where
                 leaderboard,
                 ping_manager,
                 hidden_admin_ids: config.twitch.hidden_admins.clone(),
-                default_cooldown: Duration::from_secs(config.pings.cooldown),
-                pings_public: config.pings.public,
-                cooldowns: config.cooldowns.clone(),
+                settings: settings.clone(),
                 tracker_tx,
                 aviation_client: aviation_for_commands,
                 whisper,

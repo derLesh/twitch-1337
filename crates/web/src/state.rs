@@ -69,6 +69,14 @@ pub struct WebState {
     /// across handlers so repeat `/memory/users` loads don't re-issue
     /// the same helix batch call.
     pub avatar_cache: Arc<AvatarCache>,
+    /// Configured `[twitch].owner` (Twitch user id). `None` means no owner is set.
+    pub owner_id: Option<Arc<str>>,
+    /// Live settings handle (arc-swap snapshot of resolved `Settings`). Cloned
+    /// into handlers that need the current effective config.
+    pub settings: twitch_1337_core::settings::SettingsHandle,
+    /// Owning store for settings — apply/reset go through this. Web handlers
+    /// for `/settings` post-back via `store.apply(...)`.
+    pub settings_store: Arc<twitch_1337_core::settings::SettingsStore>,
 }
 
 /// Derive the signed-cookie [`Key`] from `[web].session_secret`.

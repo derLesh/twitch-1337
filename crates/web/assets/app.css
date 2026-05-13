@@ -400,6 +400,26 @@ kbd {
   border-color: oklch(0.7 0.16 25 / 0.3);
   color: var(--fg);
 }
+/* Compound modifier: `.flash.error` is a flash banner styled as an error
+   (used by /settings validation pane). Defined after the singleton rules
+   so the danger palette wins regardless of source order in the markup. */
+.flash.error {
+  background: oklch(0.7 0.16 25 / 0.1);
+  border-color: oklch(0.7 0.16 25 / 0.3);
+  color: var(--fg);
+}
+.flash.error ul {
+  margin: 6px 0 0;
+  padding-left: 20px;
+}
+.flash.error code {
+  background: var(--bg-0);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 0 4px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+}
 
 /* Stat strip */
 .stat-strip {
@@ -913,3 +933,89 @@ textarea.input { resize: vertical; min-height: 140px; line-height: 1.6; }
   color: var(--fg-3);
   margin: 0 0 18px;
 }
+
+/* ====================== Settings page ======================
+   Cards stacked vertically, each fieldset wraps a small grid of
+   labelled inputs. Two reset buttons sit side-by-side beneath the
+   primary save action. Matches the .form-card visual language used
+   by /pings/new and /state/new. */
+.settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+.card {
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--bg-1);
+  padding: 18px 22px 22px;
+  margin: 0;
+  min-width: 0;
+}
+.card > legend {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--fg-4);
+  padding: 0 6px;
+  margin-left: -6px;
+}
+.card > label {
+  display: grid;
+  grid-template-columns: 160px 160px 1fr;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+}
+.card > label:first-of-type { border-top: 0; }
+.card > label > span {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  color: var(--fg-2);
+}
+.card > label > small {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--fg-4);
+}
+.card input[type="number"] {
+  background: var(--bg-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  padding: 7px 10px;
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--fg);
+  outline: none;
+  transition: border-color 0.12s ease, background 0.12s ease;
+  width: 100%;
+}
+.card input[type="number"]:focus {
+  border-color: var(--line-strong);
+  background: var(--bg-2);
+}
+.card > label.check {
+  grid-template-columns: auto 1fr auto;
+  gap: 10px;
+}
+.card > label.check input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.card-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.reset-form {
+  margin: 0;
+  flex: 1 1 0;
+  min-width: 220px;
+}
+.reset-form .btn { width: 100%; justify-content: center; }

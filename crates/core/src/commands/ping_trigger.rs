@@ -13,21 +13,26 @@ use crate::ping::{PingManager, TriggerDecision};
 
 pub struct PingTriggerCommand {
     ping_manager: Arc<RwLock<PingManager>>,
-    default_cooldown: Duration,
-    public: bool,
+    settings: crate::settings::SettingsHandle,
 }
 
 impl PingTriggerCommand {
     pub fn new(
         ping_manager: Arc<RwLock<PingManager>>,
-        default_cooldown: Duration,
-        public: bool,
+        settings: crate::settings::SettingsHandle,
     ) -> Self {
         Self {
             ping_manager,
-            default_cooldown,
-            public,
+            settings,
         }
+    }
+
+    fn current_cooldown(&self) -> Duration {
+        Duration::from_secs(self.settings.load().pings.cooldown)
+    }
+
+    fn current_public(&self) -> bool {
+        self.settings.load().pings.public
     }
 }
 
@@ -78,7 +83,12 @@ where
 
         let decision = {
             let mut manager = self.ping_manager.write().await;
-            manager.try_record_trigger(&ping_name, sender, self.default_cooldown, self.public)
+            manager.try_record_trigger(
+                &ping_name,
+                sender,
+                self.current_cooldown(),
+                self.current_public(),
+            )
         };
 
         let rendered = match decision {
@@ -108,5 +118,35 @@ where
             .await?;
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod settings_live_tests {
+    use std::sync::Arc;
+
+    use super::*;
+    use crate::settings::Settings;
+
+    #[test]
+    fn reads_cooldown_and_public_from_handle_at_call_time() {
+        let initial = Settings::compiled_defaults();
+        let handle: crate::settings::SettingsHandle =
+            Arc::new(arc_swap::ArcSwap::from_pointee(initial));
+        let mgr = Arc::new(tokio::sync::RwLock::new(crate::ping::PingManager::empty()));
+        let cmd = PingTriggerCommand::new(mgr.clone(), handle.clone());
+        // Snapshot the values seen by the command before and after a swap.
+        let before_cooldown = cmd.current_cooldown();
+        let before_public = cmd.current_public();
+        let mut next = Settings::compiled_defaults();
+        next.pings.cooldown = 7;
+        next.pings.public = true;
+        handle.store(Arc::new(next));
+        let after_cooldown = cmd.current_cooldown();
+        let after_public = cmd.current_public();
+        assert_ne!(before_cooldown, after_cooldown);
+        assert_eq!(after_cooldown, std::time::Duration::from_secs(7));
+        assert!(!before_public);
+        assert!(after_public);
     }
 }

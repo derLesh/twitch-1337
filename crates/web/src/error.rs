@@ -38,6 +38,12 @@ pub enum WebError {
     Internal(#[from] eyre::Report),
 }
 
+impl From<twitch_1337_core::settings::SettingsError> for WebError {
+    fn from(e: twitch_1337_core::settings::SettingsError) -> Self {
+        WebError::Internal(eyre::eyre!("settings: {e}"))
+    }
+}
+
 /// Inner payload for `WebError::Conflict`, boxed inside the variant to
 /// keep the `Result<_, WebError>` size small (clippy `result_large_err`).
 #[derive(Debug)]
@@ -59,6 +65,10 @@ pub struct ConflictPayload {
     /// conflict template so the sidebar gates correctly.
     pub is_mod: bool,
     pub is_broadcaster: bool,
+    /// Whether the session user holds the Owner role. Forwarded to the
+    /// sidebar so the owner-only Settings entry renders for conflicts
+    /// triggered by an owner-tier editor.
+    pub is_owner: bool,
     /// Sidebar highlight key matching the originating editor's section.
     pub current_page: &'static str,
     pub cancel_url: &'static str,
@@ -86,6 +96,7 @@ struct ConflictTpl<'a> {
     user_avatar_url: Option<&'a str>,
     is_mod: bool,
     is_broadcaster: bool,
+    is_owner: bool,
     current_page: &'static str,
     cancel_url: &'static str,
 }
@@ -152,6 +163,7 @@ impl IntoResponse for WebError {
                     user_avatar_url: payload.user_avatar_url.as_deref(),
                     is_mod: payload.is_mod,
                     is_broadcaster: payload.is_broadcaster,
+                    is_owner: payload.is_owner,
                     current_page: payload.current_page,
                     cancel_url: payload.cancel_url,
                 },

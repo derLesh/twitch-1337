@@ -44,6 +44,9 @@
       <ul class="nav-list">
         {% call nav_item("logs", "/logs", "Logs") %}{% endcall %}
         {% call nav_item("config", "/config", "Config") %}{% endcall %}
+        {% if is_owner %}
+        {% call nav_item("settings", "/settings", "Settings") %}{% endcall %}
+        {% endif %}
       </ul>
     </div>
     {% endif %}
@@ -59,7 +62,7 @@
       {% endmatch %}
       <div class="me-meta">
         <span class="me-name">{{ user_login }}</span>
-        <span class="me-role">{% if is_broadcaster %}broadcaster{% else if is_mod %}mod{% endif %}</span>
+        <span class="me-role">{% if is_owner %}owner{% else if is_broadcaster %}broadcaster{% else if is_mod %}mod{% endif %}</span>
       </div>
     </div>
     <form class="logout-form" method="post" action="/logout">

@@ -66,6 +66,7 @@ struct StubTpl<'a> {
     current_page: &'static str,
     is_mod: bool,
     is_broadcaster: bool,
+    is_owner: bool,
 }
 
 async fn render_stub(
@@ -83,5 +84,6 @@ async fn render_stub(
         current_page: meta.nav,
         is_mod: session.is_mod(),
         is_broadcaster: session.is_broadcaster,
+        is_owner: matches!(session.role, crate::auth::Role::Owner),
     })
 }

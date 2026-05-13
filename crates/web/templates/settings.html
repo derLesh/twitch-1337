@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Settings — twitch-1337{% endblock %}
+
+{% macro cooldown_row(field, label, value, default) %}
+<label>
+  <span>{{ label }} (s)</span>
+  <input type="number" name="{{ field }}" min="1" max="3600" value="{{ value }}">
+  <small>default: {{ default }}</small>
+</label>
+{% endmacro %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Settings</h1>
+    <p class="page-sub">Live cooldowns and ping policy. Saved values apply immediately to running handlers.</p>
+  </div>
+</div>
+
+{% if let Some(msg) = flash %}<div class="flash">{{ msg }}</div>{% endif %}
+
+{% if !errors.is_empty() %}
+<div class="flash error">
+  <strong>Validation failed:</strong>
+  <ul>
+  {% for e in errors %}
+    <li><code>{{ e.field }}</code>: {{ e.message }}</li>
+  {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<form method="post" action="/settings" class="settings-form">
+  <input type="hidden" name="_csrf" value="{{ csrf }}">
+
+  <fieldset class="card">
+    <legend>Cooldowns</legend>
+    {% call cooldown_row("cooldown_ai", "ai", current.cooldowns.ai, defaults.cooldowns.ai) %}{% endcall %}
+    {% call cooldown_row("cooldown_news", "news", current.cooldowns.news, defaults.cooldowns.news) %}{% endcall %}
+    {% call cooldown_row("cooldown_up", "up", current.cooldowns.up, defaults.cooldowns.up) %}{% endcall %}
+    {% call cooldown_row("cooldown_feedback", "feedback", current.cooldowns.feedback, defaults.cooldowns.feedback) %}{% endcall %}
+    {% call cooldown_row("cooldown_doener", "doener", current.cooldowns.doener, defaults.cooldowns.doener) %}{% endcall %}
+  </fieldset>
+
+  <fieldset class="card">
+    <legend>Pings</legend>
+    <label>
+      <span>cooldown (s)</span>
+      <input type="number" name="ping_cooldown" min="1" max="86400" value="{{ current.pings.cooldown }}">
+      <small>default: {{ defaults.pings.cooldown }}</small>
+    </label>
+    <label class="check">
+      <input type="checkbox" name="ping_public" value="1"{% if current.pings.public %} checked{% endif %}>
+      <span>public (anyone can fire)</span>
+      <small>default: {{ defaults.pings.public }}</small>
+    </label>
+  </fieldset>
+
+  <div class="form-actions">
+    <button type="submit" class="btn primary">Save changes</button>
+  </div>
+</form>
+
+<div class="card-row">
+  <form method="post" action="/settings/reset/cooldowns" class="reset-form">
+    <input type="hidden" name="_csrf" value="{{ csrf }}">
+    <button type="submit" class="btn ghost">Reset cooldowns to defaults</button>
+  </form>
+  <form method="post" action="/settings/reset/pings" class="reset-form">
+    <input type="hidden" name="_csrf" value="{{ csrf }}">
+    <button type="submit" class="btn ghost">Reset pings to defaults</button>
+  </form>
+</div>
+{% endblock %}

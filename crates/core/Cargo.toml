@@ -8,6 +8,7 @@ license.workspace = true
 testing = []
 
 [dependencies]
+arc-swap = { workspace = true }
 async-trait = { workspace = true }
 base64 = { workspace = true }
 bytesize = { workspace = true }

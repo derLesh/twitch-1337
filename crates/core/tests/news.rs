@@ -145,7 +145,9 @@ async fn news_command_does_not_use_previous_news_response_as_boundary() {
             if let Some(ai) = c.ai.as_mut() {
                 ai.history_length = 10;
             }
-            c.cooldowns.news = 0;
+        })
+        .with_settings(|o| {
+            o.cooldowns.news = Some(1);
         })
         .spawn()
         .await;
@@ -311,7 +313,9 @@ async fn news_command_allows_longer_followup_whisper() {
             if let Some(ai) = c.ai.as_mut() {
                 ai.history_length = 10;
             }
-            c.cooldowns.news = 0;
+        })
+        .with_settings(|o| {
+            o.cooldowns.news = Some(1);
         })
         .spawn()
         .await;
@@ -324,7 +328,8 @@ async fn news_command_allows_longer_followup_whisper() {
     assert_eq!(first.message, "ICYMI: first summary");
 
     bot.send("carol", "a lot more happened").await;
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    // Wait past the 1s news cooldown so alice's second !news isn't rate-limited.
+    tokio::time::sleep(Duration::from_millis(1_500)).await;
     bot.llm.push_chat("lang ".repeat(300));
     bot.send_privmsg_as("alice", "alice-id", "!news").await;
     let second = bot.expect_whisper(Duration::from_secs(2)).await;
@@ -437,7 +442,9 @@ async fn tldr_command_allows_longer_followup_whisper() {
             if let Some(ai) = c.ai.as_mut() {
                 ai.history_length = 10;
             }
-            c.cooldowns.news = 0;
+        })
+        .with_settings(|o| {
+            o.cooldowns.news = Some(1);
         })
         .spawn()
         .await;
@@ -454,7 +461,8 @@ async fn tldr_command_allows_longer_followup_whisper() {
 
     bot.send_at("carol", "very long tldr topic", now.timestamp_millis())
         .await;
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    // Wait past the 1s news cooldown so alice's second !tldr isn't rate-limited.
+    tokio::time::sleep(Duration::from_millis(1_500)).await;
 
     bot.llm.push_chat("lang ".repeat(300));
     bot.send_privmsg_as("alice", "alice-id", "!tldr").await;

@@ -62,6 +62,7 @@ struct TreeTpl {
     current_page: &'static str,
     is_mod: bool,
     is_broadcaster: bool,
+    is_owner: bool,
 }
 
 #[derive(Template)]
@@ -88,6 +89,7 @@ struct EditorTpl<'a> {
     current_page: &'static str,
     is_mod: bool,
     is_broadcaster: bool,
+    is_owner: bool,
     /// Render the user-only frontmatter inputs (`username`, `display_name`).
     show_user_fm: bool,
     /// Render the state-only frontmatter input (`created_by`).
@@ -121,6 +123,7 @@ struct StateListTpl {
     current_page: &'static str,
     is_mod: bool,
     is_broadcaster: bool,
+    is_owner: bool,
 }
 
 struct UserRow {
@@ -147,6 +150,7 @@ struct UsersListTpl {
     current_page: &'static str,
     is_mod: bool,
     is_broadcaster: bool,
+    is_owner: bool,
 }
 
 #[derive(Template)]
@@ -158,6 +162,7 @@ struct UsersNewTpl {
     current_page: &'static str,
     is_mod: bool,
     is_broadcaster: bool,
+    is_owner: bool,
 }
 
 /// Resolve avatar URLs for a slice of Twitch user ids. Cache hits skip
@@ -309,6 +314,7 @@ async fn tree(
         current_page: crate::nav::MEMORY_TREE,
         is_mod: session.is_mod(),
         is_broadcaster: session.is_broadcaster,
+        is_owner: matches!(session.role, crate::auth::Role::Owner),
     })
 }
 
@@ -357,6 +363,7 @@ async fn view_kind(
         current_page,
         is_mod: session.is_mod(),
         is_broadcaster: session.is_broadcaster,
+        is_owner: matches!(session.role, crate::auth::Role::Owner),
         show_user_fm: matches!(kind, FileKind::User { .. }),
         show_state_fm: matches!(kind, FileKind::State { .. }),
         fm_username: mf.frontmatter.username.as_deref().unwrap_or(""),
@@ -449,6 +456,7 @@ async fn list_users(
         current_page: crate::nav::MEMORY_USERS,
         is_mod: session.is_mod(),
         is_broadcaster: session.is_broadcaster,
+        is_owner: matches!(session.role, crate::auth::Role::Owner),
     })
 }
 
@@ -498,6 +506,7 @@ async fn new_user_form(Extension(session): Extension<Session>) -> Result<Respons
         current_page: crate::nav::MEMORY_USERS,
         is_mod: session.is_mod(),
         is_broadcaster: session.is_broadcaster,
+        is_owner: matches!(session.role, crate::auth::Role::Owner),
     })
 }
 
@@ -572,6 +581,7 @@ async fn list_state(
         current_page: crate::nav::MEMORY_STATE,
         is_mod: session.is_mod(),
         is_broadcaster: session.is_broadcaster,
+        is_owner: matches!(session.role, crate::auth::Role::Owner),
     })
 }
 
@@ -591,6 +601,7 @@ async fn new_state_form(
         session.avatar_url.as_deref(),
         session.is_mod(),
         session.is_broadcaster,
+        matches!(session.role, crate::auth::Role::Owner),
     )
 }
 
@@ -712,6 +723,7 @@ async fn save_kind(
                 user_avatar_url: session.avatar_url.clone(),
                 is_mod: session.is_mod(),
                 is_broadcaster: session.is_broadcaster,
+                is_owner: matches!(session.role, crate::auth::Role::Owner),
                 current_page,
                 cancel_url,
             })))
@@ -755,6 +767,7 @@ async fn save_kind(
                     current_page,
                     is_mod: session.is_mod(),
                     is_broadcaster: session.is_broadcaster,
+                    is_owner: matches!(session.role, crate::auth::Role::Owner),
                     show_user_fm: matches!(&kind, FileKind::User { .. }),
                     show_state_fm: matches!(&kind, FileKind::State { .. }),
                     fm_username: &form.fm_username,
@@ -898,6 +911,7 @@ async fn create_state(
             session.avatar_url.as_deref(),
             session.is_mod(),
             session.is_broadcaster,
+            matches!(session.role, crate::auth::Role::Owner),
         );
     }
     let slug = form.slug.clone();
@@ -948,12 +962,15 @@ async fn create_state(
                 session.avatar_url.as_deref(),
                 session.is_mod(),
                 session.is_broadcaster,
+                matches!(session.role, crate::auth::Role::Owner),
             )
         }
     }
 }
 
 #[allow(clippy::too_many_arguments)]
+// 8 args is just past clippy's default of 7. Threading a struct here would
+// obscure the call sites without trimming any state; allow it locally.
 fn render_state_create(
     status: StatusCode,
     body: &str,
@@ -964,6 +981,7 @@ fn render_state_create(
     user_avatar_url: Option<&str>,
     is_mod: bool,
     is_broadcaster: bool,
+    is_owner: bool,
 ) -> Result<Response, WebError> {
     render_with(
         status,
@@ -986,6 +1004,7 @@ fn render_state_create(
             current_page: crate::nav::MEMORY_STATE,
             is_mod,
             is_broadcaster,
+            is_owner,
             show_user_fm: false,
             show_state_fm: false,
             fm_username: "",

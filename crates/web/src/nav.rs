@@ -19,3 +19,4 @@ pub const SCHEDULES: &str = "schedules";
 pub const FLIGHTS: &str = "flights";
 pub const LOGS: &str = "logs";
 pub const CONFIG: &str = "config";
+pub const SETTINGS: &str = "settings";

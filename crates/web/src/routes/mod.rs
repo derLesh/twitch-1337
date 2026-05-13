@@ -10,6 +10,7 @@ pub mod health;
 pub mod leaderboard;
 pub mod memory;
 pub mod pings;
+pub mod settings;
 pub mod stubs;
 
 pub(crate) fn render<T: Template>(tpl: &T) -> Result<Response, WebError> {

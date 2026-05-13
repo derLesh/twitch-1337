@@ -49,7 +49,9 @@ pub struct Session {
 
 impl Session {
     pub fn is_mod(&self) -> bool {
-        self.role == Role::Mod
+        // Owner is a strict superset of Mod — anywhere we ask "is this user
+        // at least a moderator?" Owner must answer true.
+        self.role >= Role::Mod
     }
 }
 

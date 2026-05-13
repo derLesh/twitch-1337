@@ -67,6 +67,11 @@ async fn main() -> Result<()> {
         .await
         .wrap_err("open memory store")?;
 
+    let audit_log = Arc::new(twitch_1337_core::settings::MemoryAuditLog::new());
+    let (settings_store, settings_handle) =
+        twitch_1337_core::settings::SettingsStore::open(&data_dir, audit_log)
+            .wrap_err("open settings store")?;
+
     let clock = Arc::new(SystemClock);
     let session_ttl = Duration::from_secs(7 * 24 * 3600);
     let sessions = Arc::new(SessionTable::new(session_ttl, clock.clone()));
@@ -114,6 +119,9 @@ async fn main() -> Result<()> {
         avatar_cache: Arc::new(twitch_1337_web::helix::AvatarCache::new(
             Duration::from_secs(3600),
         )),
+        owner_id: None,
+        settings: settings_handle,
+        settings_store,
     };
 
     let listener = bind(bind_addr).await?;
