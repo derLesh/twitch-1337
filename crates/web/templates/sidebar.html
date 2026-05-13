@@ -43,7 +43,6 @@
       <div class="nav-group-label">System</div>
       <ul class="nav-list">
         {% call nav_item("logs", "/logs", "Logs") %}{% endcall %}
-        {% call nav_item("config", "/config", "Config") %}{% endcall %}
         {% if is_owner %}
         {% call nav_item("settings", "/settings", "Settings") %}{% endcall %}
         {% endif %}

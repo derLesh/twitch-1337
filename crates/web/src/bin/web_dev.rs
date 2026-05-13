@@ -119,7 +119,7 @@ async fn main() -> Result<()> {
         avatar_cache: Arc::new(twitch_1337_web::helix::AvatarCache::new(
             Duration::from_secs(3600),
         )),
-        owner_id: None,
+        owner_id: Some(Arc::from(DEV_USER_ID)),
         settings: settings_handle,
         settings_store,
     };
