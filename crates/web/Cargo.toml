@@ -30,7 +30,7 @@ tower-http = { workspace = true }
 tracing = { workspace = true }
 url = { workspace = true }
 urlencoding = { workspace = true }
-tower-livereload = { version = "0.9", optional = true }
+tower-livereload = { version = "0.10", optional = true }
 notify-debouncer-mini = { version = "0.7", optional = true }
 
 [features]
