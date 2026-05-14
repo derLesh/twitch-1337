@@ -74,7 +74,9 @@ mod tests {
     fn hit(city: &str, n: u32, prices: Option<(f64, f64, f64)>) -> CityHit {
         CityHit {
             city: city.into(),
+            slug: String::new(),
             location_count: n,
+            priced_shop_sample: 0,
             min_price: prices.map(|(min, _, _)| min),
             max_price: prices.map(|(_, _, max)| max),
             avg_price: prices.map(|(_, avg, _)| avg),

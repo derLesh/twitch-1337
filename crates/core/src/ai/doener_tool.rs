@@ -1,3 +1,4 @@
+use futures_util::future::join_all;
 use llm::{ToolCall, ToolDefinition, ToolResultMessage};
 use serde::Deserialize;
 use serde_json::json;
@@ -15,14 +16,14 @@ pub(crate) struct DoenerArgs {
 pub fn doener_tool() -> ToolDefinition {
     ToolDefinition {
         name: DOENER_TOOL_NAME.into(),
-        description: "Use when viewers ask about Döner or kebab prices in Germany: typical averages, cheaper or pricier areas, or what things cost compared to elsewhere. Nationwide context if nothing more specific helps; naming a German city narrows results to matching places."
+        description: "Use when viewers ask about Döner or kebab prices in Germany: typical averages, cheaper or pricier areas, or what things cost compared to elsewhere. Nationwide context if nothing more specific helps; naming a German city narrows results to matching places. City figures come from Döneratlas public city aggregates when enrichment succeeds."
             .into(),
         parameters: serde_json::json!({
             "type": "object",
             "properties": {
                 "city": {
                     "type": "string",
-                    "description": "City name or short prefix when the question is about a specific German place (e.g. Cologne, München). Omit for Germany-wide.",
+                    "description": "City name or short prefix when the question is about a specific German place (e.g. Cologne, München). Omit for Germany-wide. Per-city aggregates come from Döneratlas when available.",
                 }
             }
         }),
@@ -62,8 +63,9 @@ pub async fn execute_doener_index(
         },
         Some(q) => match client.search_city_hits(q).await {
             Ok(hits) => {
-                let top: Vec<_> = hits.into_iter().take(5).collect();
-                json!({"scope": "city", "query": q, "hits": top})
+                let enriched =
+                    join_all(hits.into_iter().take(5).map(|h| client.enrich_city_hit(h))).await;
+                json!({"scope": "city", "query": q, "hits": enriched})
             }
             Err(e) => {
                 tracing::warn!(error = ?e, query = q, "doener_index city lookup failed");
@@ -146,11 +148,25 @@ mod tests {
             .mount(&server)
             .await;
 
+        let json_city = br#"{"name":"Hannover","slug":"hannover","shop_count":1,"avg_price":"6.00","min_price":"6.00","max_price":"6.00"}"#;
+        Mock::given(method("GET"))
+            .and(path("/app-api/public/cities"))
+            .and(wiremock::matchers::query_param("slug", "hannover"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_raw(json_city.as_slice(), "application/json"),
+            )
+            .mount(&server)
+            .await;
+
         let client = test_client(&server);
         let msg = execute_doener_index(&client, &call(serde_json::json!({"city": "Han"}))).await;
         let body = content(&msg);
         assert!(body.contains("\"scope\":\"city\""), "got: {body}");
         assert!(body.contains("Hannover"), "got: {body}");
+        assert!(
+            body.contains("\"avg_price\":6.0") || body.contains("\"avg_price\":6,"),
+            "got: {body}"
+        );
     }
 
     #[tokio::test]

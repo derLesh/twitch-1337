@@ -3,7 +3,13 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub struct CityHit {
     pub city: String,
+    /// Match key für `GET /app-api/public/cities?slug=…`.
+    #[serde(default)]
+    pub slug: String,
     pub location_count: u32,
+    /// Shops whose `current_price` appeared in the search response for this slug (often << [`CityHit::location_count`]).
+    #[serde(default)]
+    pub priced_shop_sample: u32,
     #[serde(deserialize_with = "deserialize_optional_price")]
     pub min_price: Option<f64>,
     #[serde(deserialize_with = "deserialize_optional_price")]
@@ -39,6 +45,8 @@ mod tests {
         let raw = r#"{"city":"Hannover","location_count":51,"min_price":"6.00","max_price":"6.00","avg_price":"6.00"}"#;
         let c: CityHit = serde_json::from_str(raw).unwrap();
         assert_eq!(c.city, "Hannover");
+        assert_eq!(c.slug, "");
+        assert_eq!(c.priced_shop_sample, 0);
         assert_eq!(c.location_count, 51);
         assert_eq!(c.avg_price, Some(6.0));
     }

@@ -65,7 +65,7 @@ where
             }
         } else {
             match self.client.search_city_hits(query).await {
-                Ok(hits) => decide_city_response(query, hits),
+                Ok(hits) => resolve_city_reply(self.client.as_ref(), query, hits).await,
                 Err(e) => {
                     error!(error = ?e, query, "doeneratlas city search failed");
                     api_down_message().to_string()
@@ -78,15 +78,21 @@ where
     }
 }
 
-fn decide_city_response(query: &str, hits: Vec<CityHit>) -> String {
+async fn resolve_city_reply(
+    client: &DoeneratlasClient,
+    query: &str,
+    mut hits: Vec<CityHit>,
+) -> String {
     if hits.is_empty() {
         return format_not_found(query);
     }
     if hits.len() == 1 {
-        return format_city(&hits[0]);
+        let hit = client.enrich_city_hit(hits.remove(0)).await;
+        return format_city(&hit);
     }
     if hits[0].city.eq_ignore_ascii_case(query) {
-        return format_city(&hits[0]);
+        let hit = client.enrich_city_hit(hits.remove(0)).await;
+        return format_city(&hit);
     }
     format_did_you_mean(&hits)
 }
@@ -104,45 +110,113 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::doener::CityHit;
+    use crate::doener::{CityHit, DoeneratlasClient};
 
     fn hit(city: &str, n: u32, with_prices: bool) -> CityHit {
         CityHit {
             city: city.into(),
+            slug: String::new(),
             location_count: n,
+            priced_shop_sample: if with_prices { n } else { 0 },
             min_price: with_prices.then_some(6.0),
             max_price: with_prices.then_some(6.0),
             avg_price: with_prices.then_some(6.0),
         }
     }
 
-    #[test]
-    fn city_response_empty_hits_is_not_found() {
-        let out = decide_city_response("xyz", vec![]);
+    #[tokio::test]
+    async fn city_response_empty_hits_is_not_found() {
+        crate::install_crypto_provider();
+        let server = wiremock::MockServer::start().await;
+        let client = DoeneratlasClient::with_base_url(reqwest::Client::new(), server.uri());
+        let out = resolve_city_reply(&client, "xyz", vec![]).await;
         assert_eq!(out, "FeelsDankMan keine Stadt für 'xyz' gefunden.");
     }
 
-    #[test]
-    fn city_response_single_hit_uses_format_city() {
-        let out = decide_city_response("Hannover", vec![hit("Hannover", 51, true)]);
-        assert!(out.starts_with("Hannover: 51 Buden"));
+    #[tokio::test]
+    async fn city_response_single_hit_enriches_from_cities_endpoint() {
+        crate::install_crypto_provider();
+        let server = wiremock::MockServer::start().await;
+        let json = br#"{"name":"Hannover","slug":"hannover","shop_count":20,"avg_price":"4.81","min_price":"2.50","max_price":"8.00"}"#;
+        wiremock::Mock::given(wiremock::matchers::method("GET"))
+            .and(wiremock::matchers::path("/app-api/public/cities"))
+            .and(wiremock::matchers::query_param("slug", "hannover"))
+            .respond_with(
+                wiremock::ResponseTemplate::new(200)
+                    .set_body_raw(json.as_slice(), "application/json"),
+            )
+            .mount(&server)
+            .await;
+
+        let client = DoeneratlasClient::with_base_url(reqwest::Client::new(), server.uri());
+        let hit = CityHit {
+            city: "Hannover".into(),
+            slug: "hannover".into(),
+            location_count: 51,
+            priced_shop_sample: 3,
+            min_price: Some(3.0),
+            max_price: Some(9.0),
+            avg_price: Some(6.0),
+        };
+        let out = resolve_city_reply(&client, "Han", vec![hit]).await;
+        assert!(
+            out.starts_with("Hannover: 20 Buden")
+                && out.contains("4.81")
+                && out.contains("2.50")
+                && out.contains("8.00"),
+            "unexpected reply: {out}"
+        );
     }
 
-    #[test]
-    fn city_response_exact_match_short_circuits() {
-        let hits = vec![hit("Berlin", 324, true), hit("Berlingerode", 1, false)];
-        let out = decide_city_response("berlin", hits);
-        assert!(out.starts_with("Berlin: 324 Buden"));
+    #[tokio::test]
+    async fn city_response_exact_match_enriches_first_hit_only() {
+        crate::install_crypto_provider();
+        let server = wiremock::MockServer::start().await;
+        let json = br#"{"name":"Berlin","slug":"berlin","shop_count":127,"avg_price":"5.49","min_price":"2.50","max_price":"37.00"}"#;
+        wiremock::Mock::given(wiremock::matchers::method("GET"))
+            .and(wiremock::matchers::path("/app-api/public/cities"))
+            .and(wiremock::matchers::query_param("slug", "berlin"))
+            .respond_with(
+                wiremock::ResponseTemplate::new(200)
+                    .set_body_raw(json.as_slice(), "application/json"),
+            )
+            .mount(&server)
+            .await;
+
+        let client = DoeneratlasClient::with_base_url(reqwest::Client::new(), server.uri());
+        let hits = vec![
+            CityHit {
+                city: "Berlin".into(),
+                slug: "berlin".into(),
+                location_count: 127,
+                priced_shop_sample: 8,
+                min_price: Some(3.3),
+                max_price: Some(8.0),
+                avg_price: Some(4.95),
+            },
+            hit("Berlingerode", 1, false),
+        ];
+        let out = resolve_city_reply(&client, "berlin", hits).await;
+        assert!(
+            out.starts_with("Berlin: 127 Buden")
+                && out.contains("5.49")
+                && out.contains("2.50")
+                && out.contains("37.00"),
+            "unexpected reply: {out}"
+        );
     }
 
-    #[test]
-    fn city_response_multi_hit_no_exact_match_is_did_you_mean() {
+    #[tokio::test]
+    async fn city_response_multi_hit_no_exact_match_is_did_you_mean() {
+        crate::install_crypto_provider();
+        let server = wiremock::MockServer::start().await;
+        let client = DoeneratlasClient::with_base_url(reqwest::Client::new(), server.uri());
         let hits = vec![
             hit("Hannover", 51, true),
             hit("Hanau", 3, true),
             hit("Handewitt", 1, false),
         ];
-        let out = decide_city_response("Han", hits);
+        let out = resolve_city_reply(&client, "Han", hits).await;
         assert_eq!(out, "Meintest du: Hannover (51), Hanau (3), Handewitt (1)?");
     }
 }

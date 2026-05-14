@@ -1,4 +1,7 @@
 //! JSON API client for [doeneratlas.de](https://doeneratlas.de/) (`/app-api/public/…`).
+//!
+//! Stadt-Ø / Min–Max für `!dpi` kommen von [`DoeneratlasClient::fetch_city_public_metrics`]
+//! (`GET /app-api/public/cities?slug=…`), weil [`AtlasSearchResponse::shops`] nur eine kleine Stichprobe ist.
 
 use std::time::Duration;
 
@@ -10,6 +13,15 @@ use crate::doener::types::CityHit;
 
 const DEFAULT_BASE_URL: &str = "https://doeneratlas.de";
 const TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Stadt-Kennzahlen wie vom öffentlichen `cities`-Endpoint (`avg_price` / Min / Max / `shop_count`).
+#[derive(Debug, Clone, PartialEq)]
+pub struct CityPublicMetrics {
+    pub listed_shops: u32,
+    pub avg_price_eur: f64,
+    pub min_price_eur: f64,
+    pub max_price_eur: f64,
+}
 
 /// Response shape for `GET /app-api/public/stats`.
 #[derive(Debug, Clone, Deserialize, PartialEq, serde::Serialize)]
@@ -45,6 +57,21 @@ pub struct AtlasShopRow {
     #[serde(default)]
     pub city_name: String,
     pub current_price: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct AtlasCityDetail {
+    #[allow(dead_code)]
+    pub name: String,
+    #[allow(dead_code)]
+    pub slug: String,
+    pub shop_count: u32,
+    #[serde(default)]
+    pub avg_price: Option<String>,
+    #[serde(default)]
+    pub min_price: Option<String>,
+    #[serde(default)]
+    pub max_price: Option<String>,
 }
 
 pub struct DoeneratlasClient {
@@ -115,10 +142,86 @@ impl DoeneratlasClient {
             .wrap_err("doeneratlas search: parse JSON")
     }
 
-    /// City rows from search, with min/max/avg over listed shop prices for that `city_slug`.
+    /// City rows from prefix search; Preisfelder sind bis zu [`Self::enrich_city_hit`] nur aus der
+    /// Such-Stichprobe — oft unvollständig gegenüber [`AtlasCityRow::shop_count`].
     pub async fn search_city_hits(&self, q: &str) -> Result<Vec<CityHit>> {
         let body = self.search(q).await?;
         Ok(city_hits_from_search(&body))
+    }
+
+    /// `GET /app-api/public/cities?slug=…` — volle Stadt-Aggregate (Ø / Min / Max / Anzahl Läden).
+    pub async fn fetch_city_public_metrics(&self, slug: &str) -> Result<CityPublicMetrics> {
+        let url = format!("{}/app-api/public/cities", self.base_trimmed());
+        let resp = self
+            .http
+            .get(&url)
+            .query(&[("slug", slug)])
+            .send()
+            .await
+            .wrap_err("doeneratlas cities: request failed")?
+            .error_for_status()
+            .wrap_err("doeneratlas cities: non-2xx")?;
+        let row = resp
+            .json::<AtlasCityDetail>()
+            .await
+            .wrap_err("doeneratlas cities: parse JSON")?;
+        metrics_from_city_detail(row).wrap_err("doeneratlas cities: incomplete price fields")
+    }
+
+    /// Ersetzt Such-Stichproben-Preise durch [`Self::fetch_city_public_metrics`] wenn möglich.
+    pub async fn enrich_city_hit(&self, hit: CityHit) -> CityHit {
+        if hit.slug.is_empty() {
+            return strip_unreliable_city_prices(hit);
+        }
+        match self.fetch_city_public_metrics(&hit.slug).await {
+            Ok(m) => CityHit {
+                city: hit.city,
+                slug: hit.slug,
+                location_count: m.listed_shops,
+                priced_shop_sample: hit.priced_shop_sample,
+                avg_price: Some(m.avg_price_eur),
+                min_price: Some(m.min_price_eur),
+                max_price: Some(m.max_price_eur),
+            },
+            Err(_) => strip_unreliable_city_prices(hit),
+        }
+    }
+}
+
+fn metrics_from_city_detail(row: AtlasCityDetail) -> Result<CityPublicMetrics> {
+    let avg_price_eur = row
+        .avg_price
+        .as_deref()
+        .and_then(parse_price_str)
+        .ok_or_else(|| eyre::eyre!("avg_price missing or invalid"))?;
+    let min_price_eur = row
+        .min_price
+        .as_deref()
+        .and_then(parse_price_str)
+        .ok_or_else(|| eyre::eyre!("min_price missing or invalid"))?;
+    let max_price_eur = row
+        .max_price
+        .as_deref()
+        .and_then(parse_price_str)
+        .ok_or_else(|| eyre::eyre!("max_price missing or invalid"))?;
+    Ok(CityPublicMetrics {
+        listed_shops: row.shop_count,
+        avg_price_eur,
+        min_price_eur,
+        max_price_eur,
+    })
+}
+
+fn strip_unreliable_city_prices(hit: CityHit) -> CityHit {
+    if hit.priced_shop_sample > 0 && hit.priced_shop_sample == hit.location_count {
+        hit
+    } else {
+        CityHit {
+            avg_price: None,
+            min_price: None,
+            max_price: None,
+            ..hit
+        }
     }
 }
 
@@ -136,6 +239,7 @@ fn city_hits_from_search(body: &AtlasSearchResponse) -> Vec<CityHit> {
                 .filter(|s| s.city_slug == c.slug)
                 .filter_map(|s| parse_price_str(&s.current_price))
                 .collect();
+            let priced_shop_sample = prices.len() as u32;
             let (min_price, max_price, avg_price) = if prices.is_empty() {
                 (None, None, None)
             } else {
@@ -147,7 +251,9 @@ fn city_hits_from_search(body: &AtlasSearchResponse) -> Vec<CityHit> {
             };
             CityHit {
                 city: c.name.clone(),
+                slug: c.slug.clone(),
                 location_count: c.shop_count,
+                priced_shop_sample,
                 min_price,
                 max_price,
                 avg_price,
@@ -217,9 +323,39 @@ mod tests {
             .expect("hits");
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].city, "Darmstadt");
+        assert_eq!(hits[0].slug, "darmstadt");
+        assert_eq!(hits[0].priced_shop_sample, 2);
         assert_eq!(hits[0].location_count, 2);
         assert!((hits[0].min_price.unwrap() - 4.0).abs() < 1e-9);
         assert!((hits[0].max_price.unwrap() - 6.0).abs() < 1e-9);
         assert!((hits[0].avg_price.unwrap() - 5.0).abs() < 1e-9);
+    }
+
+    #[tokio::test]
+    async fn fetch_city_public_metrics_reads_cities_slug_endpoint() {
+        let server = MockServer::start().await;
+        let json = br#"{"name":"Berlin","slug":"berlin","shop_count":127,"avg_price":"5.49","min_price":"2.50","max_price":"37.00"}"#;
+        Mock::given(method("GET"))
+            .and(path("/app-api/public/cities"))
+            .and(wiremock::matchers::query_param("slug", "berlin"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_raw(json.as_slice(), "application/json"),
+            )
+            .mount(&server)
+            .await;
+
+        let m = client(&server)
+            .fetch_city_public_metrics("berlin")
+            .await
+            .expect("metrics");
+        assert_eq!(
+            m,
+            CityPublicMetrics {
+                listed_shops: 127,
+                avg_price_eur: 5.49,
+                min_price_eur: 2.5,
+                max_price_eur: 37.0,
+            }
+        );
     }
 }
