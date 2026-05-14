@@ -6,7 +6,6 @@ use std::time::Duration;
 use chrono::Duration as ChronoDuration;
 use common::TestBotBuilder;
 use secrecy::SecretString;
-use serial_test::serial;
 use twitch_1337::config::AviationstackConfig;
 use wiremock::matchers::{method, path, path_regex, query_param};
 use wiremock::{Mock, ResponseTemplate};
@@ -21,7 +20,6 @@ fn enable_aviationstack(config: &mut twitch_1337::config::Configuration) {
 }
 
 #[tokio::test]
-#[serial]
 async fn track_command_acknowledges_flight() {
     let bot = TestBotBuilder::new().spawn().await;
 
@@ -70,7 +68,6 @@ async fn track_command_acknowledges_flight() {
 }
 
 #[tokio::test]
-#[serial]
 async fn track_command_enriches_flight_from_aviationstack_once() {
     let bot = TestBotBuilder::new()
         .with_config(enable_aviationstack)
@@ -172,7 +169,6 @@ async fn track_command_enriches_flight_from_aviationstack_once() {
 }
 
 #[tokio::test]
-#[serial]
 async fn track_command_accepts_aviationstack_flight_before_adsb_appears() {
     let bot = TestBotBuilder::new()
         .with_config(enable_aviationstack)
@@ -284,7 +280,6 @@ async fn track_command_accepts_aviationstack_flight_before_adsb_appears() {
 }
 
 #[tokio::test]
-#[serial]
 async fn track_command_keeps_pending_flight_with_stale_scheduled_departure() {
     let bot = TestBotBuilder::new()
         .with_config(enable_aviationstack)
@@ -385,7 +380,6 @@ async fn track_command_keeps_pending_flight_with_stale_scheduled_departure() {
 }
 
 #[tokio::test]
-#[serial]
 async fn pending_flight_polls_when_due_and_becomes_visible() {
     let bot = TestBotBuilder::new()
         .with_config(enable_aviationstack)
@@ -486,7 +480,6 @@ async fn pending_flight_polls_when_due_and_becomes_visible() {
 }
 
 #[tokio::test]
-#[serial]
 async fn pending_flight_expires_without_extra_adsb_call() {
     let bot = TestBotBuilder::new()
         .with_config(enable_aviationstack)

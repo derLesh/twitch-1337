@@ -4,12 +4,10 @@ use std::time::Duration;
 
 use common::TestBotBuilder;
 use llm::Role;
-use serial_test::serial;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 #[tokio::test]
-#[serial]
 async fn ai_reply_includes_parent_message() {
     let bot = TestBotBuilder::new()
         .with_ai()
@@ -45,7 +43,6 @@ async fn ai_reply_includes_parent_message() {
 }
 
 #[tokio::test]
-#[serial]
 async fn grok_without_reply_behaves_like_ai_alias() {
     let bot = TestBotBuilder::new()
         .with_ai()
@@ -77,7 +74,6 @@ async fn grok_without_reply_behaves_like_ai_alias() {
 }
 
 #[tokio::test]
-#[serial]
 async fn grok_reply_with_leading_mention_triggers_alias() {
     let bot = TestBotBuilder::new()
         .with_ai()
@@ -121,7 +117,6 @@ async fn grok_reply_with_leading_mention_triggers_alias() {
 }
 
 #[tokio::test]
-#[serial]
 async fn grok_empty_reply_with_leading_mention_uses_default_instruction() {
     let bot = TestBotBuilder::new()
         .with_ai()
@@ -159,7 +154,6 @@ async fn grok_empty_reply_with_leading_mention_uses_default_instruction() {
 }
 
 #[tokio::test]
-#[serial]
 async fn grok_strips_visible_reasoning_prefix_from_response() {
     let bot = TestBotBuilder::new()
         .with_ai()
@@ -182,7 +176,6 @@ async fn grok_strips_visible_reasoning_prefix_from_response() {
 }
 
 #[tokio::test]
-#[serial]
 async fn grok_uses_web_tools_when_enabled() {
     let search = MockServer::start().await;
     Mock::given(method("GET"))

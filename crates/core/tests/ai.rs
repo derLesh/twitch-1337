@@ -5,12 +5,10 @@ use std::time::Duration;
 
 use common::TestBotBuilder;
 use llm::{Role, ToolCall, ToolChatCompletionResponse};
-use serial_test::serial;
 use wiremock::matchers::{method, path, query_param};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 #[tokio::test]
-#[serial]
 async fn ai_command_returns_fake_response() {
     let bot = TestBotBuilder::new().with_ai().spawn().await;
     bot.llm.push_tool_message("pong");
@@ -27,7 +25,6 @@ async fn ai_command_returns_fake_response() {
 }
 
 #[tokio::test]
-#[serial]
 async fn ai_command_empty_shows_usage() {
     let mut bot = TestBotBuilder::new().with_ai().spawn().await;
 
@@ -50,7 +47,6 @@ async fn ai_command_empty_shows_usage() {
 }
 
 #[tokio::test]
-#[serial]
 async fn ai_command_injects_7tv_emote_glossary() {
     let mut bot = TestBotBuilder::new()
         .with_ai()
@@ -141,7 +137,6 @@ meaning = "steht nicht im aktuellen 7TV-Katalog"
 }
 
 #[tokio::test]
-#[serial]
 async fn ai_command_continues_when_7tv_unavailable() {
     let mut bot = TestBotBuilder::new()
         .with_ai()
@@ -190,7 +185,6 @@ meaning = "lachen"
 }
 
 #[tokio::test]
-#[serial]
 async fn ai_command_web_tool_flow_search_success() {
     let search = MockServer::start().await;
     Mock::given(method("GET"))
@@ -263,7 +257,6 @@ async fn ai_command_web_tool_flow_search_success() {
 }
 
 #[tokio::test]
-#[serial]
 async fn ai_command_read_url_round_trip() {
     // Bypass the SSRF guard so the bot can reach local wiremock servers.
     twitch_1337::ai::content::client::ssrf_bypass_for_tests(true);

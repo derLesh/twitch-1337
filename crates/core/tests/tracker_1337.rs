@@ -6,7 +6,6 @@ use chrono::{Duration as ChronoDuration, TimeZone};
 use chrono_tz::Europe::Berlin;
 use common::TestBotBuilder;
 use common::irc_line::privmsg_at;
-use serial_test::serial;
 
 use crate::common::test_bot::TestBot;
 
@@ -40,7 +39,6 @@ async fn advance_to_1337_window(bot: &mut TestBot) {
 }
 
 #[tokio::test]
-#[serial]
 async fn tracker_1337_posts_reminder_and_stats() {
     let mut bot = TestBotBuilder::new()
         .at(Berlin
@@ -82,7 +80,6 @@ async fn tracker_1337_posts_reminder_and_stats() {
 }
 
 #[tokio::test]
-#[serial]
 async fn tracker_1337_updates_leaderboard_with_sub_second_time() {
     let mut bot = TestBotBuilder::new()
         .at(Berlin
@@ -130,7 +127,6 @@ async fn tracker_1337_updates_leaderboard_with_sub_second_time() {
 }
 
 #[tokio::test]
-#[serial]
 async fn tracker_1337_posts_slowest_only_for_final_ten_seconds() {
     let mut bot = TestBotBuilder::new()
         .at(Berlin
@@ -175,7 +171,6 @@ async fn tracker_1337_posts_slowest_only_for_final_ten_seconds() {
 }
 
 #[tokio::test]
-#[serial]
 async fn tracker_1337_does_not_post_slowest_before_final_ten_seconds() {
     let mut bot = TestBotBuilder::new()
         .at(Berlin
@@ -216,7 +211,6 @@ async fn tracker_1337_does_not_post_slowest_before_final_ten_seconds() {
 }
 
 #[tokio::test]
-#[serial]
 async fn tracker_1337_zero_users_posts_erm_or_fuh() {
     let mut bot = TestBotBuilder::new()
         .at(Berlin

@@ -1,16 +1,21 @@
-use crate::doener::types::{CityHit, GlobalStats};
+use crate::doener::atlas::AtlasPublicStats;
+use crate::doener::types::CityHit;
 
-const API_DOWN_MESSAGE: &str = "FeelsDankMan döner-index API down";
+const API_DOWN_MESSAGE: &str = "FeelsDankMan Döneratlas API down";
 
-pub fn format_global(s: &GlobalStats) -> String {
+pub fn format_global(s: &AtlasPublicStats) -> String {
+    let change = s
+        .change_30d
+        .map(|d| format!(" Veränderung 30 Tage: {d:+.1}%."))
+        .unwrap_or_default();
     format!(
-        "Döner-Index DE: {locations} Buden in {cities} Städten, ⌀ {avg:.2}€ ({min:.2}–{max:.2}€). {no_price}% ohne Preis.",
-        locations = s.total_locations,
+        "Döneratlas DE: Ø {avg:.2}€ (Modus {mode}€), {cities} Städte, {shops} Läden, {reports} Meldungen.{change}",
+        avg = s.national_average,
+        mode = s.mode_price,
         cities = s.total_cities,
-        avg = s.avg_price,
-        min = s.min_price,
-        max = s.max_price,
-        no_price = format_pct(s.locations_no_price_pct),
+        shops = s.total_shops,
+        reports = s.total_reports,
+        change = change,
     )
 }
 
@@ -51,26 +56,18 @@ pub fn api_down_message() -> &'static str {
     API_DOWN_MESSAGE
 }
 
-fn format_pct(p: f64) -> String {
-    if (p.round() - p).abs() < f64::EPSILON {
-        format!("{}", p.round() as i64)
-    } else {
-        format!("{p:.1}")
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn stats() -> GlobalStats {
-        GlobalStats {
-            total_locations: 6092,
-            total_cities: 2202,
-            min_price: 5.5,
-            max_price: 9.0,
-            avg_price: 6.1,
-            locations_no_price_pct: 87.0,
+    fn stats() -> AtlasPublicStats {
+        AtlasPublicStats {
+            national_average: 8.36,
+            total_cities: 1072,
+            total_shops: 1897,
+            total_reports: 3514,
+            change_30d: Some(1.7),
+            mode_price: 7,
         }
     }
 
@@ -85,18 +82,21 @@ mod tests {
     }
 
     #[test]
-    fn global_matches_golden_string() {
-        assert_eq!(
-            format_global(&stats()),
-            "Döner-Index DE: 6092 Buden in 2202 Städten, ⌀ 6.10€ (5.50–9.00€). 87% ohne Preis."
-        );
+    fn global_includes_headline_numbers() {
+        let s = format_global(&stats());
+        assert!(s.contains("Döneratlas DE:"));
+        assert!(s.contains("8.36"));
+        assert!(s.contains("1072 Städte"));
+        assert!(s.contains("1897 Läden"));
+        assert!(s.contains("1.7"));
     }
 
     #[test]
-    fn global_keeps_decimal_in_no_price_pct_when_non_integer() {
+    fn global_omits_change_when_none() {
         let mut s = stats();
-        s.locations_no_price_pct = 87.1;
-        assert!(format_global(&s).contains("87.1% ohne Preis"));
+        s.change_30d = None;
+        let out = format_global(&s);
+        assert!(!out.contains("Veränderung"));
     }
 
     #[test]

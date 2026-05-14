@@ -6,7 +6,6 @@ use std::time::Duration;
 
 use chrono::NaiveDate;
 use common::TestBotBuilder;
-use serial_test::serial;
 use twitch_1337::PersonalBest;
 
 fn seeded_alice() -> HashMap<String, PersonalBest> {
@@ -22,7 +21,6 @@ fn seeded_alice() -> HashMap<String, PersonalBest> {
 }
 
 #[tokio::test]
-#[serial]
 async fn pb_returns_callers_own_pb() {
     let mut bot = TestBotBuilder::new()
         .with_seeded_leaderboard(seeded_alice())
@@ -39,7 +37,6 @@ async fn pb_returns_callers_own_pb() {
 }
 
 #[tokio::test]
-#[serial]
 async fn pb_returns_other_user_pb() {
     let mut bot = TestBotBuilder::new()
         .with_seeded_leaderboard(seeded_alice())
@@ -59,7 +56,6 @@ async fn pb_returns_other_user_pb() {
 }
 
 #[tokio::test]
-#[serial]
 async fn pb_handles_at_prefix_and_case() {
     let mut bot = TestBotBuilder::new()
         .with_seeded_leaderboard(seeded_alice())
@@ -78,7 +74,6 @@ async fn pb_handles_at_prefix_and_case() {
 }
 
 #[tokio::test]
-#[serial]
 async fn pb_empty_state_self() {
     let mut bot = TestBotBuilder::new().spawn().await;
 
@@ -93,7 +88,6 @@ async fn pb_empty_state_self() {
 }
 
 #[tokio::test]
-#[serial]
 async fn pb_empty_state_other() {
     let mut bot = TestBotBuilder::new().spawn().await;
 

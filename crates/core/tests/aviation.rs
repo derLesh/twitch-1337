@@ -3,12 +3,10 @@ mod common;
 use std::time::Duration;
 
 use common::TestBotBuilder;
-use serial_test::serial;
 use wiremock::matchers::{method, path_regex};
 use wiremock::{Mock, ResponseTemplate};
 
 #[tokio::test]
-#[serial]
 async fn up_command_lists_aircraft_above_plz() {
     let bot = TestBotBuilder::new().spawn().await;
 
@@ -62,7 +60,6 @@ async fn up_command_lists_aircraft_above_plz() {
 }
 
 #[tokio::test]
-#[serial]
 async fn up_command_includes_aircraft_without_route() {
     let bot = TestBotBuilder::new().spawn().await;
 
@@ -113,7 +110,6 @@ async fn up_command_includes_aircraft_without_route() {
 }
 
 #[tokio::test]
-#[serial]
 async fn up_command_uses_registration_when_callsign_missing() {
     let bot = TestBotBuilder::new().spawn().await;
 
@@ -150,7 +146,6 @@ async fn up_command_uses_registration_when_callsign_missing() {
 }
 
 #[tokio::test]
-#[serial]
 async fn up_command_falls_back_to_hex() {
     let bot = TestBotBuilder::new().spawn().await;
 
@@ -185,7 +180,6 @@ async fn up_command_falls_back_to_hex() {
 }
 
 #[tokio::test]
-#[serial]
 async fn up_command_sorts_by_distance() {
     let bot = TestBotBuilder::new().spawn().await;
 

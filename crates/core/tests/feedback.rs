@@ -3,10 +3,8 @@ mod common;
 use std::time::Duration;
 
 use common::TestBotBuilder;
-use serial_test::serial;
 
 #[tokio::test]
-#[serial]
 async fn feedback_appends_to_file() {
     let mut bot = TestBotBuilder::new().spawn().await;
 
@@ -32,7 +30,6 @@ async fn feedback_appends_to_file() {
 }
 
 #[tokio::test]
-#[serial]
 async fn feedback_empty_message_shows_usage() {
     let mut bot = TestBotBuilder::new().spawn().await;
 

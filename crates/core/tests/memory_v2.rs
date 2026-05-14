@@ -18,7 +18,6 @@ use std::time::Duration;
 
 use common::{TestBotBuilder, wait_for_say};
 use llm::{ToolCall, ToolChatCompletionResponse};
-use serial_test::serial;
 
 // ---------------------------------------------------------------------------
 // 1. Basic write + reply
@@ -27,7 +26,6 @@ use serial_test::serial;
 /// Push tool call: write_file(users/12345.md, "alice content"), then final
 /// Message("hello alice"). Send `!ai hi` from user 12345; assert reply + file contents.
 #[tokio::test]
-#[serial]
 async fn memory_v2_basic_write_and_reply() {
     let mut bot = TestBotBuilder::new().with_ai().spawn().await;
 
@@ -70,7 +68,6 @@ async fn memory_v2_basic_write_and_reply() {
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
-#[serial]
 async fn memory_v2_multiline_collapses() {
     let mut bot = TestBotBuilder::new().with_ai().spawn().await;
 
@@ -92,7 +89,6 @@ async fn memory_v2_multiline_collapses() {
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
-#[serial]
 async fn memory_v2_silent() {
     let mut bot = TestBotBuilder::new().with_ai().spawn().await;
 
@@ -118,7 +114,6 @@ async fn memory_v2_silent() {
 ///
 /// Moderator write path is unit-tested in tools; one branch is enough here.
 #[tokio::test]
-#[serial]
 async fn memory_v2_perms() {
     let bot = TestBotBuilder::new().with_ai().spawn().await;
 
@@ -158,7 +153,6 @@ async fn memory_v2_perms() {
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
-#[serial]
 async fn memory_v2_cap() {
     let bot = TestBotBuilder::new()
         .with_ai()
@@ -205,7 +199,6 @@ async fn memory_v2_cap() {
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
-#[serial]
 async fn chat_turn_state_reserved() {
     let bot = TestBotBuilder::new().with_ai().spawn().await;
 
@@ -239,7 +232,6 @@ async fn chat_turn_state_reserved() {
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
-#[serial]
 async fn chat_turn_write_quota() {
     let mut bot = TestBotBuilder::new()
         .with_ai()
@@ -305,7 +297,6 @@ async fn chat_turn_write_quota() {
 /// `# users/<id>.md`. Writing one should return "invalid_body", leaving the
 /// target file empty.
 #[tokio::test]
-#[serial]
 async fn chat_turn_injection() {
     let bot = TestBotBuilder::new().with_ai().spawn().await;
 
@@ -351,7 +342,6 @@ async fn chat_turn_injection() {
 /// replace this placeholder with an actual integration test.
 #[tokio::test]
 #[ignore = "v1 disposal covered by store::tests::open_renames_v1_store_when_present unit test; integration version needs seed_file builder (future task)"]
-#[serial]
 async fn v1_store_discarded() {
     // See comment above.
     unimplemented!()
@@ -366,7 +356,6 @@ async fn v1_store_discarded() {
 /// call must replace the entire body with `<corrupt: rejected>`. We verify this
 /// by inspecting the system prompt that `FakeLlm` receives.
 #[tokio::test]
-#[serial]
 async fn ritual_transcript_injection() {
     let bot = TestBotBuilder::new().with_ai().spawn().await;
 
@@ -416,7 +405,6 @@ async fn ritual_transcript_injection() {
 /// <yesterday>.md) before running the LLM. The rotate happens before the agent
 /// call, so a failed agent must not prevent rotation.
 #[tokio::test]
-#[serial]
 async fn ritual_dreamer_failure() {
     let bot = TestBotBuilder::new().with_ai().spawn().await;
 
@@ -451,7 +439,6 @@ async fn ritual_dreamer_failure() {
 /// Normal PRIVMSGs (not `!ai` commands) must be appended to `today.md` by the
 /// transcript tap handler wired in T15.
 #[tokio::test]
-#[serial]
 async fn transcript_captures_normal_chat() {
     let bot = TestBotBuilder::new().with_ai().spawn().await;
 

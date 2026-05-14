@@ -6,7 +6,6 @@ use std::time::Duration;
 
 use chrono::NaiveDate;
 use common::{TestBot, TestBotBuilder};
-use serial_test::serial;
 use twitch_1337::PersonalBest;
 
 /// twitch-irc's default rate limiter allows 5 msgs / 150 ms per connection.
@@ -39,7 +38,6 @@ async fn assert_lb_works(bot: &mut TestBot) {
 }
 
 #[tokio::test]
-#[serial]
 async fn broadcaster_can_suspend_lb_then_unsuspend() {
     let mut bot = TestBotBuilder::new()
         .with_seeded_leaderboard(seeded_lb_with_alice())
@@ -79,7 +77,6 @@ async fn broadcaster_can_suspend_lb_then_unsuspend() {
 }
 
 #[tokio::test]
-#[serial]
 async fn mod_can_suspend_lb() {
     let mut bot = TestBotBuilder::new()
         .with_seeded_leaderboard(seeded_lb_with_alice())
@@ -100,7 +97,6 @@ async fn mod_can_suspend_lb() {
 }
 
 #[tokio::test]
-#[serial]
 async fn hidden_admin_can_suspend_lb() {
     // irc_line::privmsg sets user-id=67890; add it as a hidden admin.
     let mut bot = TestBotBuilder::new()
@@ -126,7 +122,6 @@ async fn hidden_admin_can_suspend_lb() {
 }
 
 #[tokio::test]
-#[serial]
 async fn non_admin_cannot_suspend() {
     let mut bot = TestBotBuilder::new()
         .with_seeded_leaderboard(seeded_lb_with_alice())
@@ -147,7 +142,6 @@ async fn non_admin_cannot_suspend() {
 }
 
 #[tokio::test]
-#[serial]
 async fn exempt_commands_rejected() {
     let mut bot = TestBotBuilder::new().spawn().await;
 
@@ -165,7 +159,6 @@ async fn exempt_commands_rejected() {
 }
 
 #[tokio::test]
-#[serial]
 async fn default_duration_used_when_omitted() {
     // Uses the built-in default of 600s = 10m.
     let mut bot = TestBotBuilder::new()
@@ -184,7 +177,6 @@ async fn default_duration_used_when_omitted() {
 }
 
 #[tokio::test]
-#[serial]
 async fn custom_default_from_config() {
     let mut bot = TestBotBuilder::new()
         .with_seeded_leaderboard(seeded_lb_with_alice())
@@ -205,7 +197,6 @@ async fn custom_default_from_config() {
 }
 
 #[tokio::test]
-#[serial]
 async fn bad_duration_format_rejected() {
     let mut bot = TestBotBuilder::new()
         .with_seeded_leaderboard(seeded_lb_with_alice())
@@ -230,7 +221,6 @@ async fn bad_duration_format_rejected() {
 }
 
 #[tokio::test]
-#[serial]
 async fn unsuspend_unknown_command_replies_not_suspended() {
     let mut bot = TestBotBuilder::new().spawn().await;
 
@@ -246,7 +236,6 @@ async fn unsuspend_unknown_command_replies_not_suspended() {
 }
 
 #[tokio::test]
-#[serial]
 async fn ping_can_be_suspended() {
     let mut bot = TestBotBuilder::new().spawn().await;
 

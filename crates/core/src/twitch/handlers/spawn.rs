@@ -69,7 +69,7 @@ pub(crate) struct SpawnDeps<T: Transport, L: LoginCredentials> {
     pub config: Configuration,
     pub clock: Arc<dyn Clock>,
     pub data_dir: PathBuf,
-    pub doener: Arc<crate::doener::DoenerClient>,
+    pub doener: Arc<crate::doener::DoeneratlasClient>,
 
     // 1337 tracker.
     pub leaderboard: Arc<RwLock<HashMap<String, PersonalBest>>>,

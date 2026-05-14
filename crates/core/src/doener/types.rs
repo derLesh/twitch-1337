@@ -1,16 +1,6 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
-pub struct GlobalStats {
-    pub total_locations: u32,
-    pub total_cities: u32,
-    pub min_price: f64,
-    pub max_price: f64,
-    pub avg_price: f64,
-    pub locations_no_price_pct: f64,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub struct CityHit {
     pub city: String,
     pub location_count: u32,
@@ -20,11 +10,6 @@ pub struct CityHit {
     pub max_price: Option<f64>,
     #[serde(deserialize_with = "deserialize_optional_price")]
     pub avg_price: Option<f64>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub(crate) struct CitiesResponse {
-    pub cities: Vec<CityHit>,
 }
 
 fn deserialize_optional_price<'de, D>(de: D) -> Result<Option<f64>, D::Error>
@@ -48,16 +33,6 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn global_stats_parses_canonical_payload() {
-        let raw = r#"{"total_locations":6092,"total_cities":2202,"min_price":5.5,"max_price":9,"avg_price":6.1,"locations_no_price":5304,"locations_no_price_pct":87.1}"#;
-        let s: GlobalStats = serde_json::from_str(raw).unwrap();
-        assert_eq!(s.total_locations, 6092);
-        assert_eq!(s.total_cities, 2202);
-        assert!((s.avg_price - 6.1).abs() < 1e-9);
-        assert!((s.locations_no_price_pct - 87.1).abs() < 1e-9);
-    }
 
     #[test]
     fn city_hit_parses_string_prices() {

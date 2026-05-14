@@ -91,7 +91,7 @@ pub struct AiCommand {
     web: Option<AiWeb>,
     emotes: Option<Arc<SevenTvEmoteProvider>>,
     bot_username: String,
-    doener: Arc<crate::doener::DoenerClient>,
+    doener: Arc<crate::doener::DoeneratlasClient>,
 }
 
 pub struct AiCommandDeps {
@@ -104,7 +104,7 @@ pub struct AiCommandDeps {
     pub web: Option<AiWeb>,
     pub emotes: Option<Arc<SevenTvEmoteProvider>>,
     pub bot_username: String,
-    pub doener: Arc<crate::doener::DoenerClient>,
+    pub doener: Arc<crate::doener::DoeneratlasClient>,
 }
 
 const GROK_ALIAS_TRIGGER: &str = "@grok";
@@ -153,7 +153,7 @@ impl AiCommand {
 struct V2Executor<'a> {
     chat: &'a ChatTurnExecutor,
     web: Option<&'a content::ContentToolExecutor>,
-    doener: &'a crate::doener::DoenerClient,
+    doener: &'a crate::doener::DoeneratlasClient,
     trace: &'a TraceIds,
 }
 

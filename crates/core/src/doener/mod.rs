@@ -1,6 +1,6 @@
-pub mod client;
+pub mod atlas;
 pub mod format;
 pub mod types;
 
-pub use client::DoenerClient;
-pub use types::{CityHit, GlobalStats};
+pub use atlas::{AtlasPublicStats, DoeneratlasClient};
+pub use types::CityHit;

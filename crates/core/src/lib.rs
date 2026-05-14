@@ -76,7 +76,7 @@ pub struct Services {
     pub clock: Arc<dyn Clock>,
     pub llm: Option<Arc<dyn LlmClient>>,
     pub aviation: Option<AviationClient>,
-    pub doener: Arc<crate::doener::DoenerClient>,
+    pub doener: Arc<crate::doener::DoeneratlasClient>,
     pub whisper: Option<Arc<dyn WhisperSender>>,
     pub data_dir: PathBuf,
     /// Shared dashboard-managed runtime settings. Constructed by the bin so

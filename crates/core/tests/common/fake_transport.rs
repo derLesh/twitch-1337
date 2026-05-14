@@ -6,8 +6,8 @@
 //! with the server-side of a duplex stream. `FakeTransport::new()` drains
 //! the slot to obtain its end.
 //!
-//! Because the slot is global, tests must run serially
-//! (`#[serial_test::serial]`) to avoid slot collisions.
+//! Because the slot is global, callers must serialize client construction; integration
+//! tests do this inside `TestBotBuilder::spawn` in `tests/common/test_bot.rs` (mutex).
 
 use std::fmt::{self, Debug};
 use std::sync::{Mutex, OnceLock};

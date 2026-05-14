@@ -1,6 +1,9 @@
 //! Integration tests for the optional `twitch.ai_channel`: only `!ai` is
 //! reachable there, all other commands and the 1337 tracker ignore it,
 //! chat history skips it, and the primary-channel path is unchanged.
+//!
+//! Bots are spawned through `TestBotBuilder::spawn` in `tests/common/test_bot.rs`, which takes
+//! a process-wide mutex so the fake Twitch transport slot cannot collide between parallel tests.
 
 mod common;
 

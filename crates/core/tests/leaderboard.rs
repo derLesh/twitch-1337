@@ -6,11 +6,9 @@ use std::time::Duration;
 
 use chrono::NaiveDate;
 use common::TestBotBuilder;
-use serial_test::serial;
 use twitch_1337::PersonalBest;
 
 #[tokio::test]
-#[serial]
 async fn leaderboard_returns_fastest_pb() {
     let mut seeded: HashMap<String, PersonalBest> = HashMap::new();
     seeded.insert(
@@ -50,7 +48,6 @@ async fn leaderboard_returns_fastest_pb() {
 }
 
 #[tokio::test]
-#[serial]
 async fn leaderboard_empty_state_message() {
     let mut bot = TestBotBuilder::new().spawn().await;
 
