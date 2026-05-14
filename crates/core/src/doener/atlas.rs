@@ -76,6 +76,21 @@ struct AtlasCityDetail {
     pub max_price: Option<String>,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+struct AtlasCityDetail {
+    #[allow(dead_code)]
+    pub name: String,
+    #[allow(dead_code)]
+    pub slug: String,
+    pub shop_count: u32,
+    #[serde(default)]
+    pub avg_price: Option<String>,
+    #[serde(default)]
+    pub min_price: Option<String>,
+    #[serde(default)]
+    pub max_price: Option<String>,
+}
+
 pub struct DoeneratlasClient {
     http: reqwest::Client,
     base_url: String,
