@@ -41,7 +41,7 @@ pub fn dev_new_session() -> crate::auth::session::NewSession {
     crate::auth::session::NewSession {
         user_id: DEV_USER_ID.to_owned(),
         user_login: DEV_USER_LOGIN.to_owned(),
-        role: crate::auth::role::Role::Mod,
+        role: crate::auth::role::Role::Owner,
         avatar_url: None,
         is_broadcaster: false,
     }

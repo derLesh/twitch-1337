@@ -50,8 +50,8 @@ async fn ping_trigger_renders_template_with_mentions() {
 #[serial]
 async fn ping_cooldown_blocks_second_trigger() {
     let mut bot = TestBotBuilder::new()
-        .with_config(|c| {
-            c.pings.cooldown = 60;
+        .with_settings(|o| {
+            o.pings.cooldown = Some(60);
         })
         .spawn()
         .await;

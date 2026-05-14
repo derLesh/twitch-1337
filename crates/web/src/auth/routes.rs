@@ -320,30 +320,38 @@ async fn callback(
         .await
         .map_err(|e| WebError::OAuthExchange(e.wrap_err("user lookup")))?;
 
-    let role = match crate::auth::role_check::check_is_mod_with_token(
-        &state,
-        &me.id,
-        &user_token,
-        &state.broadcaster_id,
-        &state.hidden_admins,
-    )
-    .await
-    .map_err(|e| WebError::OAuthExchange(e.wrap_err("mod check")))?
+    let role = if state
+        .owner_id
+        .as_deref()
+        .is_some_and(|owner| owner == me.id.as_str())
     {
-        GateOutcome::Allow => crate::auth::role::Role::Mod,
-        GateOutcome::Deny => match check_in_allowlist(&me.id, &state.viewer_allowlist) {
-            GateOutcome::Allow => crate::auth::role::Role::Viewer,
-            GateOutcome::Deny => {
-                tracing::info!(
-                    target: "twitch_1337_web",
-                    user_id = %me.id,
-                    user_login = %me.login,
-                    action = "login",
-                    result = "denied",
-                );
-                return Err(WebError::Forbidden);
-            }
-        },
+        crate::auth::role::Role::Owner
+    } else {
+        match crate::auth::role_check::check_is_mod_with_token(
+            &state,
+            &me.id,
+            &user_token,
+            &state.broadcaster_id,
+            &state.hidden_admins,
+        )
+        .await
+        .map_err(|e| WebError::OAuthExchange(e.wrap_err("mod check")))?
+        {
+            GateOutcome::Allow => crate::auth::role::Role::Mod,
+            GateOutcome::Deny => match check_in_allowlist(&me.id, &state.viewer_allowlist) {
+                GateOutcome::Allow => crate::auth::role::Role::Viewer,
+                GateOutcome::Deny => {
+                    tracing::info!(
+                        target: "twitch_1337_web",
+                        user_id = %me.id,
+                        user_login = %me.login,
+                        action = "login",
+                        result = "denied",
+                    );
+                    return Err(WebError::Forbidden);
+                }
+            },
+        }
     };
 
     let (sid, csrf_value) = state
@@ -490,6 +498,17 @@ pub async fn require_role(
         .unwrap_or_default();
     if elapsed > state.config.role_check_refresh {
         let outcome: eyre::Result<GateOutcome> = match session.role {
+            crate::auth::role::Role::Owner => {
+                if state
+                    .owner_id
+                    .as_deref()
+                    .is_some_and(|owner| owner == session.user_id.as_str())
+                {
+                    Ok(GateOutcome::Allow)
+                } else {
+                    Ok(GateOutcome::Deny)
+                }
+            }
             crate::auth::role::Role::Mod => {
                 check_is_mod(
                     state.helix.as_ref(),
@@ -538,6 +557,15 @@ pub async fn require_mod(
     next: Next,
 ) -> Result<Response, WebError> {
     require_role(crate::auth::role::Role::Mod, state, cookies, req, next).await
+}
+
+pub async fn require_owner(
+    state: State<WebState>,
+    cookies: Cookies,
+    req: Request,
+    next: Next,
+) -> Result<Response, WebError> {
+    require_role(crate::auth::role::Role::Owner, state, cookies, req, next).await
 }
 
 #[cfg(test)]

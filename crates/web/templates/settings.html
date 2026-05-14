@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+{% block title %}Settings — twitch-1337{% endblock %}
+
+{% macro row_head(key, hint) %}
+<div class="row-left">
+  <div class="row-label">
+    <span class="dirty-dot" aria-hidden="true"></span>
+    <code class="row-key">{{ key }}</code>
+  </div>
+  <div class="row-hint">{{ hint }}</div>
+</div>
+{% endmacro %}
+
+{% macro row_reset(key) %}
+<button
+  type="button"
+  class="row-reset"
+  title="Reset to default"
+  aria-label="Reset {{ key }} to default"
+  hidden>↺</button>
+{% endmacro %}
+
+{% macro num_row(section, field, key, hint, value, default, unit) %}
+<div class="settings-row" data-section="{{ section }}">
+  {% call row_head(key, hint) %}{% endcall %}
+  <div class="row-control-cell">
+    <span class="row-pretty" aria-hidden="true" data-pretty-unit="{{ unit }}">{{ value }} second{% if value != 1 %}s{% endif %}</span>
+    <div class="num-wrap">
+      <input
+        type="number"
+        class="num-input"
+        name="{{ field }}"
+        min="1"
+        max="3600"
+        value="{{ value }}"
+        data-default="{{ default }}"
+        data-key="{{ key }}">
+      <span class="num-unit">{{ unit }}</span>
+    </div>
+  </div>
+  <div class="row-right">
+    {% call row_reset(key) %}{% endcall %}
+    <span class="row-default">default <span class="mono">{{ default }}{{ unit }}</span></span>
+  </div>
+</div>
+{% endmacro %}
+
+{% macro toggle_row(section, field, key, hint, value, default) %}
+<div class="settings-row" data-section="{{ section }}">
+  {% call row_head(key, hint) %}{% endcall %}
+  <div class="row-control-cell">
+    <span class="row-pretty" aria-hidden="true" data-pretty-unit="bool">{% if value %}On{% else %}Off{% endif %}</span>
+    <label class="toggle">
+      <input
+        type="checkbox"
+        name="{{ field }}"
+        value="1"
+        data-default="{{ default }}"
+        data-key="{{ key }}"
+        role="switch"
+        aria-label="{{ key }}"
+        {% if value %}checked{% endif %}>
+      <span class="toggle-thumb" aria-hidden="true"></span>
+    </label>
+  </div>
+  <div class="row-right">
+    {% call row_reset(key) %}{% endcall %}
+    <span class="row-default">default <span class="mono">{% if default %}on{% else %}off{% endif %}</span></span>
+  </div>
+</div>
+{% endmacro %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Settings</h1>
+    <p class="page-sub">Tune how the bot behaves in chat. Changes take effect right away — no restart needed.</p>
+  </div>
+</div>
+
+{% if let Some(msg) = flash %}<div class="flash">{{ msg }}</div>{% endif %}
+
+{% if !errors.is_empty() %}
+<div class="flash error">
+  <strong>Validation failed:</strong>
+  <ul>
+  {% for e in errors %}
+    <li><code>{{ e.field }}</code>: {{ e.message }}</li>
+  {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<div class="settings-grid">
+  <aside class="settings-nav" aria-label="Settings sections">
+    <div class="settings-nav-label">Sections</div>
+    <a href="#sec-cooldowns" class="settings-nav-item" data-target="cooldowns">
+      <span class="dot" aria-hidden="true"></span>
+      <span>Cooldowns</span>
+      <span class="ndirty" hidden>0</span>
+    </a>
+    <a href="#sec-pings" class="settings-nav-item" data-target="pings">
+      <span class="dot" aria-hidden="true"></span>
+      <span>Pings</span>
+      <span class="ndirty" hidden>0</span>
+    </a>
+  </aside>
+
+  <div class="settings-main">
+    <form id="settings-form" method="post" action="/settings">
+      <input type="hidden" name="_csrf" value="{{ csrf }}">
+
+      <section id="sec-cooldowns" class="settings-card" data-section="cooldowns">
+        <header class="settings-card-head">
+          <div>
+            <h2>Cooldowns</h2>
+            <p>How long a user has to wait between uses of each chat command.</p>
+          </div>
+          <div class="settings-card-tag">
+            <span class="card-dirty" hidden>0 modified</span>
+          </div>
+        </header>
+        <div class="settings-rows">
+          {% call num_row("cooldowns", "cooldown_ai", "ai", "Per-user cooldown for !ai.", current.cooldowns.ai, defaults.cooldowns.ai, "s") %}{% endcall %}
+          {% call num_row("cooldowns", "cooldown_news", "news", "Per-user cooldown for !news.", current.cooldowns.news, defaults.cooldowns.news, "s") %}{% endcall %}
+          {% call num_row("cooldowns", "cooldown_up", "up", "Per-user cooldown for !up.", current.cooldowns.up, defaults.cooldowns.up, "s") %}{% endcall %}
+          {% call num_row("cooldowns", "cooldown_feedback", "feedback", "Per-user cooldown for !fb.", current.cooldowns.feedback, defaults.cooldowns.feedback, "s") %}{% endcall %}
+          {% call num_row("cooldowns", "cooldown_doener", "doener", "Per-user cooldown for !dpi and !döner (!doener); both use Döneratlas.", current.cooldowns.doener, defaults.cooldowns.doener, "s") %}{% endcall %}
+        </div>
+      </section>
+
+      <section id="sec-pings" class="settings-card" data-section="pings">
+        <header class="settings-card-head">
+          <div>
+            <h2>Pings</h2>
+            <p>Channel-wide rules for the community ping system. Manage individual pings and their members on the <a href="/pings">pings page</a>.</p>
+          </div>
+          <div class="settings-card-tag">
+            <span class="card-dirty" hidden>0 modified</span>
+          </div>
+        </header>
+        <div class="settings-rows">
+          {% call num_row("pings", "ping_cooldown", "cooldown", "Minimum interval between any two ping fires from the same user.", current.pings.cooldown, defaults.pings.cooldown, "s") %}{% endcall %}
+          {% call toggle_row("pings", "ping_public", "public", "Non-members can also trigger pings. Membership only affects who gets @-mentioned.", current.pings.public, defaults.pings.public) %}{% endcall %}
+        </div>
+      </section>
+    </form>
+
+  </div>
+</div>
+
+<div id="settings-save-bar" class="save-bar" role="region" aria-label="Unsaved changes">
+  <div class="save-bar-inner">
+    <div class="save-bar-text">
+      <span class="save-pulse" aria-hidden="true"></span>
+      <span><strong data-count>0</strong> <span data-noun>changes</span> pending</span>
+      <span class="muted" data-preview></span>
+    </div>
+    <div class="save-bar-actions">
+      <button type="button" class="btn ghost" data-discard>Discard</button>
+      <button type="submit" class="btn primary" form="settings-form">Save changes</button>
+    </div>
+  </div>
+</div>
+{% endblock %}

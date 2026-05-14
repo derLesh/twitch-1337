@@ -15,10 +15,10 @@ pub(crate) struct DoenerArgs {
 pub fn doener_tool() -> ToolDefinition {
     ToolDefinition {
         name: DOENER_TOOL_NAME.into(),
-        description: "Look up Döner prices via doeneratlas.de (German nationwide stats and city search). \
-            Without `city`, returns `GET /app-api/public/stats` (national average, city/shop counts, etc.). \
-            With `city`, returns `GET /app-api/public/search` aggregates per matching city. \
-            Use for questions about Döner prices, kebab prices, or costs in a German city."
+        description: "Look up German Döner prices via doeneratlas.de. \
+            Without `city`: nationwide overview (average price, counts). \
+            With `city`: matching cities and their price aggregates (German spelling helps). \
+            Use for questions about Döner/kebab prices or costs in a German city."
             .into(),
         parameters: serde_json::json!({
             "type": "object",

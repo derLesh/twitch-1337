@@ -22,6 +22,7 @@ struct ListTpl {
     current_page: &'static str,
     is_mod: bool,
     is_broadcaster: bool,
+    is_owner: bool,
 }
 
 struct RowView {
@@ -62,6 +63,7 @@ async fn list(
 
     let csrf = csrf::encode(&session.csrf_value);
     let is_mod = session.is_mod();
+    let is_owner = matches!(session.role, crate::auth::Role::Owner);
     render(&ListTpl {
         rows,
         user_avatar_url: session.avatar_url.clone(),
@@ -70,5 +72,6 @@ async fn list(
         current_page: crate::nav::LEADERBOARD,
         is_mod,
         is_broadcaster: session.is_broadcaster,
+        is_owner,
     })
 }

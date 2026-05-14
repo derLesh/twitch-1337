@@ -126,11 +126,37 @@ pub async fn build_state_with_overrides(
     build_state_inner(helix, role_check_refresh, clock).await
 }
 
+/// Variant that returns the ping, memory, and settings tempdirs so callers
+/// can keep all three alive while exercising persistent CRUD paths — used
+/// by `/settings` tests which actually hit `settings_store.apply/reset`.
+pub async fn build_state_with_all_dirs(
+    helix: Arc<dyn HelixClient>,
+) -> (WebState, TempDir, TempDir, TempDir) {
+    let clock: Arc<dyn Clock> = Arc::new(FixedClock(
+        chrono::TimeZone::with_ymd_and_hms(&Utc, 2026, 1, 1, 0, 0, 0).unwrap(),
+    ));
+    build_state_inner_keep_settings(helix, Duration::from_secs(300), clock).await
+}
+
 async fn build_state_inner(
     helix: Arc<dyn HelixClient>,
     role_check_refresh: Duration,
     clock: Arc<dyn Clock>,
 ) -> (WebState, TempDir, TempDir) {
+    let (state, td_p, td_m, td_s) =
+        build_state_inner_keep_settings(helix, role_check_refresh, clock).await;
+    // Settings tempdir is intentionally dropped here; helper-driven tests
+    // that need the on-disk `settings.ron` to survive should use
+    // [`build_state_with_all_dirs`] instead.
+    drop(td_s);
+    (state, td_p, td_m)
+}
+
+async fn build_state_inner_keep_settings(
+    helix: Arc<dyn HelixClient>,
+    role_check_refresh: Duration,
+    clock: Arc<dyn Clock>,
+) -> (WebState, TempDir, TempDir, TempDir) {
     let pings_dir = TempDir::new().expect("pings tempdir");
     let memory_dir = TempDir::new().expect("memory tempdir");
     let pings = PingManager::load(pings_dir.path()).expect("load empty ping manager");
@@ -157,6 +183,14 @@ async fn build_state_inner(
     // Tests don't need a real production secret; a fixed 32-byte key keeps
     // signed-cookie round-trips deterministic across reruns.
     let signed_key = tower_cookies::Key::from(&[0x42u8; 64]);
+    let settings_dir = TempDir::new().expect("settings tempdir");
+    let audit: Arc<dyn twitch_1337_core::settings::AuditLog> =
+        Arc::new(twitch_1337_core::settings::FileAuditLog::new(
+            settings_dir.path().join("settings_audit.log"),
+        ));
+    let (settings_store, settings_handle) =
+        twitch_1337_core::settings::SettingsStore::open(settings_dir.path(), audit)
+            .expect("open settings store");
     let state = WebState {
         sessions,
         helix,
@@ -177,8 +211,11 @@ async fn build_state_inner(
         avatar_cache: Arc::new(twitch_1337_web::helix::AvatarCache::new(
             Duration::from_secs(3600),
         )),
+        owner_id: None,
+        settings: settings_handle,
+        settings_store,
     };
-    (state, pings_dir, memory_dir)
+    (state, pings_dir, memory_dir, settings_dir)
 }
 
 /// Insert a session for `(user_id, user_login)` and return

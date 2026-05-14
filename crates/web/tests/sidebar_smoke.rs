@@ -82,6 +82,58 @@ async fn memory_state_page_highlights_state() {
 }
 
 #[tokio::test]
+async fn settings_nav_link_only_visible_to_owner() {
+    install_crypto();
+    // Mod session against a different owner_id must NOT see the Settings nav.
+    let helix = Arc::new(FakeHelix {
+        moderators: vec![],
+        users: HashMap::new(),
+    });
+    let (mut state, _td_pings, _td_mem) = build_state_with_dirs(helix).await;
+    state.owner_id = Some(Arc::from("999"));
+    let (sid, csrf, _bare) =
+        insert_session_as(&state, "42", "modder", twitch_1337_web::auth::Role::Mod);
+    let app = build_router(state);
+    let req = Request::builder()
+        .uri("/pings")
+        .header(header::COOKIE, cookie_header(&sid, &csrf))
+        .body(Body::empty())
+        .unwrap();
+    let res = app.oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK, "/pings: status");
+    let bytes = to_bytes(res.into_body(), 1024 * 1024).await.unwrap();
+    let body = String::from_utf8(bytes.to_vec()).unwrap();
+    assert!(
+        !body.contains("href=\"/settings\""),
+        "Settings nav link must be hidden for non-owner sessions",
+    );
+
+    // Owner session (user_id matches state.owner_id) must see the nav link.
+    let helix = Arc::new(FakeHelix {
+        moderators: vec![],
+        users: HashMap::new(),
+    });
+    let (mut state, _td_pings, _td_mem) = build_state_with_dirs(helix).await;
+    state.owner_id = Some(Arc::from("999"));
+    let (sid, csrf, _bare) =
+        insert_session_as(&state, "999", "boss", twitch_1337_web::auth::Role::Owner);
+    let app = build_router(state);
+    let req = Request::builder()
+        .uri("/pings")
+        .header(header::COOKIE, cookie_header(&sid, &csrf))
+        .body(Body::empty())
+        .unwrap();
+    let res = app.oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK, "/pings (owner): status");
+    let bytes = to_bytes(res.into_body(), 1024 * 1024).await.unwrap();
+    let body = String::from_utf8(bytes.to_vec()).unwrap();
+    assert!(
+        body.contains("href=\"/settings\""),
+        "Settings nav link must be visible for owner sessions",
+    );
+}
+
+#[tokio::test]
 async fn sidebar_hides_memory_and_system_for_viewer() {
     install_crypto();
     let helix = Arc::new(FakeHelix {

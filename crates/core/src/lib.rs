@@ -13,6 +13,7 @@ pub mod database;
 pub mod doener;
 pub mod llm_factory;
 pub mod ping;
+pub mod settings;
 pub mod suspend;
 pub mod twitch;
 pub mod util;
@@ -78,6 +79,14 @@ pub struct Services {
     pub doener: Arc<crate::doener::DoeneratlasClient>,
     pub whisper: Option<Arc<dyn WhisperSender>>,
     pub data_dir: PathBuf,
+    /// Shared dashboard-managed runtime settings. Constructed by the bin so
+    /// the same `Arc` is handed to the IRC command handlers (via `SpawnDeps`)
+    /// and to `WebState` (for the dashboard settings page).
+    pub settings: crate::settings::SettingsHandle,
+    /// Owner of `settings.ron`. The bin keeps an `Arc` for `WebState` (the
+    /// POST handler calls `.apply()` / `.reset()`); the bot itself only
+    /// reads via the handle.
+    pub settings_store: Arc<crate::settings::SettingsStore>,
     /// Optional override for the 7TV emote glossary TOML. Production leaves
     /// this `None` so the baked glossary is used; integration tests inject
     /// custom fixtures.
@@ -152,6 +161,8 @@ where
         doener,
         whisper,
         data_dir,
+        settings,
+        settings_store: _,
         emote_glossary_override,
         irc_connected,
         web_spawner,
@@ -219,6 +230,7 @@ where
         aviation_tracker_rx,
         emote_provider,
         irc_connected: irc_connected.clone(),
+        settings: settings.clone(),
     });
 
     let shutdown_notify = handlers.shutdown_notify.clone();

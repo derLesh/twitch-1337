@@ -6,7 +6,7 @@
 use eyre::{Result, WrapErr, bail};
 use secrecy::{ExposeSecret as _, SecretString};
 use serde::Deserialize;
-use tracing::{debug, info};
+use tracing::info;
 
 use crate::{ai::prefill, database};
 
@@ -29,6 +29,11 @@ pub struct TwitchConfiguration {
     /// IDs (not logins) so entries survive Twitch login renames.
     #[serde(default)]
     pub viewer_allowlist: Vec<String>,
+    /// Twitch user ID granted full dashboard access including the settings
+    /// page. Single value for v1; a tiered permission system replaces it
+    /// later. Absent → no owner exists and the settings page returns 403.
+    #[serde(default)]
+    pub owner: Option<String>,
     #[serde(default)]
     pub admin_channel: Option<String>,
     #[serde(default)]
@@ -431,82 +436,6 @@ fn validate_reasoning_effort(path: &str, value: Option<&str>) -> Result<()> {
     Ok(())
 }
 
-fn default_cooldown() -> u64 {
-    300
-}
-
-fn default_ai_cooldown() -> u64 {
-    30
-}
-
-fn default_news_cooldown() -> u64 {
-    60
-}
-
-fn default_up_cooldown() -> u64 {
-    30
-}
-
-fn default_doener_cooldown() -> u64 {
-    30
-}
-
-fn default_doeneratlas_cooldown() -> u64 {
-    30
-}
-
-fn default_feedback_cooldown() -> u64 {
-    300
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct CooldownsConfig {
-    #[serde(default = "default_ai_cooldown")]
-    pub ai: u64,
-    #[serde(default = "default_news_cooldown")]
-    pub news: u64,
-    #[serde(default = "default_up_cooldown")]
-    pub up: u64,
-    /// Cooldown for `!dpi` (Döneratlas search + stats).
-    #[serde(default = "default_doener_cooldown")]
-    pub doener: u64,
-    /// Cooldown for `!döner` / `!doener` (Döneratlas JSON API).
-    #[serde(default = "default_doeneratlas_cooldown")]
-    pub doeneratlas: u64,
-    #[serde(default = "default_feedback_cooldown")]
-    pub feedback: u64,
-}
-
-impl Default for CooldownsConfig {
-    fn default() -> Self {
-        Self {
-            ai: default_ai_cooldown(),
-            news: default_news_cooldown(),
-            up: default_up_cooldown(),
-            doener: default_doener_cooldown(),
-            doeneratlas: default_doeneratlas_cooldown(),
-            feedback: default_feedback_cooldown(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct PingsConfig {
-    #[serde(default = "default_cooldown")]
-    pub cooldown: u64,
-    #[serde(default)]
-    pub public: bool,
-}
-
-impl Default for PingsConfig {
-    fn default() -> Self {
-        Self {
-            cooldown: default_cooldown(),
-            public: false,
-        }
-    }
-}
-
 fn default_suspend_duration() -> u64 {
     600
 }
@@ -601,10 +530,6 @@ pub struct Configuration {
     #[serde(default)]
     pub aviationstack: Option<AviationstackConfig>,
     #[serde(default)]
-    pub pings: PingsConfig,
-    #[serde(default)]
-    pub cooldowns: CooldownsConfig,
-    #[serde(default)]
     pub suspend: SuspendConfig,
     #[serde(default)]
     pub ai: Option<AiConfig>,
@@ -630,12 +555,11 @@ impl Configuration {
                 expected_latency: 100,
                 hidden_admins: Vec::new(),
                 viewer_allowlist: Vec::new(),
+                owner: None,
                 admin_channel: None,
                 ai_channel: None,
             },
             aviationstack: None,
-            pings: PingsConfig::default(),
-            cooldowns: CooldownsConfig::default(),
             suspend: SuspendConfig::default(),
             ai: None,
             schedules: Vec::new(),
@@ -663,7 +587,10 @@ pub async fn load_configuration() -> Result<Configuration> {
 
     validate_config(&config)?;
 
-    debug!(public = config.pings.public, "Ping trigger policy");
+    info!(
+        owner_configured = config.twitch.owner.is_some(),
+        "Resolved dashboard owner"
+    );
 
     Ok(config)
 }
@@ -1340,29 +1267,5 @@ mod tests {
         assert_eq!(cfg.cap_for(Bucket::Audio), cfg.max_audio_size);
         assert_eq!(cfg.cap_for(Bucket::Video), cfg.max_video_size);
         assert_eq!(cfg.cap_for(Bucket::Text), cfg.max_text_size);
-    }
-
-    #[test]
-    fn cooldowns_doener_defaults_to_30() {
-        let c: CooldownsConfig = toml::from_str("").expect("empty cooldowns parses");
-        assert_eq!(c.doener, 30);
-    }
-
-    #[test]
-    fn cooldowns_doener_overrides_via_toml() {
-        let c: CooldownsConfig = toml::from_str("doener = 5").expect("parses");
-        assert_eq!(c.doener, 5);
-    }
-
-    #[test]
-    fn cooldowns_doeneratlas_defaults_to_30() {
-        let c: CooldownsConfig = toml::from_str("").expect("empty cooldowns parses");
-        assert_eq!(c.doeneratlas, 30);
-    }
-
-    #[test]
-    fn cooldowns_doeneratlas_overrides_via_toml() {
-        let c: CooldownsConfig = toml::from_str("doeneratlas = 7").expect("parses");
-        assert_eq!(c.doeneratlas, 7);
     }
 }

@@ -38,19 +38,10 @@ const LOGS: StubMeta = StubMeta {
     nav: crate::nav::LOGS,
 };
 
-const CONFIG: StubMeta = StubMeta {
-    title: "Config",
-    subtitle: "Read-only view of effective configuration: cooldowns, AI settings, channels.",
-    slug: "config",
-    note: "Configuration is sourced from config.toml; restart the bot to apply non-schedule changes.",
-    nav: crate::nav::CONFIG,
-};
-
 pub fn router() -> Router<WebState> {
     Router::new()
         .route("/schedules", get(|s| render_stub(SCHEDULES, s)))
         .route("/logs", get(|s| render_stub(LOGS, s)))
-        .route("/config", get(|s| render_stub(CONFIG, s)))
 }
 
 #[derive(Template)]
@@ -66,6 +57,7 @@ struct StubTpl<'a> {
     current_page: &'static str,
     is_mod: bool,
     is_broadcaster: bool,
+    is_owner: bool,
 }
 
 async fn render_stub(
@@ -83,5 +75,6 @@ async fn render_stub(
         current_page: meta.nav,
         is_mod: session.is_mod(),
         is_broadcaster: session.is_broadcaster,
+        is_owner: matches!(session.role, crate::auth::Role::Owner),
     })
 }

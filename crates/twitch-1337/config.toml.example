@@ -27,6 +27,11 @@ client_secret = "your_client_secret"
 # Twitch user IDs granted read-only viewer access to the web dashboard.
 # viewer_allowlist = ["12345678", "87654321"]
 
+# Twitch user ID with full dashboard access, including the settings page.
+# Absent → settings page returns 403 for everyone. Single value for v1; a
+# tiered permission system replaces it later.
+# owner = "12345678"
+
 # Optional: A separate channel for testing bot commands (broadcaster-only access)
 # admin_channel = "my_test_channel"
 
@@ -35,19 +40,8 @@ client_secret = "your_client_secret"
 # `channel` and `admin_channel`.
 # ai_channel = "my_bot_account"
 
-# Optional: Pings configuration
-# [pings]
-# cooldown = 300  # Cooldown in seconds between triggers (default: 300)
-# public = false  # Allow anyone to trigger pings (default: false, members-only)
-
-# Optional: Command cooldowns in seconds
-# [cooldowns]
-# ai = 30        # !ai command (default: 30)
-# news = 60      # !news command (default: 60)
-# up = 30        # !up command (default: 30)
-# doener = 30       # !dpi — Döneratlas (default: 30)
-# doeneratlas = 30  # !döner / !doener — Döneratlas API (default: 30)
-# feedback = 300 # !fb command (default: 300)
+# Cooldowns and ping policy are managed from the dashboard (`/settings`,
+# owner-only). They live in `$DATA_DIR/settings.ron` after the first save.
 
 # Optional: Aviationstack metadata enrichment for !track.
 # The bot uses this at most once per newly tracked flight to fetch route,

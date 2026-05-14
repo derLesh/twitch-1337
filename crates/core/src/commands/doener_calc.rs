@@ -1,4 +1,4 @@
-//! `!döner` / `!doener` — Euro-Betrag in „Anzahl Döner“ umrechnen (Deutschland-Ø von [Döneratlas](https://doeneratlas.de/) via `/app-api/public/stats`).
+//! `!döner` / `!doener` — Euro-Betrag in „Anzahl Döner“ umrechnen (Deutschland-Ø nach [Döneratlas](https://doeneratlas.de/)).
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -58,12 +58,12 @@ fn format_doener_count(n: f64) -> String {
     }
 }
 
-pub struct DoeneratlasCommand {
+pub struct DoenerCalcCommand {
     client: Arc<DoeneratlasClient>,
     cooldown: PerUserCooldown,
 }
 
-impl DoeneratlasCommand {
+impl DoenerCalcCommand {
     pub fn new(client: Arc<DoeneratlasClient>, cooldown: Duration) -> Self {
         Self {
             client,
@@ -73,7 +73,7 @@ impl DoeneratlasCommand {
 }
 
 #[async_trait]
-impl<T, L> Command<T, L> for DoeneratlasCommand
+impl<T, L> Command<T, L> for DoenerCalcCommand
 where
     T: Transport,
     L: LoginCredentials,

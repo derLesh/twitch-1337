@@ -61,6 +61,20 @@ pub struct PingManager {
 }
 
 impl PingManager {
+    /// In-memory empty manager. Useful for tests that only need *a*
+    /// `PingManager` instance without touching disk. The `path` is a dummy
+    /// (`pings.ron` in cwd); callers must not invoke methods that persist.
+    #[cfg(any(test, feature = "testing"))]
+    pub fn empty() -> Self {
+        Self {
+            store: PingStore {
+                pings: HashMap::new(),
+            },
+            last_triggered: HashMap::new(),
+            path: PathBuf::from(PINGS_FILENAME),
+        }
+    }
+
     /// Load pings from disk. Creates empty store if file doesn't exist.
     ///
     /// Templates are re-validated against `validate_template` after
