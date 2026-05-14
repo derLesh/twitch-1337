@@ -126,6 +126,7 @@ mod tests {
 
     #[tokio::test]
     async fn city_response_empty_hits_is_not_found() {
+        crate::install_crypto_provider();
         let server = wiremock::MockServer::start().await;
         let client = DoeneratlasClient::with_base_url(reqwest::Client::new(), server.uri());
         let out = resolve_city_reply(&client, "xyz", vec![]).await;
