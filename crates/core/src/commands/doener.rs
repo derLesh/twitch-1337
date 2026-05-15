@@ -12,18 +12,25 @@ use crate::doener::format::{
     api_down_message, format_city, format_did_you_mean, format_global, format_not_found,
 };
 use crate::doener::{CityHit, DoeneratlasClient};
+use crate::settings::SettingsHandle;
 
 pub struct DoenerCommand {
     client: Arc<DoeneratlasClient>,
     cooldown: PerUserCooldown,
+    settings: SettingsHandle,
 }
 
 impl DoenerCommand {
-    pub fn new(client: Arc<DoeneratlasClient>, cooldown: Duration) -> Self {
+    pub fn new(client: Arc<DoeneratlasClient>, settings: SettingsHandle) -> Self {
         Self {
             client,
-            cooldown: PerUserCooldown::new(cooldown),
+            cooldown: PerUserCooldown::new(Duration::ZERO),
+            settings,
         }
+    }
+
+    fn current_cooldown(&self) -> Duration {
+        Duration::from_secs(self.settings.load().cooldowns.doener)
     }
 }
 
@@ -39,7 +46,11 @@ where
 
     async fn execute(&self, ctx: CommandContext<'_, T, L>) -> Result<()> {
         let user = &ctx.privmsg.sender.login;
-        if let Some(remaining) = self.cooldown.check(user).await {
+        if let Some(remaining) = self
+            .cooldown
+            .check_with_duration(user, self.current_cooldown())
+            .await
+        {
             send(
                 &ctx,
                 format!(
@@ -90,11 +101,17 @@ async fn resolve_city_reply(
         let hit = client.enrich_city_hit(hits.remove(0)).await;
         return format_city(&hit);
     }
-    if hits[0].city.eq_ignore_ascii_case(query) {
+    if equal_case_insensitive(&hits[0].city, query) {
         let hit = client.enrich_city_hit(hits.remove(0)).await;
         return format_city(&hit);
     }
     format_did_you_mean(&hits)
+}
+
+fn equal_case_insensitive(left: &str, right: &str) -> bool {
+    left.chars()
+        .flat_map(char::to_lowercase)
+        .eq(right.chars().flat_map(char::to_lowercase))
 }
 
 async fn send<T, L>(ctx: &CommandContext<'_, T, L>, line: String)
@@ -218,5 +235,76 @@ mod tests {
         ];
         let out = resolve_city_reply(&client, "Han", hits).await;
         assert_eq!(out, "Meintest du: Hannover (51), Hanau (3), Handewitt (1)?");
+    }
+
+    #[tokio::test]
+    async fn city_response_unicode_exact_match_enriches_first_hit_only() {
+        crate::install_crypto_provider();
+        let server = wiremock::MockServer::start().await;
+        let json = r#"{"name":"München","slug":"muenchen","shop_count":42,"avg_price":"8.10","min_price":"6.50","max_price":"10.00"}"#;
+        wiremock::Mock::given(wiremock::matchers::method("GET"))
+            .and(wiremock::matchers::path("/app-api/public/cities"))
+            .and(wiremock::matchers::query_param("slug", "muenchen"))
+            .respond_with(
+                wiremock::ResponseTemplate::new(200)
+                    .set_body_raw(json.as_bytes(), "application/json"),
+            )
+            .mount(&server)
+            .await;
+
+        let client = DoeneratlasClient::with_base_url(reqwest::Client::new(), server.uri());
+        let hits = vec![
+            CityHit {
+                city: "München".into(),
+                slug: "muenchen".into(),
+                location_count: 42,
+                priced_shop_sample: 2,
+                min_price: Some(7.0),
+                max_price: Some(9.0),
+                avg_price: Some(8.0),
+            },
+            hit("Müncheberg", 2, true),
+        ];
+        let out = resolve_city_reply(&client, "MÜNCHEN", hits).await;
+        assert!(
+            out.starts_with("München: 42 Buden")
+                && out.contains("8.10")
+                && out.contains("6.50")
+                && out.contains("10.00"),
+            "unexpected reply: {out}"
+        );
+    }
+}
+
+#[cfg(test)]
+mod settings_live_tests {
+    use std::sync::Arc;
+    use tokio::time::Duration;
+
+    use super::DoenerCommand;
+    use crate::settings::Settings;
+
+    #[test]
+    fn reads_cooldown_from_handle_at_call_time() {
+        crate::install_crypto_provider();
+        let initial = Settings::compiled_defaults();
+        let handle: crate::settings::SettingsHandle =
+            Arc::new(arc_swap::ArcSwap::from_pointee(initial));
+        let cmd = DoenerCommand::new(
+            Arc::new(crate::doener::DoeneratlasClient::with_base_url(
+                reqwest::Client::new(),
+                "http://127.0.0.1:1",
+            )),
+            handle.clone(),
+        );
+
+        let before = cmd.current_cooldown();
+        let mut next = Settings::compiled_defaults();
+        next.cooldowns.doener = 7;
+        handle.store(Arc::new(next));
+        let after = cmd.current_cooldown();
+
+        assert_ne!(before, after);
+        assert_eq!(after, Duration::from_secs(7));
     }
 }

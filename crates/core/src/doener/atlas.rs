@@ -56,7 +56,9 @@ pub struct AtlasShopRow {
     pub city_slug: String,
     #[serde(default)]
     pub city_name: String,
-    pub current_price: String,
+    /// API sendet `null`, wenn noch kein Preis gemeldet wurde.
+    #[serde(default)]
+    pub current_price: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -237,7 +239,7 @@ fn city_hits_from_search(body: &AtlasSearchResponse) -> Vec<CityHit> {
                 .shops
                 .iter()
                 .filter(|s| s.city_slug == c.slug)
-                .filter_map(|s| parse_price_str(&s.current_price))
+                .filter_map(|s| s.current_price.as_deref().and_then(parse_price_str))
                 .collect();
             let priced_shop_sample = prices.len() as u32;
             let (min_price, max_price, avg_price) = if prices.is_empty() {
@@ -306,7 +308,7 @@ mod tests {
 
     #[tokio::test]
     async fn search_city_hits_aggregates_prices_by_slug() {
-        let json = br#"{"cities":[{"id":1,"name":"Darmstadt","slug":"darmstadt","state":"Hessen","shop_count":2}],"shops":[{"city_slug":"darmstadt","city_name":"Darmstadt","current_price":"4.00"},{"city_slug":"darmstadt","city_name":"Darmstadt","current_price":"6.00"}]}"#;
+        let json = br#"{"cities":[{"id":1,"name":"Darmstadt","slug":"darmstadt","state":"Hessen","shop_count":2}],"shops":[{"city_slug":"darmstadt","city_name":"Darmstadt","current_price":null},{"city_slug":"darmstadt","city_name":"Darmstadt","current_price":"4.00"},{"city_slug":"darmstadt","city_name":"Darmstadt","current_price":"6.00"}]}"#;
         let server = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path("/app-api/public/search"))

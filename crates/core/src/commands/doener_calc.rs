@@ -10,6 +10,7 @@ use twitch_irc::{login::LoginCredentials, transport::Transport};
 
 use crate::cooldown::{PerUserCooldown, format_cooldown_remaining};
 use crate::doener::DoeneratlasClient;
+use crate::settings::SettingsHandle;
 
 use super::{Command, CommandContext};
 
@@ -58,17 +59,31 @@ fn format_doener_count(n: f64) -> String {
     }
 }
 
+fn matches_doener_trigger(word: &str) -> bool {
+    let Some(stripped) = word.strip_prefix('!') else {
+        return false;
+    };
+    let lowered = stripped.to_lowercase();
+    lowered == "döner" || lowered == "doener"
+}
+
 pub struct DoenerCalcCommand {
     client: Arc<DoeneratlasClient>,
     cooldown: PerUserCooldown,
+    settings: SettingsHandle,
 }
 
 impl DoenerCalcCommand {
-    pub fn new(client: Arc<DoeneratlasClient>, cooldown: Duration) -> Self {
+    pub fn new(client: Arc<DoeneratlasClient>, settings: SettingsHandle) -> Self {
         Self {
             client,
-            cooldown: PerUserCooldown::new(cooldown),
+            cooldown: PerUserCooldown::new(Duration::ZERO),
+            settings,
         }
+    }
+
+    fn current_cooldown(&self) -> Duration {
+        Duration::from_secs(self.settings.load().cooldowns.doener)
     }
 }
 
@@ -83,16 +98,16 @@ where
     }
 
     fn matches(&self, word: &str) -> bool {
-        let Some(stripped) = word.strip_prefix('!') else {
-            return false;
-        };
-        let lowered = stripped.to_lowercase();
-        lowered == "döner" || lowered == "doener"
+        matches_doener_trigger(word)
     }
 
     async fn execute(&self, ctx: CommandContext<'_, T, L>) -> Result<()> {
         let user = &ctx.privmsg.sender.login;
-        if let Some(rem) = self.cooldown.check(user).await {
+        if let Some(rem) = self
+            .cooldown
+            .check_with_duration(user, self.current_cooldown())
+            .await
+        {
             if let Err(e) = ctx
                 .client
                 .say_in_reply_to(
@@ -161,7 +176,10 @@ where
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use super::*;
+    use crate::settings::Settings;
 
     #[test]
     fn parse_amounts() {
@@ -169,5 +187,36 @@ mod tests {
         assert!((parse_euro_amount("25,5").unwrap() - 25.5).abs() < 1e-9);
         assert!((parse_euro_amount("25.5").unwrap() - 25.5).abs() < f64::EPSILON);
         assert!((parse_euro_amount("1.234,56").unwrap() - 1234.56).abs() < 0.001);
+    }
+
+    #[test]
+    fn matches_both_spellings_case_insensitive() {
+        assert!(matches_doener_trigger("!döner"));
+        assert!(matches_doener_trigger("!DÖNER"));
+        assert!(matches_doener_trigger("!doener"));
+    }
+
+    #[test]
+    fn reads_cooldown_from_handle_at_call_time() {
+        crate::install_crypto_provider();
+        let initial = Settings::compiled_defaults();
+        let handle: crate::settings::SettingsHandle =
+            Arc::new(arc_swap::ArcSwap::from_pointee(initial));
+        let cmd = DoenerCalcCommand::new(
+            Arc::new(crate::doener::DoeneratlasClient::with_base_url(
+                reqwest::Client::new(),
+                "http://127.0.0.1:1",
+            )),
+            handle.clone(),
+        );
+
+        let before = cmd.current_cooldown();
+        let mut next = Settings::compiled_defaults();
+        next.cooldowns.doener = 9;
+        handle.store(Arc::new(next));
+        let after = cmd.current_cooldown();
+
+        assert_ne!(before, after);
+        assert_eq!(after, Duration::from_secs(9));
     }
 }

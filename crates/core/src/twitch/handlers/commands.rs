@@ -163,11 +163,11 @@ where
         )),
         Box::new(commands::doener::DoenerCommand::new(
             doener.clone(),
-            Duration::from_secs(snapshot.cooldowns.doener),
+            settings.clone(),
         )),
         Box::new(commands::doener_calc::DoenerCalcCommand::new(
             doener.clone(),
-            Duration::from_secs(snapshot.cooldowns.doener),
+            settings.clone(),
         )),
     ];
 

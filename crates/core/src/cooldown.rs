@@ -22,11 +22,16 @@ impl PerUserCooldown {
 
     /// Returns `Some(remaining)` if the user is still on cooldown, `None` if clear.
     pub async fn check(&self, user: &str) -> Option<Duration> {
+        self.check_with_duration(user, self.duration).await
+    }
+
+    /// Like [`Self::check`], but uses a caller-supplied cooldown duration.
+    pub async fn check_with_duration(&self, user: &str, duration: Duration) -> Option<Duration> {
         let guard = self.last_use.lock().await;
         let last = guard.get(user)?;
         let elapsed = last.elapsed();
-        if elapsed < self.duration {
-            Some(self.duration - elapsed)
+        if elapsed < duration {
+            Some(duration - elapsed)
         } else {
             None
         }
