@@ -27,22 +27,22 @@ fn parse_euro_amount(raw: &str) -> Option<f64> {
 }
 
 fn parse_number_literal(t: &str) -> Option<f64> {
-    match (t.contains(','), t.contains('.')) {
-        (true, false) => t.replace(',', ".").parse().ok(),
-        (false, true) => t.parse().ok(),
+    let normalized = match (t.contains(','), t.contains('.')) {
+        (true, false) => t.replace(',', "."),
+        (false, true) | (false, false) => t.to_string(),
         (true, true) => {
             let last_comma = t.rfind(',').unwrap_or(0);
             let last_dot = t.rfind('.').unwrap_or(0);
             if last_comma > last_dot {
                 let no_dots: String = t.chars().filter(|&c| c != '.').collect();
-                no_dots.replace(',', ".").parse().ok()
+                no_dots.replace(',', ".")
             } else {
-                let no_commas: String = t.chars().filter(|&c| c != ',').collect();
-                no_commas.parse().ok()
+                t.chars().filter(|&c| c != ',').collect()
             }
         }
-        (false, false) => t.parse().ok(),
-    }
+    };
+
+    normalized.parse::<f64>().ok()
 }
 
 struct AmountExprParser<'a> {
@@ -357,9 +357,9 @@ mod tests {
     #[test]
     fn parse_amounts() {
         assert!((parse_euro_amount("25").unwrap() - 25.0).abs() < f64::EPSILON);
-        assert!((parse_euro_amount("25,5").unwrap() - 25.5).abs() < 1e-9);
+        assert!((parse_euro_amount("25,5").unwrap() - 25.5).abs() < f64::EPSILON);
         assert!((parse_euro_amount("25.5").unwrap() - 25.5).abs() < f64::EPSILON);
-        assert!((parse_euro_amount("1.234,56").unwrap() - 1234.56).abs() < 0.001);
+        assert!((parse_euro_amount("1.234,56").unwrap() - 1234.56).abs() < f64::EPSILON);
     }
 
     #[test]
@@ -374,7 +374,7 @@ mod tests {
     fn parse_amounts_respect_precedence_and_parentheses() {
         assert!((parse_euro_amount("2+3*4").unwrap() - 14.0).abs() < f64::EPSILON);
         assert!((parse_euro_amount("(2+3)*4").unwrap() - 20.0).abs() < f64::EPSILON);
-        assert!((parse_euro_amount("1,5 + 2,5").unwrap() - 4.0).abs() < 1e-9);
+        assert!((parse_euro_amount("1,5 + 2,5").unwrap() - 4.0).abs() < f64::EPSILON);
     }
 
     #[test]
