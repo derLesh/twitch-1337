@@ -198,6 +198,7 @@ mod tests {
 
     #[test]
     fn reads_cooldown_from_handle_at_call_time() {
+        crate::install_crypto_provider();
         let initial = Settings::compiled_defaults();
         let handle: crate::settings::SettingsHandle =
             Arc::new(arc_swap::ArcSwap::from_pointee(initial));
