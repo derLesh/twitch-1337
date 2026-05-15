@@ -93,8 +93,97 @@ async fn doener_calc_accepts_ascii_alias_and_formats_reply() {
     bot.send("alice", "!doener 16,72").await;
     let reply = bot.expect_reply(Duration::from_secs(2)).await;
     assert!(
-        reply.contains("Das wären 2 Döner") && reply.contains("Ø 8,36€ Deutschland"),
+        reply.contains("Das wären 2 Döner")
+            && reply.contains("Ø 8,36€ Deutschland")
+            && !reply.contains("Döneratlas"),
         "expected calculated döner count, got: {reply}"
+    );
+
+    bot.shutdown().await;
+}
+
+#[tokio::test]
+async fn doener_calc_accepts_expressions() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/app-api/public/stats"))
+        .respond_with(ResponseTemplate::new(200).set_body_raw(
+            br#"{"national_average":8.36,"total_cities":1072,"total_shops":1897,"total_reports":3514,"change_30d":1.7,"mode_price":7}"#.as_slice(),
+            "application/json",
+        ))
+        .mount(&server)
+        .await;
+
+    let mut bot = TestBotBuilder::new()
+        .with_doener_base_url(server.uri())
+        .spawn()
+        .await;
+
+    bot.send("alice", "!doener 5+5").await;
+    let reply = bot.expect_reply(Duration::from_secs(2)).await;
+    assert!(
+        reply.contains("1,2 Döner")
+            && reply.contains("8,36€ Deutschland")
+            && !reply.contains("Döneratlas"),
+        "expected calculated expression reply, got: {reply}"
+    );
+
+    bot.shutdown().await;
+}
+
+#[tokio::test]
+async fn doener_calc_shows_zero_for_non_positive_amounts() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/app-api/public/stats"))
+        .respond_with(ResponseTemplate::new(200).set_body_raw(
+            br#"{"national_average":8.36,"total_cities":1072,"total_shops":1897,"total_reports":3514,"change_30d":1.7,"mode_price":7}"#.as_slice(),
+            "application/json",
+        ))
+        .mount(&server)
+        .await;
+
+    let mut bot = TestBotBuilder::new()
+        .with_doener_base_url(server.uri())
+        .spawn()
+        .await;
+
+    bot.send("alice", "!doener 0").await;
+    let reply = bot.expect_reply(Duration::from_secs(2)).await;
+    assert!(
+        reply.contains("0 Döner")
+            && reply.contains("8,36€ Deutschland")
+            && !reply.contains("Döneratlas"),
+        "expected zero-döner reply, got: {reply}"
+    );
+
+    bot.shutdown().await;
+}
+
+#[tokio::test]
+async fn doener_calc_formats_huge_values_without_inf() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/app-api/public/stats"))
+        .respond_with(ResponseTemplate::new(200).set_body_raw(
+            br#"{"national_average":8.36,"total_cities":1072,"total_shops":1897,"total_reports":3514,"change_30d":1.7,"mode_price":7}"#.as_slice(),
+            "application/json",
+        ))
+        .mount(&server)
+        .await;
+
+    let mut bot = TestBotBuilder::new()
+        .with_doener_base_url(server.uri())
+        .spawn()
+        .await;
+
+    bot.send("alice", "!doener 1.7976931348623157e+308").await;
+    let reply = bot.expect_reply(Duration::from_secs(2)).await;
+    assert!(
+        reply.contains("2,15e307 Döner")
+            && !reply.contains("inf Döner")
+            && !reply.contains("Döneratlas"),
+        "expected finite scientific-notation reply, got: {reply}"
     );
 
     bot.shutdown().await;
