@@ -207,7 +207,7 @@ fn format_doener_count(n: f64) -> String {
         return "0".to_string();
     }
 
-    if n < 0.1 || n >= 1_000_000.0 {
+    if !(0.1..1_000_000.0).contains(&n) {
         return format!("{n:.2e}").replace('.', ",");
     }
 
